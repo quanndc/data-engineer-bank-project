@@ -4,6 +4,26 @@ Ghi lại các phát hiện, quyết định thiết kế và thay đổi của 
 
 ---
 
+## [2026-10-06] Report: bổ sung kết quả P1–P5
+
+| Phần | Bổ sung |
+|---|---|
+| II.F Data Characteristics | Đoạn *Temporal coverage*: Aug 31 ngày, Sep 22 ngày, Oct chỉ 2 ngày; dữ liệu thực chất đủ từ 1/8 đến ~21/9 |
+| II.G Data Quality Defects | 142.360 ID dùng chung bao phủ 304.877 bản ghi khách (29,1%) |
+| IV Criteria (bảng tiêu chí) | Đổi chỉ số "null foreign key" → "trỏ tới Unknown member (key 0)" cho khớp kiểm tra thật |
+| V.A Environment | Mô tả đúng môi trường: Docker VM **8 GB / 11 vCPU** (máy 18 GB), dừng workload khác trừ 1 container rảnh ~64 MB; bảng mới `tab:env` (phiên bản + giới hạn RAM; PostgreSQL còn TBD) |
+| VI.A Data Correctness | Viết kết quả: 12/12 PASS, đối soát 0,00 INR, chạy lại với 40k sự kiện trùng vẫn đúng; streaming 642/642 khớp batch, p50 2,10 s, p95 3,18 s. Bảng `tab:correctness-results` viết lại đủ 15 dòng (C1–C3, U1–U3, A1–A3, K1–K3, S1, S2, X1); chỉ X1 (so sánh giữa các giải pháp) còn TBD |
+| VI.B Performance | Bảng mới `tab:pipeline`: thời gian từng bước ở ×1 (**ghi rõ là 1 lần chạy**, chỉ để tham khảo); bảng XII benchmark vẫn TBD |
+| VI.C Effectiveness | Bảng mới `tab:br-results` (2 cột): 10/10 BR demo thành công + 1 kết quả cụ thể cho mỗi BR; thời gian phản hồi ~0,75 s/biểu đồ, ~1,1 s/trang. Còn TODO: số thao tác, thời gian trả lời, SUS, ảnh chụp |
+| VI.E Threats to Validity | Thêm: dữ liệu thực chất chỉ đến 21/9; nhiều khách có số dư trùng nhau đến từng đồng |
+| VII Limitations | Ghi rõ chỉ 2 ngày thuộc tháng 10 |
+| Appendix A | Thay lệnh cũ (`make etl`, `make bench` không tồn tại) bằng lệnh thật |
+
+- Đã sửa 1 nhận định sai trước khi ghi: số tiền trung bình **không tăng đều theo tuổi** (nhóm 0–17 cao hơn 18–24; 65+ nữ thấp hơn 55–64 nữ) → viết lại đúng theo số liệu.
+- Còn lại trong report: 11 `TODO`, 12 `TBD` — chủ yếu chờ P6 (benchmark) và ảnh chụp.
+
+---
+
 ## [2026-10-06] P5 — Ứng dụng: Superset + Streamlit ✅ (Mốc M2)
 
 ### Hạ tầng

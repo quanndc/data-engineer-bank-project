@@ -323,6 +323,12 @@ median 459.49 INR, the 99th percentile 20,000 INR, and the maximum 1,560,034.99 
 Recorded balances range from 0 to 115.0 million INR (median 16,792.18 INR). Daily volume
 ranges from 3 to 36,798 transactions (mean 25,796).
 
+\textbf{Temporal coverage.} Coverage is uneven: August has 31 days of data (884,932
+transactions), September 22 days (528,845), and October only 2 days (4,987); from
+2016-09-22 onwards no day exceeds 10,000 transactions. In practice the data is complete
+only from 2016-08-01 to about 2016-09-21, which must be kept in mind when trends (BR1) and
+recency (BR4) are interpreted.
+
 \textbf{Transaction types.} Types were inferred by the dataset author using recurrence and
 amount rules, and their distribution is strongly imbalanced (Table~\ref{tab:types}).
 
@@ -372,7 +378,8 @@ quality characteristics \cite{iso25012}. Three findings are decisive.
 
 \emph{Customer identifier collisions.} There are 884,265 distinct \tbl{customer\_id}
 values but 1,046,782 customer keys. Of the 142,360 identifiers mapped to more than one key,
-141,466 have records with different dates of birth and 60,185 with different genders.
+141,466 have records with different dates of birth and 60,185 with different genders;
+together they cover 304,877 customer records (29.1\%).
 These are different individuals sharing an identifier, not one customer whose attributes
 change over time; a slowly changing dimension would therefore model them incorrectly.
 
@@ -915,7 +922,7 @@ results on all solutions; this cross-check validates both the model and the alte
 \textbf{Characteristic} & \textbf{Metric} & \textbf{Target} \\
 \midrule
 Completeness & Rows in source vs.\ rows in \tbl{fact\_transactions} & Equal (1,418,764) \\
-Completeness & Fact rows with a null foreign key & 0 \\
+Completeness & Fact rows pointing to the Unknown member (key 0) & 0 \\
 Uniqueness & Duplicate surrogate keys; duplicate natural keys in \tbl{dim\_customer} & 0 \\
 Accuracy & DOB outside [1916-10-22, 2016-10-21] (age 0--100); gender outside \{M, F, Unknown\}; negative amounts & 0 \\
 Consistency & $|\sum$ amount (source) $-$ $\sum$ amount (warehouse)$|$ & 0 INR \\
@@ -961,8 +968,29 @@ above average.
 
 \subsection{Environment}
 All experiments were run on one machine (Apple Silicon, 11 CPU cores, 18 GB RAM) with
-Docker 28.3. Every system under test was given the same CPU and memory limits.
-\todo{Fill in software versions: Kafka, Spark, ClickHouse, PostgreSQL, Superset, Streamlit.}
+Docker Desktop 28.3.3 and Docker Compose 2.39, whose virtual machine was allocated 11 vCPUs
+and 8 GB of RAM. Workloads of other projects were stopped, except one idle container that
+used about 64 MB. Every service ran with a fixed memory limit (Table~\ref{tab:env}).
+
+\begin{table}[!t]
+\centering
+\caption{Software Versions and Memory Limits}
+\label{tab:env}
+\footnotesize
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{L{3.6cm} L{2.0cm} L{1.6cm}}
+\toprule
+\textbf{Component} & \textbf{Version} & \textbf{Memory limit} \\
+\midrule
+Apache Kafka (KRaft, 1 broker) & 3.9.1 & 1 GB \\
+Apache Spark (local mode, PySpark, Python 3.8) & 3.5.6 & 3 GB \\
+ClickHouse & 25.3.14.14 & 2.5 GB \\
+Apache Superset & 4.1.3 & 1.5 GB \\
+Streamlit & 1.40.2 & 0.5 GB \\
+PostgreSQL (alternative, B2) & \tbd & \tbd \\
+\bottomrule
+\end{tabular}
+\end{table}
 
 \subsection{Data Profiling}
 The source files were profiled with DuckDB: row counts, distinct counts, value
@@ -1024,32 +1052,81 @@ five), the tasks given per user group, and the questionnaire procedure.}
 % "it can be tentatively concluded that...").
 
 \subsection{Data Correctness}
-\todo{Fill Table~\ref{tab:correctness-results} from the \tbl{audit} table and interpret any
-failed check.}
+All twelve automated checks passed on the original data (Table~\ref{tab:correctness-results}).
+The amount reconciliation between the source file and the warehouse differed by exactly
+0.00~INR, and every fact row resolved to a real dimension member. The informational
+counters suggest that the cleaning rules behaved as designed: 56,782 placeholder dates of
+birth were set to NULL, 117,460 future dates were shifted back by 100 years and all of them
+fell within the valid age range afterwards (no date had to be discarded), and 1,101 invalid
+genders were mapped to ``Unknown''. The batch pipeline was also re-run after 40,000
+transactions had been replayed into Kafka a second time (1,458,764 events in the topic);
+de-duplication on the transaction key kept the fact table at exactly 1,418,764 rows, and
+all checks passed again.
+
+For the streaming path, 40,000 transactions were replayed at 2,000 events per second. The
+stream raised 642 alerts, and the same rules applied in batch to the same transactions in
+the warehouse produced exactly the same 642 alerts, with identical rules and conformed keys
+and no duplicates. The end-to-end latency from the producer to the alert being visible in
+ClickHouse was 2.10~s at the median and 3.18~s at the 95th percentile, within the 5-second
+target. The remaining check---identical BR results across solutions---depends on the
+alternative solutions and is reported with the benchmark.
 
 \begin{table}[!t]
 \centering
-\caption{Data Correctness Results}
+\caption{Data Correctness Results (Original Data)}
 \label{tab:correctness-results}
 \footnotesize
-\setlength{\tabcolsep}{4pt}
-\begin{tabular}{L{1.7cm} L{3.5cm} L{1.5cm} L{0.8cm}}
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{l L{1.45cm} L{3.0cm} L{1.25cm} L{1.25cm}}
 \toprule
-\textbf{Characteristic} & \textbf{Metric} & \textbf{Target} & \textbf{Result} \\
+\textbf{ID} & \textbf{Charact.} & \textbf{Metric} & \textbf{Target} & \textbf{Result} \\
 \midrule
-Completeness & Source rows vs.\ fact rows & 1,418,764 & \tbd \\
-Completeness & Null foreign keys & 0 & \tbd \\
-Uniqueness & Duplicate surrogate / natural keys & 0 & \tbd \\
-Accuracy & Out-of-range DOB, gender, amount & 0 & \tbd \\
-Consistency & Amount reconciliation difference & 0 INR & \tbd \\
-Consistency & Orphan foreign keys & 0 & \tbd \\
-Consistency & BR results identical across solutions & 10 / 10 & \tbd \\
-Currentness & Alert latency, p95 & $\leq$ 5 s & \tbd \\
+C1 & Completeness & Source transactions vs.\ fact rows & 1,418,764 & 1,418,764 \\
+C2 & Completeness & Source customers vs.\ \tbl{dim\_customer} rows & 1,046,782 & 1,046,782 \\
+C3 & Completeness & Fact rows pointing to the Unknown member & 0 & 0 \\
+U1 & Uniqueness & Duplicate surrogate keys & 0 & 0 \\
+U2 & Uniqueness & Duplicate customer natural keys & 0 & 0 \\
+U3 & Uniqueness & Duplicate transaction keys & 0 & 0 \\
+A1 & Accuracy & DOB outside age 0--100 & 0 & 0 \\
+A2 & Accuracy & Gender outside \{M, F, Unknown\} & 0 & 0 \\
+A3 & Accuracy & Negative amounts & 0 & 0 \\
+K1 & Consistency & $|\sum$ source $-$ $\sum$ warehouse$|$ & 0.00 INR & 0.00 INR \\
+K2 & Consistency & Orphan foreign keys & 0 & 0 \\
+K3 & Consistency & Duplicate snapshot rows & 0 & 0 \\
+S1 & Consistency & Stream alerts equal batch alerts & 642 & 642 \\
+S2 & Currentness & Alert latency, p95 & $\leq$ 5 s & 3.18 s \\
+X1 & Consistency & BR results identical across solutions & 10 / 10 & \tbd \\
 \bottomrule
 \end{tabular}
 \end{table}
 
 \subsection{Performance}
+Table~\ref{tab:pipeline} reports the duration of each pipeline stage on the original data
+($\times$1). These are single observations, recorded while the pipeline was developed;
+they indicate the order of magnitude only, and the systematic measurements (B1--B4) follow
+the protocol of Section~\ref{sec:method}. The whole batch pipeline, from the raw layer to
+the data marts, completed in 38~s, and each BR query on the star schema in ClickHouse
+answered in 4--90~ms.
+
+\begin{table}[!t]
+\centering
+\caption{Pipeline Stage Durations at Scale Factor $\times$1 (Single Run)}
+\label{tab:pipeline}
+\footnotesize
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{L{4.2cm} L{2.0cm} r}
+\toprule
+\textbf{Stage} & \textbf{Volume} & \textbf{Time} \\
+\midrule
+Producer: CSV $\rightarrow$ Kafka (unthrottled) & 1.42M events & 5.2 s \\
+Spark: Kafka + CSV $\rightarrow$ raw Parquet & 2.47M rows & 17 s \\
+Spark: raw $\rightarrow$ staging $\rightarrow$ star schema & 6 tables & 32 s \\
+ClickHouse: load from Parquet & 5.30M rows & 1.5 s \\
+Full re-run: star schema, load, checks, marts & --- & 38 s \\
+\bottomrule
+\end{tabular}
+\end{table}
+
 \todo{Fill Table~\ref{tab:results} for each scale factor and add charts of latency vs.\
 scale factor (B1, B2), streaming latency (B3), and ETL time vs.\ cores (B4).}
 
@@ -1077,8 +1154,37 @@ BR10 & \tbd & \tbd & \tbd \\
 \end{table}
 
 \subsection{Effectiveness of Data Exploitation}
-\todo{Report, per BR, whether the demonstration succeeded, the number of interactions, and
-the time to answer; add one screenshot per user group, as in Figs.~\ref{fig:exec}
+All ten BRs were demonstrated end to end on the original data: nine through the seven
+Superset dashboards and BR7 through the Streamlit page, whose alert counters grew in real
+time while transactions were replayed. Table~\ref{tab:br-results} lists, for each BR, the
+view that answers it and one result it produced. In the browser, each dashboard chart
+received its data in about 0.75~s and a dashboard page loaded in about 1.1~s.
+
+\begin{table*}[!t]
+\centering
+\caption{Demonstration of the Business Requirements and Example Results}
+\label{tab:br-results}
+\small
+\begin{tabular}{l L{2.6cm} c L{11.0cm}}
+\toprule
+\textbf{BR} & \textbf{View} & \textbf{Demo} & \textbf{Example result} \\
+\midrule
+BR1 & Executive & \checkmark & 1.42M transactions worth 2.23B INR; 25.6k active customers on an average day \\
+BR2 & Executive & \checkmark & Saturday has the most transactions per day (33,491 on average), Friday the fewest (20,114) \\
+BR3 & Regional & \checkmark & Delhi leads the named cities with 366M INR, ahead of Mumbai (277M INR); the 54 named cities hold 77.6\% of transactions \\
+BR4 & Marketing & \checkmark & 91.7\% of customers are ``Hibernating''; ``At Risk (High Value)'' has only 22,988 customers but 601M INR of value, a natural campaign target \\
+BR5 & Marketing & \checkmark & The average transaction is lowest for ages 18--24 (979.68~INR for men) and highest for older groups (3,053.43~INR for women aged 55--64; 3,400.56~INR for men aged 65+); women spend more per transaction than men in every age group below 65 \\
+BR6 & Product & \checkmark & Purchases are 78.6\% and transfers 21.1\% of transactions; bill and loan payments stay below 0.4\% \\
+BR7 & Risk (Streamlit) & \checkmark & 642 alerts for 40,000 replayed transactions, visible within 3.18~s (p95) \\
+BR8 & Wealth & \checkmark & 10,482 customers above the top-1\% threshold of 1.59M INR hold 46.7B INR \\
+BR9 & Data quality & \checkmark & 12 of 12 checks passed; corrections listed by rule (e.g., 117,460 DOBs shifted back 100 years) \\
+BR10 & Regional & \checkmark & 68.4\% of transactions are between 100 and 2,000 INR; only 0.3\% reach 50,000 INR or more \\
+\bottomrule
+\end{tabular}
+\end{table*}
+
+\todo{Measure, per BR, the number of interactions and the time to answer; if conducted,
+report the SUS score; add one screenshot per user group, as in Figs.~\ref{fig:exec}
 and~\ref{fig:risk}.}
 
 \begin{figure}[!t]
@@ -1105,7 +1211,10 @@ The results should be interpreted with caution. The data is synthetic, so behavi
 findings may not transfer to a real bank. Scaling by replication preserves the
 distribution of the original data and may therefore favor compression more than real data
 would. All measurements are taken on a single machine, so they do not capture the network
-effects of a distributed deployment.
+effects of a distributed deployment. Two properties of the synthetic data also limit
+behavioral conclusions: coverage is effectively limited to 2016-08-01--2016-09-21, and many
+customers share identical balances to the last rupee (e.g., 115,035,495.10~INR), which
+suggests generated rather than observed values.
 
 
 %% =====================================================================
@@ -1124,7 +1233,7 @@ Section~\ref{sec:criteria}.}
 \textbf{Recommendations.} \todo{State which solution the bank should adopt and under which
 conditions, based on the results.}
 
-\textbf{Limitations.} The data covers only 55 days; most customers have a single
+\textbf{Limitations.} The data covers only 55 days, of which only two fall in October; most customers have a single
 transaction; transaction types and several customer attributes are rule-inferred or
 simulated; there is no time of day; and the absence of effective dates prevents a genuine
 slowly changing dimension.
@@ -1141,8 +1250,17 @@ anomaly detection; and evaluate a distributed deployment.
 \section{Reproducibility}
 \label{App:Reproducibility}
 The full source code, Docker Compose configuration, and benchmark scripts are available at
-\todo{repository URL}. The system starts with \texttt{make up}; the pipeline runs with
-\texttt{make etl}; the benchmark runs with \texttt{make bench}.
+\todo{repository URL}. The main commands are:
+\begin{itemize}
+  \item \texttt{make up} --- start Kafka, Spark, and ClickHouse;
+  \item \texttt{make produce} --- replay the source transactions into Kafka;
+  \item \texttt{make pipeline} --- raw layer, star schema, ClickHouse load, data quality
+        checks, and data marts;
+  \item \texttt{make stream} and \texttt{make produce-live RATE=2000 LIMIT=40000} ---
+        run the BR7 alert stream on a live replay;
+  \item \texttt{make app-up} and \texttt{make app-bootstrap} --- start Superset and
+        Streamlit and create the dashboards.
+\end{itemize}
 
 \section{Work Allocation}
 \label{App:Work}
