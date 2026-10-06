@@ -3,21 +3,18 @@
 ClickHouse reads the Parquet files itself (file() table function over the shared
 /lake mount), so no data passes through Python.
 """
-import re
 import time
 
-from common import clickhouse
+from common import clickhouse, run_sql_file
 
-DDL = "/opt/warehouse/ddl/dwh.sql"
+DDL = "/opt/warehouse/clickhouse/ddl/dwh.sql"
 TABLES = ["dim_date", "dim_customer", "dim_location", "dim_transaction_type",
           "fact_transactions", "fact_customer_balance_snapshot"]
 
 
 def main():
     ch = clickhouse()
-    sql = re.sub(r"--[^\n]*", "", open(DDL).read())
-    for stmt in filter(None, (s.strip() for s in sql.split(";"))):
-        ch.command(stmt)
+    run_sql_file(ch, DDL)
 
     for t in TABLES:
         cols = [r[0] for r in ch.query(

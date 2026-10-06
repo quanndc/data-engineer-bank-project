@@ -6,7 +6,8 @@ from pyspark.sql import SparkSession
 SOURCE = "/data/source/dwh"
 LAKE = "/lake"
 RAW, STAGING, CORE = f"{LAKE}/raw", f"{LAKE}/staging", f"{LAKE}/core"
-SEEDS = "/opt/seeds"
+WAREHOUSE = "/opt/warehouse"
+SEEDS = f"{WAREHOUSE}/seeds"
 
 KAFKA_BOOTSTRAP = os.environ.get("KAFKA_BOOTSTRAP", "kafka:9092")
 TOPIC = "transactions"
@@ -34,3 +35,11 @@ def clickhouse():
         host=os.environ.get("CLICKHOUSE_HOST", "clickhouse"),
         username=os.environ.get("CLICKHOUSE_USER", "bank"),
         password=os.environ.get("CLICKHOUSE_PASSWORD", "bank"))
+
+
+def run_sql_file(ch, path):
+    """Execute every statement of a .sql file (comments stripped, split on ';')."""
+    import re
+    sql = re.sub(r"--[^\n]*", "", open(path).read())
+    for stmt in filter(None, (part.strip() for part in sql.split(";"))):
+        ch.command(stmt)

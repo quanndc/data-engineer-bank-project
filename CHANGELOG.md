@@ -4,6 +4,43 @@ Ghi lại các phát hiện, quyết định thiết kế và thay đổi của 
 
 ---
 
+## [2026-10-06] Git + P3 — Mart RFM và 10 truy vấn BR ✅
+
+### Git
+- Khởi tạo repo (nhánh `main`), commit đầu `f105593` (P0–P2 + report). `data/`, `lake/` không đưa vào repo.
+
+### Code
+- [warehouse/clickhouse/ddl/marts.sql](warehouse/clickhouse/ddl/marts.sql): `mart.rfm`, ngưỡng cố định — R (≤7/21/42/63 ngày), F = min(số giao dịch, 5), M (<500/2.000/10.000/50.000 INR); 5 phân khúc: Champions, Loyal, Recent, At Risk (High Value), Hibernating.
+- [warehouse/clickhouse/ddl/streaming.sql](warehouse/clickhouse/ddl/streaming.sql): `dwh.fact_transaction_alert` cho BR7 (không bị xoá khi nạp lại batch); có `produced_at`, `detected_at`, `inserted_at` để đo độ trễ.
+- [warehouse/queries/clickhouse/](warehouse/queries/clickhouse/): 10 file `br01`–`br10`, mỗi file có `ORDER BY` xác định để so sánh kết quả giữa các giải pháp.
+- [spark/jobs/p3_marts_and_queries.py](spark/jobs/p3_marts_and_queries.py): dựng mart, chạy 10 BR, lưu CSV vào `lake/results/clickhouse_star/`.
+- `make marts`; `make pipeline` giờ = ingest → core → load → dq → marts.
+- Đổi mount: `./warehouse` → `/opt/warehouse` (DDL, truy vấn, seed); thêm `run_sql_file()` dùng chung.
+
+### Kết quả (ClickHouse, star schema, ×1, lần chạy thứ hai)
+| BR | Dòng | Thời gian |
+|---|---:|---:|
+| br01 daily KPIs | 55 | 37 ms |
+| br02 weekday/weekend | 7 | 24 ms |
+| br03 city ranking | 55 | 59 ms |
+| br04 RFM segments | 5 | 13 ms |
+| br05 age × gender | 19 | 90 ms |
+| br06 type mix | 216 | 36 ms |
+| br07 alerts | 0 (chờ P4) | 4 ms |
+| br08 high balance (top 1%) | 10.482 | 55 ms |
+| br09 data quality | 19 | 6 ms |
+| br10 amount bands | 328 | 32 ms |
+
+- Chạy lại toàn bộ pipeline (core → load → dq → marts): **38 s**, 12/12 DQ PASS.
+- *Lưu ý:* đây mới là số đo sơ bộ (1 lần chạy), chưa phải benchmark theo phương pháp (6 lần, median/p95) của P6.
+
+### Phát hiện cho report
+- RFM: **91,7% Hibernating** (hệ quả của 71% khách chỉ có 1 giao dịch); **At Risk (High Value)** 22.988 khách nhưng **601 triệu INR** → nhóm mục tiêu cho chiến dịch.
+- BR2: Thứ Bảy trung bình cao nhất (33.491 giao dịch/ngày), Thứ Sáu thấp nhất (20.114).
+- BR8: ngưỡng top 1% = 1.587.419 INR; nhiều khách có **số dư trùng nhau đến từng đồng** (115.035.495,10) → dấu hiệu dữ liệu synthetic, ghi vào phần giới hạn.
+
+---
+
 ## [2026-10-06] P1–P2 — Ingestion, staging, star schema, data quality ✅ (Mốc M1)
 
 ### Quyết định thiết kế đã chốt (4 điểm)

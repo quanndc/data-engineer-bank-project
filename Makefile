@@ -2,7 +2,7 @@
 COMPOSE := docker compose
 TOPIC   := transactions
 
-.PHONY: up down ps logs topic smoke clean produce ingest core load dq pipeline
+.PHONY: up down ps logs topic smoke clean produce ingest core load dq pipeline marts
 
 up:            ## Build and start Kafka, ClickHouse, Spark
 	mkdir -p lake
@@ -47,7 +47,10 @@ load:          ## P2: core Parquet -> ClickHouse dwh.*
 dq:            ## P2: data correctness checks -> dq.audit
 	$(SPARK) spark-submit /opt/jobs/p2_dq_checks.py
 
-pipeline: ingest core load dq   ## P1-P2 end to end (run `make produce` once before)
+marts:         ## P3: build data marts and run the 10 BR queries (results -> lake/results)
+	$(SPARK) python3 /opt/jobs/p3_marts_and_queries.py
+
+pipeline: ingest core load dq marts   ## P1-P3 end to end (run `make produce` once before)
 
 clean:         ## Stop the stack AND delete Kafka/ClickHouse volumes and the lake
 	$(COMPOSE) down -v

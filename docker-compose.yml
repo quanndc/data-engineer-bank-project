@@ -71,8 +71,7 @@ services:
       - ./lake:/lake                 # raw / staging / core Parquet layers
       - ./spark/jobs:/opt/jobs:ro
       - ./ingestion:/opt/ingestion:ro
-      - ./warehouse/seeds:/opt/seeds:ro            # curated reference data (city mapping)
-      - ./warehouse/clickhouse:/opt/warehouse:ro   # ClickHouse DDL used by the loader
+      - ./warehouse:/opt/warehouse:ro              # DDL, BR queries, seeds (city mapping)
     depends_on:
       kafka: { condition: service_healthy }
       clickhouse: { condition: service_healthy }
