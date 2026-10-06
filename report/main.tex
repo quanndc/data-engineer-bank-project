@@ -1,0 +1,1252 @@
+%% =====================================================================
+%% Technical Report -- Data Engineering (CO5173), HCMUT -- Group 27
+%% Kimball Dimensional Data Warehouse for Banking Analytics
+%%
+%% Format and structure follow the IEEE technical report template in
+%% LaTeX_Template_for_Technical_Report/ (IEEEtran v1.8, peerreview).
+%% IEEEtran.cls must sit next to this file.
+%% Build: tectonic main.tex   (or pdfLaTeX on Overleaf, run twice)
+%% Items in red [TODO] / TBD are pending implementation results.
+%% =====================================================================
+
+\documentclass[peerreview]{IEEEtran}
+\usepackage{cite}      % Tidies up citation numbers.
+\usepackage{url}       % Provides better formatting of URLs.
+\usepackage{iftex}
+\ifPDFTeX
+  \usepackage[utf8]{inputenc}
+\fi
+\usepackage{booktabs}  % \toprule, \midrule and \bottomrule in tables
+\usepackage{graphicx}
+
+% ---------- Additional packages ----------
+\usepackage{amsmath,amssymb}
+\usepackage{array}
+\usepackage{xcolor}
+\usepackage{listings}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning,fit}
+\usepackage[hidelinks]{hyperref}
+
+% ---------- Float placement ----------
+% Allow a few more floats per page; create a float-only page only when
+% it would be nearly full.
+\setcounter{topnumber}{3}
+\setcounter{bottomnumber}{2}
+\setcounter{totalnumber}{5}
+\setcounter{dbltopnumber}{2}
+\renewcommand{\topfraction}{0.85}
+\renewcommand{\bottomfraction}{0.6}
+\renewcommand{\textfraction}{0.1}
+\renewcommand{\floatpagefraction}{0.85}
+\renewcommand{\dbltopfraction}{0.85}
+\renewcommand{\dblfloatpagefraction}{0.85}
+
+\hyphenation{op-tical net-works semi-conduc-tor}
+
+% ---------- Helpers ----------
+\newcommand{\todo}[1]{\textcolor{red}{[TODO: #1]}}
+\newcommand{\tbd}{\textcolor{red}{TBD}}
+\newcommand{\tbl}[1]{\texttt{#1}}
+\newcolumntype{L}[1]{>{\raggedright\arraybackslash}p{#1}}
+
+\lstdefinestyle{code}{
+  basicstyle=\ttfamily\scriptsize,
+  keywordstyle=\color{blue!70!black}\bfseries,
+  commentstyle=\color{green!40!black}\itshape,
+  stringstyle=\color{orange!70!black},
+  breaklines=true,
+  frame=single,
+  framesep=3pt,
+  columns=fullflexible,
+  keepspaces=true,
+  showstringspaces=false,
+  captionpos=b
+}
+\lstset{style=code}
+
+
+\begin{document}
+
+% paper title
+\title{A Kimball Dimensional Data Warehouse for Banking Analytics: \\
+Design, Implementation, and Evaluation \\ with Kafka, Spark, and ClickHouse}
+
+% author names and affiliations
+\author{Kiet Ho Tuan Nguyen, Quan Minh Tran, Van Ngoc Huynh, Hai Ngoc Ho \\
+Group 27 --- Data Engineering (CO5173), Semester 1, 2026--2027\\
+Faculty of Computer Science and Engineering\\
+Ho Chi Minh City University of Technology (HCMUT), VNU-HCM\\
+Instructor: Assoc. Prof. Dr. Chau Thi Ngoc Vo\\
+}
+\date{\todo{submission date}}
+
+% make the title area
+\maketitle
+\tableofcontents
+\listoffigures
+\listoftables
+
+\IEEEpeerreviewmaketitle
+
+\begin{abstract}
+Banks generate large volumes of transactional data, yet raw transaction logs rarely support
+business decisions directly: they contain inconsistent identifiers, invalid attributes, and
+no structure for analytical queries. This report addresses this problem for a synthetic
+banking dataset of 1.42 million transactions and 1.05 million customer records. A profiling
+study revealed critical quality defects, including 142,360 customer identifiers shared by
+different individuals, 174,242 invalid dates of birth, and pre-built marts computed against
+the wrong reference date. We propose a Kimball dimensional data warehouse in which
+transactions are ingested through Apache Kafka, cleaned and conformed with Apache Spark
+(batch and Structured Streaming), and stored as a star schema in ClickHouse, a
+column-oriented database. Ten business requirements from seven user groups are served
+through Apache Superset dashboards and a near-real-time Streamlit alerting page. The
+proposed solution is assessed against alternative solutions---a One Big Table design, a
+row-store warehouse in PostgreSQL, and an in-database streaming approach---on three
+criteria: data correctness (based on ISO/IEC 25012), performance (a TPC-style benchmark at
+scale factors $\times$1, $\times$10, and $\times$50), and effectiveness of data
+exploitation through the application.
+\todo{Add one or two sentences with the key quantitative findings and the final
+recommendation once the evaluation is complete.}
+\end{abstract}
+
+
+
+%% =====================================================================
+\section{Introduction}
+\label{sec:intro}
+
+Retail banking is one of the most data-intensive industries. Every card purchase, transfer,
+bill payment, and loan repayment produces a record that, once aggregated, reveals how
+customers behave, which regions grow, which products are used, and where risk emerges.
+Decision makers across a bank---from the executive board to the marketing, risk, and wealth
+management teams---need these insights in a form that is correct, consistent, and fast to
+query.
+
+Operational transaction logs do not satisfy these needs on their own. They are optimized for
+recording events rather than for analysis; customer attributes are often duplicated or
+invalid; and each team tends to compute its own metrics from raw data, producing
+conflicting numbers. Data engineering closes this gap by building a pipeline that ingests,
+cleans, integrates, and models the data so that it can be exploited reliably.
+
+This report is the technical report of the project \emph{Build a system where your data
+engineering solution is proved successful (in a specific application domain)} for the Data
+Engineering course (CO5173). The application domain is \textbf{banking} and the data
+engineering solution is a \textbf{Kimball dimensional data warehouse} \cite{kimball2013}.
+The objective is to show, with measurable evidence, that the solution turns a defective
+banking dataset into data that is correct, performant, and useful to the bank's users.
+
+The main contributions are:
+\begin{itemize}
+  \item a profiling study of the source dataset that identifies and quantifies its quality
+        defects, organized by the ISO/IEC 25012 data quality model \cite{iso25012};
+  \item a Kimball star schema for banking transactions, including a corrected customer
+        identity model, a periodic balance snapshot for the semi-additive balance measure,
+        and a streaming alert fact table;
+  \item an end-to-end pipeline (Kafka $\rightarrow$ Spark $\rightarrow$ ClickHouse) with
+        automated data quality checks, and a data-driven application covering ten business
+        requirements for seven user groups;
+  \item a systematic, TPC-style assessment \cite{tpch,tpcds} of the proposed solution
+        against alternative solutions at three data scales.
+\end{itemize}
+
+The rest of the report is organized as follows. Section~\ref{sec:problem} defines the
+problem: stakeholders, business requirements, and the characteristics and defects of the
+data source. Section~\ref{sec:solutions} presents the proposed solution and the
+alternatives. Section~\ref{sec:criteria} defines the criteria used to assess them.
+Section~\ref{sec:method} describes the research methodology. Section~\ref{sec:analysis}
+analyzes and interprets the results, and Section~\ref{sec:conclusion} gives conclusions and
+recommendations.
+
+
+%% =====================================================================
+\section{Problem Definition}
+\label{sec:problem}
+
+\subsection{Problem Statement}
+The project uses the public \emph{Banking Data Warehouse Sample} dataset
+\cite{kaggle_dataset}. Although the dataset is advertised as analytics-ready, our profiling
+(Sections~\ref{sec:data-characteristics} and~\ref{sec:data-quality}) shows that it cannot
+be used directly. The problem addressed in this report is therefore:
+
+\begin{quote}
+\emph{How can a banking transaction dataset with known quality defects be engineered into a
+correct, performant, and exploitable analytical data warehouse that demonstrably supports
+the business requirements of multiple user groups?}
+\end{quote}
+
+\subsection{Stakeholders and User Groups}
+The primary stakeholder is a retail bank that needs a single, trusted source of analytical
+data. Table~\ref{tab:usergroups} lists the seven user groups the system supports. Their
+characteristics drive both the data model and the design of the application.
+
+\begin{table}[!t]
+\centering
+\caption{User Groups and Their Characteristics}
+\label{tab:usergroups}
+\footnotesize
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{L{2.0cm} L{2.8cm} L{2.9cm}}
+\toprule
+\textbf{User group} & \textbf{Data usage need} & \textbf{Characteristics} \\
+\midrule
+Executive board & High-level KPIs and trends & Non-technical; short sessions; wants summaries \\
+Regional management & Compare cities and regions & Business users; filter by area \\
+Marketing / CRM & Segment customers for campaigns & Analytical; exports customer lists \\
+Product development & Understand the product usage mix & Analytical; drills into segments \\
+Risk management & Detect unusual transactions & Time-critical; needs near-real-time alerts \\
+Wealth management & Find high-balance customers & Relationship managers; act on lists \\
+Data team & Monitor data quality & Technical; needs audit details \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Business Requirements}
+The course requires at least $2n$ business requirements (BRs), where $n$ is the number of
+group members. With $n=4$, at least eight BRs are required. We define eight core BRs and two
+additional ones (BR9, BR10) that widen the set of supported user groups
+(Table~\ref{tab:brs}).
+
+Each BR exists to support a business objective of the bank. Table~\ref{tab:objectives}
+links the seven objectives to the BRs that serve them, together with an example of the
+decision each BR informs. Every objective is served by at least one BR, and every BR
+serves exactly one objective, so no requirement is included without a business purpose.
+
+\begin{table}[!t]
+\centering
+\caption{Business Objectives Supported by the Business Requirements}
+\label{tab:objectives}
+\footnotesize
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{L{2.7cm} L{0.95cm} L{3.9cm}}
+\toprule
+\textbf{Business objective} & \textbf{BRs} & \textbf{Example decision informed} \\
+\midrule
+O1. Monitor business performance and growth & BR1, BR2 & Adjust daily operations and staffing to transaction peaks \\
+O2. Optimize the regional network & BR3, BR10 & Prioritize investment in high-value cities; set regional fee and limit policies \\
+O3. Increase marketing campaign effectiveness & BR4, BR5 & Target ``At Risk'' and high-value segments with tailored offers \\
+O4. Improve the product portfolio & BR6 & Promote under-used products (bill and loan payment) in specific regions \\
+O5. Reduce fraud and risk losses & BR7 & Review or block unusual transactions within seconds \\
+O6. Grow investment and savings revenue & BR8 & Assign high-balance customers to relationship managers \\
+O7. Ensure trustworthy data for decisions & BR9 & Decide whether today's figures can be published \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table*}[!t]
+\centering
+\caption{Business Requirements, User Groups, and Supporting Data}
+\label{tab:brs}
+\small
+\begin{tabular}{l L{2.7cm} L{6.0cm} L{5.4cm}}
+\toprule
+\textbf{ID} & \textbf{User group} & \textbf{Business requirement} & \textbf{Data used} \\
+\midrule
+BR1 & Executive board & Monitor transaction count, transaction value, and active customers by day, week, and month & \tbl{fact\_transactions}, \tbl{dim\_date} \\
+BR2 & Executive board & Compare weekday and weekend behavior, and behavior by day of week & \tbl{fact\_transactions}, \tbl{dim\_date} \\
+BR3 & Regional management & Rank cities and regions by transaction value, customer count, and average value & \tbl{fact\_transactions}, \tbl{dim\_location} \\
+BR4 & Marketing / CRM & Segment customers with RFM (recency relative to 2016-10-21) to select campaign targets & \tbl{mart\_rfm} (rebuilt from the fact table) \\
+BR5 & Marketing / CRM & Analyze spending behavior by age group and gender & \tbl{fact\_transactions}, \tbl{dim\_customer} \\
+BR6 & Product development & Analyze the transaction type mix by region and customer group & \tbl{fact\_transactions}, \tbl{dim\_transaction\_type}, \tbl{dim\_customer} \\
+BR7 & Risk management & Detect unusual transactions in near real time (amount above a high percentile, or a large share of the balance) & Kafka stream, \tbl{fact\_transaction\_alert} \\
+BR8 & Wealth management & List high-balance customers for cross-selling investment and savings products & \tbl{fact\_customer\_balance\_snapshot} \\
+BR9 & Data team & Monitor data quality: defective records, corrected records, and source-to-warehouse reconciliation & Data quality checks, \tbl{audit} \\
+BR10 & Regional management & Analyze the distribution of transaction values by amount band and region & \tbl{fact\_transactions}, \tbl{dim\_location} \\
+\bottomrule
+\end{tabular}
+\end{table*}
+
+\subsection{Expected Data Sources}
+In a production deployment, the warehouse would be fed by several operational systems of
+the bank. Table~\ref{tab:expected-sources} lists these expected sources, their
+characteristics, and how each is represented in this project. The project itself uses only
+the public dataset described in Section~\ref{sec:data-source}; the operational systems are
+the sources the architecture is designed to receive, not systems we connected to. Each file
+of the dataset stands in for one of them, and the architecture keeps the same split as a
+real deployment: high-velocity transactions arrive as an event stream through Kafka, while
+slowly changing reference data (customers and locations) is loaded in batch.
+
+\begin{table}[!t]
+\centering
+\caption{Expected Data Sources in a Bank and Their Representation in This Project}
+\label{tab:expected-sources}
+\footnotesize
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{L{2.2cm} L{2.6cm} L{2.8cm}}
+\toprule
+\textbf{Expected source} & \textbf{Characteristics} & \textbf{Represented by} \\
+\midrule
+Core banking system (transactions, balances) & High volume; continuous; structured & \tbl{fact\_transactions} \\
+Card and payment switch (real-time events) & High velocity; event-based; must be processed in seconds & Producer replaying \tbl{fact\_transactions} into Kafka \\
+Customer master / KYC / CRM & Slowly changing; duplicates and invalid attributes are common & \tbl{dim\_customer} \\
+Branch, ATM, and POS registry & Small; rarely changes; free-text names & \tbl{dim\_location} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Data Source}
+\label{sec:data-source}
+The source is published under the CC BY-SA 4.0 license. It is synthetic and contains
+Indian retail banking transactions denominated in Indian rupees (INR) from 2016-08-01 to
+2016-10-21. It is delivered as eight CSV files in two layers (Table~\ref{tab:sources}): a
+\emph{dwh} layer shaped as a basic star schema, and a \emph{datamart} layer with
+pre-aggregated tables.
+
+\begin{table}[!htb]
+\centering
+\caption{Source Files}
+\label{tab:sources}
+\footnotesize
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{l l r}
+\toprule
+\textbf{Layer} & \textbf{File} & \textbf{Rows} \\
+\midrule
+dwh & \tbl{fact\_transactions} & 1,418,764 \\
+dwh & \tbl{dim\_customer} & 1,046,782 \\
+dwh & \tbl{dim\_location} & 9,354 \\
+dwh & \tbl{dim\_date} & 55 \\
+datamart & \tbl{mart\_financial\_summary} & 55 \\
+datamart & \tbl{mart\_customer\_summary} & 1,268,599 \\
+datamart & \tbl{customer\_behavior\_segmentation} & 1,268,599 \\
+datamart & \tbl{mart\_rfm\_segmentation} & 1,268,599 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Data Characteristics}
+\label{sec:data-characteristics}
+
+\textbf{Volume and value.} The fact table holds 1,418,764 transactions with a total value
+of 2.23 billion INR. Transaction amounts are highly skewed: the mean is 1,572.39 INR, the
+median 459.49 INR, the 99th percentile 20,000 INR, and the maximum 1,560,034.99 INR.
+Recorded balances range from 0 to 115.0 million INR (median 16,792.18 INR). Daily volume
+ranges from 3 to 36,798 transactions (mean 25,796).
+
+\textbf{Transaction types.} Types were inferred by the dataset author using recurrence and
+amount rules, and their distribution is strongly imbalanced (Table~\ref{tab:types}).
+
+\begin{table}[!htb]
+\centering
+\caption{Transaction Type Distribution (Amounts in INR)}
+\label{tab:types}
+\footnotesize
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{l r r r r}
+\toprule
+\textbf{Type} & \textbf{Count} & \textbf{Share} & \textbf{Mean} & \textbf{Median} \\
+\midrule
+Purchase & 1,114,638 & 78.56\% & 418 & 298 \\
+Transfer & 298,845 & 21.06\% & 5,902 & 2,800 \\
+Bill Payment & 3,834 & 0.27\% & 127 & 100 \\
+Loan Payment & 1,447 & 0.10\% & 830 & 650 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{History depth.} Each customer record has very few transactions
+(Table~\ref{tab:depth}): 70.8\% have exactly one and the maximum is six.
+
+\begin{table}[!htb]
+\centering
+\caption{Transactions per Customer Record}
+\label{tab:depth}
+\footnotesize
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{l r r r r r r}
+\toprule
+\textbf{Transactions} & 1 & 2 & 3 & 4 & 5 & 6 \\
+\midrule
+\textbf{Records} & 740,653 & 248,670 & 49,944 & 6,716 & 719 & 80 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{Referential integrity.} Every \tbl{customer\_key} in the fact table resolves to a
+row of \tbl{dim\_customer} (zero orphans).
+
+\subsection{Data Quality Defects}
+\label{sec:data-quality}
+Table~\ref{tab:dq} summarizes the defects found, organized by the ISO/IEC 25012 data
+quality characteristics \cite{iso25012}. Three findings are decisive.
+
+\emph{Customer identifier collisions.} There are 884,265 distinct \tbl{customer\_id}
+values but 1,046,782 customer keys. Of the 142,360 identifiers mapped to more than one key,
+141,466 have records with different dates of birth and 60,185 with different genders.
+These are different individuals sharing an identifier, not one customer whose attributes
+change over time; a slowly changing dimension would therefore model them incorrectly.
+
+\emph{Invalid dates of birth.} 56,782 records hold the placeholder 1800-01-01, 117,460
+hold dates after the end of the observation period (up to 2075-12-31), and 3,385 are null.
+The future dates are consistent with a two-digit-year parsing error (e.g., ``75''
+$\rightarrow$ 2075).
+
+\emph{Unreliable pre-built marts.} The datamart tables contain 1,268,599 rows for 884,265
+identifiers (up to 20 rows per identifier). In the RFM mart, recency ranges from 3,484 to
+3,565 days, i.e., it was computed against the processing date (around 2026) rather than the
+end of the data (2016-10-21), and the segments ``At Risk'' and ``Potential Loyalists'' have
+exactly the same size (303,215). In the behavior segmentation mart,
+\tbl{activity\_segment} takes a single value and 99.3\% of rows are ``Low Value''.
+
+\begin{table*}[!t]
+\centering
+\caption{Data Quality Defects by ISO/IEC 25012 Characteristic}
+\label{tab:dq}
+\small
+\begin{tabular}{L{2.3cm} L{6.6cm} L{5.8cm}}
+\toprule
+\textbf{Characteristic} & \textbf{Finding} & \textbf{Required handling} \\
+\midrule
+Uniqueness & 142,360 \tbl{customer\_id} values shared by different individuals; marts duplicated (up to 20 rows per identifier) & New natural key and surrogate key; marts rebuilt from the fact table \\
+Accuracy & DOB = 1800-01-01 (56,782); DOB after 2016-10-21 (117,460); gender ``T'' (1) and ``Unknown'' (1,100); 1,102 zero-amount transactions & DOB placeholder $\rightarrow$ NULL, future DOB shifted back 100 years, DOB outside age 0--100 $\rightarrow$ NULL (all flagged); gender mapped to M/F/Unknown; zero amounts flagged \\
+Completeness & 3,385 null DOB; \tbl{dim\_date} covers only 55 days; no time of day & Unknown members; full calendar dimension; no time dimension (limitation) \\
+Consistency & RFM recency against the wrong reference date; equal-size RFM segments; single-valued \tbl{activity\_segment} & Pre-built marts discarded; RFM recomputed with reference date 2016-10-21 \\
+Credibility & Household, marital status, and account status are simulated (94.4\% ``Closed''); transaction types rule-inferred & Kept as descriptive attributes only; no business conclusions drawn from them \\
+\bottomrule
+\end{tabular}
+\end{table*}
+
+\subsection{Scope and Constraints}
+The BRs were chosen to be answerable with the available data. Because the data spans only
+55 days and most customers have a single transaction, requirements that depend on long
+customer histories---churn prediction, customer lifetime value, or recurring payment
+detection---are out of scope. BR5 depends on the cleaning of dates of birth and gender, and
+BR8 uses the balance recorded at transaction time instead of a true end-of-day balance.
+Finally, the solution must run on a single machine so that it can be demonstrated and
+reproduced.
+
+
+%% =====================================================================
+\section{Proposed Solutions}
+\label{sec:solutions}
+
+This section presents the proposed solution---a Kimball star schema on ClickHouse, fed by
+Kafka and Spark---and the alternative solutions against which it is assessed.
+
+\subsection{First Solution: Kimball Star Schema on ClickHouse (Proposed)}
+\label{sec:sol-kimball}
+
+\subsubsection{Architecture}
+Fig.~\ref{fig:arch} shows the container-level architecture, drawn following the C4 model
+\cite{c4model}. All components run in Docker Compose on a single machine:
+\begin{enumerate}
+  \item \textbf{Ingestion.} A Python producer replays the transaction CSV into a Kafka topic
+        in date order at a configurable rate, emulating a live transaction feed. Only
+        transactions flow through Kafka; reference data (customers and locations) changes
+        rarely and is read directly from the source CSV files.
+  \item \textbf{Batch processing.} Spark reads transactions from the Kafka topic and
+        reference data from the CSV files, writes them as Parquet (raw layer), applies
+        cleaning rules (staging layer), builds dimensions and facts with surrogate keys
+        (core layer), and loads them into ClickHouse.
+  \item \textbf{Stream processing.} Spark Structured Streaming consumes the Kafka topic,
+        evaluates anomaly rules, and writes alerts to ClickHouse (BR7).
+  \item \textbf{Data management.} ClickHouse stores the star schema, the data marts, the
+        alerts, and the \tbl{audit} table.
+  \item \textbf{Data quality.} SQL checks run after each load and write their results to
+        the \tbl{audit} table (BR9).
+  \item \textbf{Application.} Superset serves one dashboard per user group; Streamlit serves
+        the near-real-time alert page.
+\end{enumerate}
+
+\begin{figure*}[!t]
+\centering
+\begin{tikzpicture}[
+  box/.style={draw, rounded corners=2pt, align=center, minimum height=1.1cm,
+              text width=2.3cm, font=\footnotesize, fill=#1},
+  box/.default=white,
+  arr/.style={-{Stealth[length=2mm]}, thick},
+  lbl/.style={font=\scriptsize, above=1pt}
+]
+% Fixed grid: columns 3.6 cm apart, rows 1.3 cm above/below the axis
+\node[box=gray!10]                                  (csv)       at (0,0)      {Source CSV\\(Kaggle)};
+\node[box=orange!15]                                (kafka)     at (3.6,0)    {Apache Kafka\\{\scriptsize topic: transactions}};
+\node[box=blue!10]                                  (batch)     at (7.2,1.3)  {Spark batch\\raw $\rightarrow$ staging\\$\rightarrow$ core};
+\node[box=blue!10]                                  (stream)    at (7.2,-1.3) {Spark Structured\\Streaming (BR7)};
+\node[box=gray!10, minimum height=0.8cm]            (pq)        at (7.2,3.2)  {Parquet lake\\(raw, staging)};
+\node[box=green!12, minimum height=3.7cm]           (ch)        at (10.8,0)   {ClickHouse\\[3pt]star schema\\+ data marts\\+ alerts\\+ audit};
+\node[box=purple!10]                                (superset)  at (14.4,1.3) {Apache Superset\\dashboards};
+\node[box=purple!10]                                (streamlit) at (14.4,-1.3){Streamlit\\alert page};
+
+\draw[arr] (csv) -- node[lbl]{producer} (kafka);
+\draw[arr] (csv.north) |- node[lbl, pos=0.75]{reference data (customers, locations)} ([yshift=3mm]batch.west);
+\draw[arr] (kafka.east) -- ++(0.55,0) |- (batch.west);
+\draw[arr] (kafka.east) -- ++(0.55,0) |- (stream.west);
+\draw[arr, dashed] (batch.north) -- (pq.south);
+\draw[arr] (batch.east) -- (batch.east -| ch.west);
+\draw[arr] (stream.east) -- (stream.east -| ch.west);
+\draw[arr] (ch.east |- superset.west) -- (superset.west);
+\draw[arr] (ch.east |- streamlit.west) -- (streamlit.west);
+\end{tikzpicture}
+\caption{Container-level architecture of the proposed solution (C4 model, level 2).}
+\label{fig:arch}
+\end{figure*}
+
+\subsubsection{Dimensional Model}
+The model follows Kimball's four-step design process \cite{kimball2013}:
+\begin{enumerate}
+  \item \textbf{Business process:} customer account transactions.
+  \item \textbf{Grain:} one fact row per transaction (atomic grain), so that every BR can be
+        answered without loss of detail.
+  \item \textbf{Dimensions} (Fig.~\ref{fig:star}):
+  \begin{itemize}
+    \item \tbl{dim\_date}: a full calendar for 2015--2017 (instead of the 55-row source),
+          with day of week, weekend flag, week, month, quarter, and Indian public holidays.
+    \item \tbl{dim\_customer}: one row per individual. The natural key is the triple
+          (\tbl{customer\_id}, original DOB, gender), which separates the colliding
+          individuals. Cleaned DOB, age group, gender, descriptive attributes, data quality
+          flags, and an ``Unknown'' member are added.
+    \item \tbl{dim\_location}: standardized location names. The source holds 9,354
+          free-text locations and no state information, so a curated seed table maps the
+          54 largest cities to a canonical city and state (e.g., ``DELHI'', ``NEW DELHI'',
+          and ``LAL HOSPITAL NEW DELHI'' $\rightarrow$ Delhi); these cover 77.6\% of the
+          transactions, and all other locations are grouped as ``Other''.
+    \item \tbl{dim\_transaction\_type}: the four transaction types, with a flag stating
+          that the labels were rule-inferred.
+  \end{itemize}
+  \item \textbf{Facts:} \tbl{transaction\_amount} is \emph{additive} along every dimension.
+        \tbl{account\_balance} is \emph{semi-additive}: it must not be summed over time, only
+        averaged or taken at the end of a period. A periodic snapshot fact
+        \tbl{fact\_customer\_balance\_snapshot} therefore records the last known balance per
+        customer at each month end (BR8). A daily grain over the three-year calendar
+        would have produced about 1.1 billion rows; the monthly grain produces 2.8
+        million and still answers BR8.
+\end{enumerate}
+Two further tables complete the model: \tbl{fact\_transaction\_alert}, written by the
+streaming job (BR7), and \tbl{mart\_rfm}, an RFM mart \cite{hughes1994} rebuilt from the
+fact table with 2016-10-21 as the reference date (BR4).
+
+\begin{figure}[!htb]
+\centering
+\begin{tikzpicture}[
+  ent/.style={draw, rounded corners=2pt, align=left, font=\scriptsize,
+              text width=3.6cm, inner sep=3pt},
+  fact/.style={ent, fill=blue!10, text width=3.7cm},
+  dim/.style={ent, fill=green!10},
+  rel/.style={thick}
+]
+% Fixed positions sized for one column (about 8.5 cm wide)
+\node[fact] (f) at (0,0) {\textbf{fact\_transactions}\\[1pt]
+transaction\_key (PK)\\ date\_key (FK)\\ customer\_key (FK)\\ location\_key (FK)\\
+txn\_type\_key (FK)\\ transaction\_amount \emph{(additive)}\\
+account\_balance \emph{(semi-additive)}\\ dq\_flags};
+\node[dim] (d) at (-2.15, 2.85) {\textbf{dim\_date}\\ date\_key, full\_date,\\ day\_of\_week, is\_weekend,\\ week, month, quarter,\\ is\_holiday};
+\node[dim] (c) at ( 2.15, 2.85) {\textbf{dim\_customer}\\ customer\_key, customer\_nk,\\ customer\_id, dob, age\_group,\\ gender, marital\_status,\\ account\_status, dq\_flags};
+\node[dim] (l) at (-2.15,-2.55) {\textbf{dim\_location}\\ location\_key, location\_name,\\ city, state};
+\node[dim] (t) at ( 2.15,-2.55) {\textbf{dim\_transaction\_type}\\ txn\_type\_key, type\_name,\\ is\_rule\_inferred};
+\draw[rel] (f) -- (d); \draw[rel] (f) -- (c);
+\draw[rel] (f) -- (l); \draw[rel] (f) -- (t);
+\end{tikzpicture}
+\caption{Star schema of the transaction business process.}
+\label{fig:star}
+\end{figure}
+
+\subsubsection{Technology for Data Processing}
+\textbf{Apache Kafka} \cite{kreps2011kafka} decouples the source from the processing jobs
+and lets the same stream feed both batch and streaming consumers.
+Listing~\ref{lst:producer} shows the producer that replays transactions in date order.
+
+% NOTE: reference design -- replace with the final code from the repository before submission.
+\begin{lstlisting}[language=Python, caption={Kafka producer replaying transactions in date order.}, label={lst:producer}]
+import csv, json, time
+from confluent_kafka import Producer
+
+p = Producer({"bootstrap.servers": "kafka:9092"})
+# input file is sorted by date_key
+with open("fact_transactions_sorted.csv") as f:
+    for row in csv.DictReader(f):
+        p.produce("transactions",
+                  key=row["customer_key"],
+                  value=json.dumps(row))
+        p.poll(0)
+        time.sleep(1 / RATE)  # replay rate
+p.flush()
+\end{lstlisting}
+
+\textbf{Apache Spark} \cite{zaharia2016spark} performs the batch ETL. Its DataFrame API
+expresses cleaning rules declaratively and scales from a laptop to a cluster without code
+changes. Listing~\ref{lst:clean} shows the customer cleaning and identity rules.
+
+% NOTE: reference design -- replace with the final code from the repository before submission.
+\begin{lstlisting}[language=Python, caption={Customer cleaning and natural key construction in PySpark.}, label={lst:clean}]
+from pyspark.sql import functions as F
+REF = F.lit("2016-10-21").cast("date")
+MIN_DOB = F.lit("1916-10-22").cast("date")
+dob = F.col("customer_dob")
+gen = F.col("customer_gender")
+
+cust = (spark.read.parquet("raw/dim_customer")
+  # natural key on ORIGINAL attributes:
+  # separates colliding individuals
+  .withColumn("customer_nk", F.sha2(
+      F.concat_ws("|", "customer_id",
+          F.coalesce(dob.cast("string"),
+                     F.lit("NA")),
+          "customer_gender"), 256))
+  # placeholder -> null;
+  # future date -> century correction
+  .withColumn("fixed",
+      F.when(dob == "1800-01-01", None)
+       .when(dob > REF, F.add_months(dob, -1200))
+       .otherwise(dob))
+  # keep only plausible ages (0..100)
+  .withColumn("dob", F.when(F.col("fixed")
+      .between(MIN_DOB, REF), F.col("fixed")))
+  .withColumn("dq_dob_fixed", dob > REF)
+  .withColumn("gender",
+      F.when(gen.isin("M", "F"), gen)
+       .otherwise("Unknown")))
+\end{lstlisting}
+
+\textbf{Spark Structured Streaming} \cite{armbrust2018structured} implements BR7 with the
+same DataFrame API as the batch jobs. A transaction raises an alert when its amount exceeds
+a threshold $\tau$ (the historical 99th percentile, 20,000 INR) or a fraction $\rho$ of the
+account balance (Listing~\ref{lst:stream}). With $\tau$ alone, 13,734 transactions
+(0.97\%) of the historical data would be flagged.
+
+% NOTE: reference design -- replace with the final code from the repository before submission.
+\begin{lstlisting}[language=Python, caption={Near-real-time anomaly detection with Spark Structured Streaming (BR7).}, label={lst:stream}]
+amt = F.col("transaction_amount")
+bal = F.col("account_balance")
+
+txn = (spark.readStream.format("kafka")
+  .option("kafka.bootstrap.servers",
+          "kafka:9092")
+  .option("subscribe", "transactions")
+  .load()
+  .select(F.from_json(
+      F.col("value").cast("string"),
+      schema).alias("t"))
+  .select("t.*"))
+
+alerts = (txn
+  .filter((amt > TAU) | (amt > RHO * bal))
+  .withColumn("rule",
+      F.when(amt > TAU, "HIGH_AMOUNT")
+       .otherwise("HIGH_BALANCE_RATIO"))
+  .withColumn("detected_at",
+      F.current_timestamp()))
+
+(alerts.writeStream
+  .foreachBatch(write_to_clickhouse)
+  .option("checkpointLocation", "/chk/alerts")
+  .trigger(processingTime="2 seconds")
+  .start())
+\end{lstlisting}
+
+\subsubsection{Technology for Data Management}
+\textbf{ClickHouse} \cite{schulze2024clickhouse} is a column-oriented analytical database.
+Column storage reads only the columns a query touches and compresses them well, which is
+the classic advantage of column stores for analytical workloads
+\cite{stonebraker2005cstore,abadi2008column}. Its MergeTree engine sorts data by a primary
+key and skips irrelevant data blocks. Listing~\ref{lst:ddl} shows the fact table: monthly
+partitions and ordering by date and location match the filters of BR1--BR3.
+
+% NOTE: reference design -- replace with the final code from the repository before submission.
+\begin{lstlisting}[language=SQL, caption={ClickHouse definition of the transaction fact table.}, label={lst:ddl}]
+CREATE TABLE dwh.fact_transactions (
+  transaction_key    UInt64,
+  date_key           UInt32,
+  customer_key       UInt64,
+  location_key       UInt32,
+  txn_type_key       UInt8,
+  transaction_amount Decimal(18, 2),
+  account_balance    Decimal(18, 2),
+  dq_flags           UInt8
+) ENGINE = MergeTree
+-- one partition per month
+PARTITION BY intDiv(date_key, 100)
+ORDER BY (date_key, location_key, customer_key);
+\end{lstlisting}
+
+Listing~\ref{lst:rfm} rebuilds the RFM mart for BR4 with the correct reference date. Scores
+use fixed thresholds instead of equal-size quantiles: since 70.8\% of customer records
+have a single transaction, quantile-based scores would assign different scores to identical
+customers---the same flaw found in the pre-built source mart.
+
+% NOTE: reference design -- replace with the final code from the repository before submission.
+\begin{lstlisting}[language=SQL, caption={RFM mart with the correct reference date and fixed score thresholds (BR4).}, label={lst:rfm}]
+INSERT INTO mart.rfm
+SELECT customer_key, recency, frequency, monetary,
+  multiIf(recency <= 7, 5, recency <= 21, 4,
+          recency <= 42, 3, recency <= 63, 2, 1)
+                                   AS r_score,
+  least(frequency, 5)              AS f_score,
+  multiIf(monetary < 500, 1, monetary < 2000, 2,
+          monetary < 10000, 3,
+          monetary < 50000, 4, 5)  AS m_score
+FROM (
+  SELECT f.customer_key,
+    dateDiff('day', max(d.full_date),
+             toDate('2016-10-21')) AS recency,
+    count()                        AS frequency,
+    sum(f.transaction_amount)      AS monetary
+  FROM dwh.fact_transactions AS f
+  JOIN dwh.dim_date AS d
+    ON f.date_key = d.date_key
+  GROUP BY f.customer_key
+);
+\end{lstlisting}
+
+Table~\ref{tab:techsel} compares candidate data management technologies, including those
+suggested by the course. ClickHouse was selected because it combines analytical query
+speed, native Kafka and Superset integration, and reliable single-machine deployment. Its
+known weaknesses for a Kimball design---historically weaker joins, asynchronous updates,
+and no enforced foreign keys---are mitigated by small dimensions, by performing key
+management in Spark, and by explicit referential checks; the cost of joins is measured
+directly against the second solution.
+
+\begin{table*}[!t]
+\centering
+\caption{Comparison of Candidate Data Management Technologies}
+\label{tab:techsel}
+\small
+\begin{tabular}{L{3.0cm} L{2.2cm} L{2.0cm} L{2.2cm} L{5.0cm}}
+\toprule
+\textbf{Technology} & \textbf{Storage model} & \textbf{Analytical speed} & \textbf{Local deployment} & \textbf{Assessment} \\
+\midrule
+ClickHouse (selected) & Column store & Very high & Single container & Fast aggregations; native Kafka engine and Superset connector; weaker updates \\
+PostgreSQL & Row store & Moderate & Single container & Full Kimball support (constraints, transactions); slower on large scans \\
+Apache Hive & Files + SQL engine & Low--moderate & Several services & In the course list; high latency hurts interactive dashboards \\
+Spark SQL + Delta Lake & Lakehouse & Moderate--high & Several services & Close to Databricks (course list); more components to operate \\
+BigQuery / Redshift / Synapse & Cloud warehouse & High & Not local & In the course list; needs cloud billing and stable connectivity \\
+\bottomrule
+\end{tabular}
+\end{table*}
+
+\subsubsection{Data-Driven Application}
+The application is organized around user groups rather than tables: each user group
+receives one dashboard containing only the views relevant to its BRs
+(Table~\ref{tab:appmap}). The design follows the characteristics in
+Table~\ref{tab:usergroups}: executive views use KPI tiles and trend lines with only a date
+filter; analytical users (marketing, product) receive filters and drill-down on the
+dimension hierarchies; risk users receive a dedicated auto-refreshing alert page; and
+list-oriented users (marketing, wealth management) can export customer lists.
+
+\begin{table}[!t]
+\centering
+\caption{Mapping of Business Requirements to Application Views}
+\label{tab:appmap}
+\footnotesize
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{l L{2.4cm} L{4.7cm}}
+\toprule
+\textbf{BR} & \textbf{Tool / view} & \textbf{Main visual and interaction} \\
+\midrule
+BR1 & Superset / Executive & KPI tiles; daily and weekly trend lines \\
+BR2 & Superset / Executive & Bar chart by day of week; weekday vs.\ weekend \\
+BR3 & Superset / Regional & Ranking table; region filter \\
+BR4 & Superset / Marketing & Segment distribution; customer list export \\
+BR5 & Superset / Marketing & Heatmap of age group $\times$ gender \\
+BR6 & Superset / Product & Stacked bar of type mix; region filter \\
+BR7 & Streamlit / Risk & Live alert feed; auto-refresh; rule filter \\
+BR8 & Superset / Wealth & Filterable high-balance customer list \\
+BR9 & Superset / Data team & Data quality check results; reconciliation \\
+BR10 & Superset / Regional & Histogram by amount band; region filter \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsubsection{Technology for the Application}
+\textbf{Apache Superset} \cite{superset} is an open-source business intelligence platform.
+It connects to ClickHouse through the \texttt{clickhouse-connect} SQLAlchemy dialect and
+serves BR1--BR6 and BR8--BR10. Three of its features are used to fit the user groups of
+Table~\ref{tab:usergroups}:
+\begin{itemize}
+  \item \emph{Datasets} are defined on the star schema and the marts with business-friendly
+        column names, so users never see surrogate keys or raw tables;
+  \item \emph{native filters} expose the dimension hierarchies (date, region, age group,
+        transaction type) as drop-downs, so analytical users can drill down without SQL;
+  \item \emph{roles} give each user group access only to its own dashboard, and query
+        results are cached so that repeated views do not reload the warehouse.
+\end{itemize}
+
+\textbf{Streamlit} \cite{streamlit} is a Python framework for data applications. It serves
+BR7 because risk users need a page that refreshes itself every few seconds, which a
+dashboard tool does not do well. Listing~\ref{lst:streamlit} shows the core of the alert
+page: a fragment that re-queries the alert fact table every two seconds.
+
+% NOTE: reference design -- replace with the final code from the repository before submission.
+\begin{lstlisting}[language=Python, caption={Auto-refreshing risk alert page in Streamlit (BR7).}, label={lst:streamlit}]
+import clickhouse_connect
+import streamlit as st
+
+ch = clickhouse_connect.get_client(
+    host="clickhouse")
+rule = st.selectbox("Rule", ["ALL", "HIGH_AMOUNT",
+                             "HIGH_BALANCE_RATIO"])
+
+@st.fragment(run_every="2s")   # auto-refresh
+def alert_feed():
+    df = ch.query_df(
+        "SELECT detected_at, customer_key, "
+        "transaction_amount, rule "
+        "FROM dwh.fact_transaction_alert "
+        "ORDER BY detected_at DESC LIMIT 200")
+    if rule != "ALL":
+        df = df[df["rule"] == rule]
+    st.metric("Recent alerts", len(df))
+    st.dataframe(df)
+
+alert_feed()
+\end{lstlisting}
+
+Table~\ref{tab:techroles} summarizes how every technology of the first solution is
+leveraged and which BRs depend on it.
+
+\begin{table}[!t]
+\centering
+\caption{Technologies of the First Solution and the BRs They Serve}
+\label{tab:techroles}
+\footnotesize
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{L{1.9cm} L{4.3cm} L{1.4cm}}
+\toprule
+\textbf{Technology} & \textbf{Role} & \textbf{BRs} \\
+\midrule
+Apache Kafka & Transaction event stream; replay of the source in date order & BR7; all (ingestion) \\
+Apache Spark (batch) & Cleaning, surrogate keys, dimensions, facts, marts & All \\
+Spark Structured Streaming & Rule-based anomaly detection on the stream & BR7 \\
+Parquet & Raw and staging layers; input to reloads and scaling & All \\
+ClickHouse & Star schema, marts, alerts, audit table & All \\
+Apache Superset & Dashboards per user group & BR1--6, BR8--10 \\
+Streamlit & Auto-refreshing alert page & BR7 \\
+Docker Compose & Reproducible single-machine deployment & All \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsubsection{Big Data Considerations}
+The course asks for the solution to be assessed in a Big Data context. We discuss it along
+the common ``V'' characteristics of Big Data.
+
+\textbf{Volume.} The source holds 1.42 million transactions, which a single machine handles
+easily. To test the solution at larger volumes, the data is replicated up to 70.9 million
+transactions (Section~\ref{sec:method}). The design scales beyond one machine without
+changing the model: Spark distributes the same jobs over a cluster, and ClickHouse can
+split the fact table into shards with its \texttt{Distributed} table engine and copy them
+with \texttt{ReplicatedMergeTree}. Within one node, column compression, monthly partitions,
+and the sort key keep scans small.
+
+\textbf{Velocity.} The busiest day in the source has 36,798 transactions, an average of
+about 0.43 transactions per second, far below the capacity of the pipeline. The producer
+therefore replays the data at a configurable rate to emulate bursts of thousands of events
+per second. Kafka absorbs bursts and retains events for replay, its partitions allow
+several consumers to read in parallel, and Structured Streaming processes the stream in
+two-second micro-batches, which bounds the alert latency.
+
+\textbf{Variety.} The data is structured: CSV files and JSON messages with a fixed schema.
+Spark enforces explicit schemas when reading, and Parquet stores them with the data.
+Semi-structured and unstructured sources (e.g., call-center notes or mobile app logs) are
+outside the scope of this project.
+
+\textbf{Veracity.} Veracity is the main Big Data challenge of this dataset
+(Section~\ref{sec:data-quality}). The solution addresses it with cleaning rules in the
+staging layer, data quality flags on dimension and fact rows, and automated checks recorded
+in the \tbl{audit} table.
+
+\textbf{Value.} Value is delivered through the ten BRs, each tied to a business objective
+(Table~\ref{tab:objectives}) and to an application view (Table~\ref{tab:appmap}).
+
+\subsection{Second Solution: One Big Table on ClickHouse}
+\label{sec:sol-obt}
+The second solution keeps the same pipeline and technologies but replaces the star schema
+with a single denormalized table that joins every fact row with all dimension attributes,
+stored in ClickHouse. This design is often recommended for column stores because it removes
+joins at query time. Its costs are redundancy (customer and location attributes repeated in
+every transaction row) and expensive updates: changing one customer attribute requires
+rewriting every fact row of that customer instead of one dimension row.
+
+\subsection{Third Solution: Star Schema on PostgreSQL (Row Store)}
+\label{sec:sol-postgres}
+The third solution keeps the same star schema but stores it in PostgreSQL, a row-oriented
+relational database. It offers full support for the Kimball design---enforced primary and
+foreign keys, transactions, and in-place updates---but reads entire rows even when a query
+needs only a few columns, which is expected to penalize the large scans of BR1--BR10.
+
+\subsection{Additional Alternatives}
+\label{sec:sol-additional}
+
+\subsubsection{In-Database Streaming for BR7}
+BR7 is also implemented with a ClickHouse Kafka engine table and a materialized view that
+applies the same anomaly rules inside the database, instead of Spark Structured Streaming.
+This removes one component but limits the logic to what SQL can express.
+
+\subsubsection{Lakehouse (Optional)}
+If time permits, the star schema is also stored as Delta Lake tables and queried with Spark
+SQL, representing the lakehouse paradigm \cite{armbrust2021lakehouse}.
+
+\subsection{Related Work}
+Kimball's bottom-up dimensional modeling \cite{kimball2013} contrasts with Inmon's top-down
+approach \cite{inmon2005}, in which a normalized enterprise data warehouse feeds
+departmental marts, and with Data Vault \cite{linstedt2015}, which separates business keys,
+relationships, and descriptive attributes to favor auditability and change. For a single
+business process and a small team, Kimball offers the shortest path from data to
+user-facing queries. The lakehouse paradigm \cite{armbrust2021lakehouse} unifies data lakes
+and warehouses on open formats. The advantages of column stores for analytical workloads
+are well established \cite{stonebraker2005cstore,abadi2008column}, and the Star Schema
+Benchmark \cite{oneil2009ssb} adapts TPC-H to star schemas; our assessment follows the same
+idea of measuring star-join queries at increasing scale factors.
+
+
+%% =====================================================================
+\section{Criteria for Assessing Solutions}
+\label{sec:criteria}
+
+The solutions are assessed against the three criteria required by the course. Each
+criterion is broken down into measurable metrics with explicit targets, defined before any
+measurement is taken.
+
+\subsection{Criterion 1: Data Correctness}
+Correctness metrics follow the ISO/IEC 25012 characteristics \cite{iso25012}
+(Table~\ref{tab:correctness-criteria}). In addition, every BR query must return identical
+results on all solutions; this cross-check validates both the model and the alternatives.
+
+\begin{table*}[!t]
+\centering
+\caption{Data Correctness Metrics and Targets}
+\label{tab:correctness-criteria}
+\small
+\begin{tabular}{L{2.4cm} L{8.6cm} L{3.6cm}}
+\toprule
+\textbf{Characteristic} & \textbf{Metric} & \textbf{Target} \\
+\midrule
+Completeness & Rows in source vs.\ rows in \tbl{fact\_transactions} & Equal (1,418,764) \\
+Completeness & Fact rows with a null foreign key & 0 \\
+Uniqueness & Duplicate surrogate keys; duplicate natural keys in \tbl{dim\_customer} & 0 \\
+Accuracy & DOB outside [1916-10-22, 2016-10-21] (age 0--100); gender outside \{M, F, Unknown\}; negative amounts & 0 \\
+Consistency & $|\sum$ amount (source) $-$ $\sum$ amount (warehouse)$|$ & 0 INR \\
+Consistency & Fact rows whose foreign key has no dimension row (orphans) & 0 \\
+Consistency & BR results identical across all solutions & 10 / 10 BRs \\
+Currentness & End-to-end alert latency (producer $\rightarrow$ alert visible), p95 & $\leq$ 5 s \\
+\bottomrule
+\end{tabular}
+\end{table*}
+
+\subsection{Criterion 2: Performance}
+Performance is assessed by four metrics: (i) query latency of each BR query (median and
+95th percentile of warm runs, plus the cold run); (ii) storage size and compression ratio;
+(iii) load and ETL time; and (iv) for BR7, end-to-end latency and throughput in events per
+second. For the model comparison, the cost of updating one customer attribute is also
+measured. A solution is considered better on performance when it achieves lower latency at
+every scale factor without violating Criterion 1.
+
+\subsection{Criterion 3: Effectiveness of Data Exploitation}
+Effectiveness is assessed per BR by (i) whether the BR is demonstrated successfully end to
+end through the application, (ii) the number of user interactions needed to obtain the
+answer, and (iii) the time to answer. Optionally, perceived usability is measured with the
+System Usability Scale (SUS) \cite{brooke1996sus}, where a score above 68 is considered
+above average.
+
+\subsection{Hypotheses}
+\begin{itemize}
+  \item \textbf{H1.} The One Big Table answers queries slightly faster than the star schema,
+        but the star schema needs less storage and updates a customer attribute by
+        rewriting one dimension row instead of many fact rows.
+  \item \textbf{H2.} ClickHouse outperforms PostgreSQL on every BR, with a gap that widens
+        as the scale factor grows.
+  \item \textbf{H3.} The ClickHouse Kafka engine yields lower latency for simple rules,
+        while Spark Structured Streaming offers more flexibility.
+  \item \textbf{H4.} Spark ETL time grows roughly linearly with data size and decreases as
+        more cores are used.
+\end{itemize}
+
+
+%% =====================================================================
+\section{Research Methodology}
+\label{sec:method}
+
+\subsection{Environment}
+All experiments were run on one machine (Apple Silicon, 11 CPU cores, 18 GB RAM) with
+Docker 28.3. Every system under test was given the same CPU and memory limits.
+\todo{Fill in software versions: Kafka, Spark, ClickHouse, PostgreSQL, Superset, Streamlit.}
+
+\subsection{Data Profiling}
+The source files were profiled with DuckDB: row counts, distinct counts, value
+distributions, range checks, and cross-table key checks. The results are reported in
+Section~\ref{sec:problem}.
+
+\subsection{Data Correctness Checks}
+After each load, an automated script executed one SQL check per metric of
+Table~\ref{tab:correctness-criteria} against the source files and the warehouse, and
+wrote the outcome (metric, expected value, observed value, pass/fail, timestamp) to the
+\tbl{audit} table. The ten BR queries were then executed on every solution and their
+result sets were compared row by row.
+
+\subsection{Data Scaling}
+The source was scaled by replicating it $k$ times, $k \in \{1, 10, 50\}$, i.e., 1.42M,
+14.2M, and 70.9M transactions. Replica $i$ was assigned new customer identifiers and keys,
+kept the original dates and locations, and had its amounts perturbed by up to $\pm$5\%,
+emulating a bank with $k$ times more customers over the same period. Scaled data was used
+only for performance measurement; correctness checks and demonstrations used the original
+data.
+
+\subsection{Benchmark Design}
+The benchmark followed the TPC methodology \cite{tpch,tpcds}. The workload consisted of
+the actual BR queries, not synthetic queries. Each query was run six times: the first
+(cold) run was recorded separately, and the median and 95th percentile of the remaining
+five (warm) runs were reported. Table~\ref{tab:bench} lists the comparisons.
+
+\begin{table*}[!t]
+\centering
+\caption{Benchmark Design}
+\label{tab:bench}
+\small
+\begin{tabular}{l L{4.4cm} L{4.0cm} L{5.4cm}}
+\toprule
+\textbf{ID} & \textbf{Comparison} & \textbf{Question} & \textbf{Metrics} \\
+\midrule
+B1 & Star schema vs.\ One Big Table, both on ClickHouse & Is Kimball modeling worth its joins? & BR latency; storage; load time; cost of updating one customer attribute \\
+B2 & ClickHouse vs.\ PostgreSQL, same star schema & Does a column store pay off? & BR latency; compression ratio; load time; throughput with concurrent users \\
+B3 & Spark Structured Streaming vs.\ ClickHouse Kafka engine & Which streaming approach suits BR7? & End-to-end latency; events/s; implementation complexity \\
+B4 & Spark ETL scalability & Does the ETL scale with data and cores? & ETL time at $\times$1/$\times$10/$\times$50 with 2/4/8 cores \\
+B5 & ClickHouse vs.\ Delta Lake + Spark SQL (optional) & How does a lakehouse compare? & BR latency; storage \\
+\bottomrule
+\end{tabular}
+\end{table*}
+
+\subsection{Effectiveness Evaluation}
+Each BR was demonstrated through its application view on the original data. For each
+BR, the number of interactions and the time to answer were recorded during a scripted
+demonstration. \todo{If the SUS study is conducted, describe the participants (at least
+five), the tasks given per user group, and the questionnaire procedure.}
+
+
+%% =====================================================================
+\section{Analysis and Interpretation}
+\label{sec:analysis}
+% Template guidance: interpret results against the criteria of Section IV only; do not
+% introduce new methods or solutions here; use hedged language unless the evidence is
+% conclusive (e.g., "it appears that...", "the results suggest that...",
+% "it can be tentatively concluded that...").
+
+\subsection{Data Correctness}
+\todo{Fill Table~\ref{tab:correctness-results} from the \tbl{audit} table and interpret any
+failed check.}
+
+\begin{table}[!t]
+\centering
+\caption{Data Correctness Results}
+\label{tab:correctness-results}
+\footnotesize
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{L{1.7cm} L{3.5cm} L{1.5cm} L{0.8cm}}
+\toprule
+\textbf{Characteristic} & \textbf{Metric} & \textbf{Target} & \textbf{Result} \\
+\midrule
+Completeness & Source rows vs.\ fact rows & 1,418,764 & \tbd \\
+Completeness & Null foreign keys & 0 & \tbd \\
+Uniqueness & Duplicate surrogate / natural keys & 0 & \tbd \\
+Accuracy & Out-of-range DOB, gender, amount & 0 & \tbd \\
+Consistency & Amount reconciliation difference & 0 INR & \tbd \\
+Consistency & Orphan foreign keys & 0 & \tbd \\
+Consistency & BR results identical across solutions & 10 / 10 & \tbd \\
+Currentness & Alert latency, p95 & $\leq$ 5 s & \tbd \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Performance}
+\todo{Fill Table~\ref{tab:results} for each scale factor and add charts of latency vs.\
+scale factor (B1, B2), streaming latency (B3), and ETL time vs.\ cores (B4).}
+
+\begin{table}[!t]
+\centering
+\caption{Warm Query Latency, Median (ms), Scale Factor $\times$10 (CH = ClickHouse, PG = PostgreSQL, OBT = One Big Table)}
+\label{tab:results}
+\footnotesize
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{l r r r}
+\toprule
+\textbf{BR} & \textbf{Star, CH} & \textbf{OBT, CH} & \textbf{Star, PG} \\
+\midrule
+BR1 & \tbd & \tbd & \tbd \\
+BR2 & \tbd & \tbd & \tbd \\
+BR3 & \tbd & \tbd & \tbd \\
+BR4 & \tbd & \tbd & \tbd \\
+BR5 & \tbd & \tbd & \tbd \\
+BR6 & \tbd & \tbd & \tbd \\
+BR8 & \tbd & \tbd & \tbd \\
+BR9 & \tbd & \tbd & \tbd \\
+BR10 & \tbd & \tbd & \tbd \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Effectiveness of Data Exploitation}
+\todo{Report, per BR, whether the demonstration succeeded, the number of interactions, and
+the time to answer; add one screenshot per user group, as in Figs.~\ref{fig:exec}
+and~\ref{fig:risk}.}
+
+\begin{figure}[!t]
+\centering
+\fbox{\parbox[c][4cm][c]{0.9\columnwidth}{\centering\textcolor{red}{[Screenshot: Executive dashboard (BR1, BR2)]}}}
+\caption{Executive dashboard. \todo{replace placeholder}}
+\label{fig:exec}
+\end{figure}
+
+\begin{figure}[!t]
+\centering
+\fbox{\parbox[c][4cm][c]{0.9\columnwidth}{\centering\textcolor{red}{[Screenshot: Risk alert page (BR7)]}}}
+\caption{Near-real-time alert page for risk management. \todo{replace placeholder}}
+\label{fig:risk}
+\end{figure}
+
+\subsection{Interpretation}
+\todo{Interpret the results against H1--H4 using appropriately hedged language: whether the
+star schema justifies its joins, how large the column-store advantage is at each scale,
+and which streaming approach appears preferable for BR7.}
+
+\subsection{Threats to Validity}
+The results should be interpreted with caution. The data is synthetic, so behavioral
+findings may not transfer to a real bank. Scaling by replication preserves the
+distribution of the original data and may therefore favor compression more than real data
+would. All measurements are taken on a single machine, so they do not capture the network
+effects of a distributed deployment.
+
+
+%% =====================================================================
+\section{Conclusions and Recommendations}
+\label{sec:conclusion}
+
+This report presented a Kimball dimensional data warehouse for banking analytics built with
+Kafka, Spark, and ClickHouse. Profiling showed that the source, although advertised as
+analytics-ready, has serious quality defects; the proposed solution resolves them through a
+redefined customer identity, explicit cleaning rules with an audit trail, and marts rebuilt
+from the atomic fact table. Ten business requirements for seven user groups are served
+through dashboards and a near-real-time alert page.
+\todo{Summarize which solution performed best on each criterion, recycling the language of
+Section~\ref{sec:criteria}.}
+
+\textbf{Recommendations.} \todo{State which solution the bank should adopt and under which
+conditions, based on the results.}
+
+\textbf{Limitations.} The data covers only 55 days; most customers have a single
+transaction; transaction types and several customer attributes are rule-inferred or
+simulated; there is no time of day; and the absence of effective dates prevents a genuine
+slowly changing dimension.
+
+\textbf{Future work.} Extend the model with additional business processes (e.g., account
+opening and loans) sharing conformed dimensions through a bus matrix; demonstrate SCD
+Type 2 on attributes with real change history; replace rule-based alerts with learned
+anomaly detection; and evaluate a distributed deployment.
+
+
+%% =====================================================================
+\appendices
+
+\section{Reproducibility}
+\label{App:Reproducibility}
+The full source code, Docker Compose configuration, and benchmark scripts are available at
+\todo{repository URL}. The system starts with \texttt{make up}; the pipeline runs with
+\texttt{make etl}; the benchmark runs with \texttt{make bench}.
+
+\section{Work Allocation}
+\label{App:Work}
+
+\begin{table}[!h]
+\centering
+\caption{Work Allocation}
+\label{tab:work}
+\footnotesize
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{L{2.6cm} L{3.4cm} L{1.6cm}}
+\toprule
+\textbf{Member} & \textbf{Technical area} & \textbf{BRs} \\
+\midrule
+Kiet Ho Tuan Nguyen & Infrastructure, Kafka, streaming & BR7, BR9 \\
+Quan Minh Tran & Spark ETL, Kimball model, data quality & BR4, BR8 \\
+Van Ngoc Huynh & ClickHouse marts, Superset & BR1, BR2, BR3 \\
+Hai Ngoc Ho & Alternative solutions, benchmark, evaluation & BR5, BR6, BR10 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+
+\begin{thebibliography}{99}
+
+\bibitem{kaggle_dataset}
+E.~Karaceper, ``Banking Data Warehouse Sample,'' Kaggle, 2026. [Online]. Available:
+\url{https://www.kaggle.com/datasets/eserkaraceper/banking-data-warehouse-sample}
+
+\bibitem{kimball2013}
+R.~Kimball and M.~Ross, \emph{The Data Warehouse Toolkit: The Definitive Guide to
+Dimensional Modeling}, 3rd~ed.\hskip 1em plus 0.5em minus 0.4em\relax Indianapolis, IN,
+USA: Wiley, 2013.
+
+\bibitem{inmon2005}
+W.~H. Inmon, \emph{Building the Data Warehouse}, 4th~ed.\hskip 1em plus 0.5em minus
+0.4em\relax Indianapolis, IN, USA: Wiley, 2005.
+
+\bibitem{linstedt2015}
+D.~Linstedt and M.~Olschimke, \emph{Building a Scalable Data Warehouse with Data Vault
+2.0}.\hskip 1em plus 0.5em minus 0.4em\relax Waltham, MA, USA: Morgan Kaufmann, 2015.
+
+\bibitem{kreps2011kafka}
+J.~Kreps, N.~Narkhede, and J.~Rao, ``Kafka: A distributed messaging system for log
+processing,'' in \emph{Proc. NetDB Workshop}, 2011.
+
+\bibitem{zaharia2016spark}
+M.~Zaharia \emph{et~al.}, ``Apache Spark: A unified engine for big data processing,''
+\emph{Commun. ACM}, vol.~59, no.~11, pp.~56--65, 2016.
+
+\bibitem{armbrust2018structured}
+M.~Armbrust \emph{et~al.}, ``Structured Streaming: A declarative API for real-time
+applications in Apache Spark,'' in \emph{Proc. ACM SIGMOD}, 2018, pp.~601--613.
+
+\bibitem{schulze2024clickhouse}
+R.~Schulze, T.~Schreiber, I.~Yatsishin, R.~Dahimene, and A.~Milovidov, ``ClickHouse ---
+Lightning fast analytics for everyone,'' \emph{Proc. VLDB Endow.}, vol.~17, no.~12,
+pp.~3731--3744, 2024.
+
+\bibitem{stonebraker2005cstore}
+M.~Stonebraker \emph{et~al.}, ``C-Store: A column-oriented DBMS,'' in \emph{Proc. VLDB},
+2005, pp.~553--564.
+
+\bibitem{abadi2008column}
+D.~J. Abadi, S.~R. Madden, and N.~Hachem, ``Column-stores vs.\ row-stores: How different
+are they really?'' in \emph{Proc. ACM SIGMOD}, 2008, pp.~967--980.
+
+\bibitem{armbrust2021lakehouse}
+M.~Armbrust, A.~Ghodsi, R.~Xin, and M.~Zaharia, ``Lakehouse: A new generation of open
+platforms that unify data warehousing and advanced analytics,'' in \emph{Proc. CIDR}, 2021.
+
+\bibitem{oneil2009ssb}
+P.~O'Neil, E.~O'Neil, X.~Chen, and S.~Revilak, ``The Star Schema Benchmark and augmented
+fact table indexing,'' in \emph{Proc. TPCTC}, LNCS vol.~5895, 2009, pp.~237--252.
+
+\bibitem{tpch}
+Transaction Processing Performance Council, ``TPC Benchmark H (Decision Support) Standard
+Specification.'' [Online]. Available: \url{https://www.tpc.org/tpch/}
+
+\bibitem{tpcds}
+Transaction Processing Performance Council, ``TPC Benchmark DS Standard Specification.''
+[Online]. Available: \url{https://www.tpc.org/tpcds/}
+
+\bibitem{iso25012}
+\emph{Software Engineering --- Software Product Quality Requirements and Evaluation
+(SQuaRE) --- Data Quality Model}, ISO/IEC 25012:2008, 2008.
+
+\bibitem{c4model}
+S.~Brown, ``The C4 model for visualising software architecture.'' [Online]. Available:
+\url{https://c4model.com}
+
+\bibitem{superset}
+Apache Software Foundation, ``Apache Superset.'' [Online]. Available:
+\url{https://superset.apache.org}
+
+\bibitem{streamlit}
+Snowflake Inc., ``Streamlit: A faster way to build and share data apps.'' [Online].
+Available: \url{https://streamlit.io}
+
+\bibitem{hughes1994}
+A.~M. Hughes, \emph{Strategic Database Marketing}.\hskip 1em plus 0.5em minus 0.4em\relax
+Chicago, IL, USA: Probus, 1994.
+
+\bibitem{brooke1996sus}
+J.~Brooke, ``SUS: A `quick and dirty' usability scale,'' in \emph{Usability Evaluation in
+Industry}.\hskip 1em plus 0.5em minus 0.4em\relax London, U.K.: Taylor \& Francis, 1996,
+pp.~189--194.
+
+\end{thebibliography}
+
+\end{document}

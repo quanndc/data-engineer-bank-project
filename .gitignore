@@ -1,0 +1,15 @@
+# Source data (download from Kaggle) and generated Parquet layers
+data/
+lake/
+
+# LaTeX build artifacts
+report/*.aux
+report/*.log
+report/*.out
+report/*.toc
+report/*.lof
+report/*.lot
+report/*.pdf
+
+.DS_Store
+__pycache__/
