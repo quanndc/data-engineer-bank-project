@@ -4,6 +4,16 @@ Ghi lại các phát hiện, quyết định thiết kế và thay đổi của 
 
 ---
 
+## [2026-10-06] Demo chạy thử + sửa độ trễ khởi động của stream (BR7)
+
+- Chạy demo toàn bộ (Superset + Streamlit + stream) trong trình duyệt; phát 60.000 giao dịch mới (`SKIP=100000`, 1.000/s): Streamlit hiện **p95 5,42 s**, vượt mục tiêu 5 s.
+- Phân tích theo khoảng 10 s: chỉ **~15 s đầu** chậm (p50 5,6 s, max 6,3 s); sau đó ổn định (p50 ~2 s, max ~3,7 s). Nguyên nhân: bảng tra cứu khoá (~1 triệu khách) được `cache()` **lười** → lô đầu tiên phải nạp.
+- Sửa [spark/jobs/p4_stream_alerts.py](spark/jobs/p4_stream_alerts.py): nạp sẵn cache bằng `count()` khi khởi động stream.
+- Đo lại (60.000 giao dịch mới, `SKIP=200000`, 1.000/s): 992 cảnh báo / 992 giao dịch; **10 s đầu p50 2,6 s, max 3,9 s; cả lần chạy p50 1,96 s, p95 3,00 s, max 3,92 s**.
+- Ghi chú cho report: số liệu p95 3,18 s trong report (40.000 giao dịch, 2.000/s) vẫn đúng; có thể bổ sung chi tiết "cold start" vào phần thảo luận B3.
+
+---
+
 ## [2026-10-06] Report: bổ sung kết quả P1–P5
 
 | Phần | Bổ sung |

@@ -41,10 +41,15 @@ def main():
     starting = "earliest" if "--earliest" in sys.argv else "latest"
 
     # Static lookups (source key -> conformed surrogate key), loaded once and broadcast
-    cust_map = F.broadcast(spark.read.parquet(f"{STAGING}/customer_key_map")
-                           .select("source_customer_key", "customer_key").cache())
-    loc_map = F.broadcast(spark.read.parquet(f"{STAGING}/location_key_map")
-                          .select("source_location_key", "location_key").cache())
+    cust_map = (spark.read.parquet(f"{STAGING}/customer_key_map")
+                .select("source_customer_key", "customer_key").cache())
+    loc_map = (spark.read.parquet(f"{STAGING}/location_key_map")
+               .select("source_location_key", "location_key").cache())
+    # Materialize the caches now: otherwise the first micro-batch pays for loading
+    # ~1M customer keys and its alerts arrive several seconds late (cold start).
+    print(f"lookups cached: {cust_map.count():,} customers, {loc_map.count():,} locations",
+          flush=True)
+    cust_map, loc_map = F.broadcast(cust_map), F.broadcast(loc_map)
 
     events = (spark.readStream.format("kafka")
               .option("kafka.bootstrap.servers", KAFKA_BOOTSTRAP)
