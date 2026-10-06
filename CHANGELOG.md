@@ -4,6 +4,35 @@ Ghi lại các phát hiện, quyết định thiết kế và thay đổi của 
 
 ---
 
+## [2026-10-06] P4 — Streaming phát hiện giao dịch bất thường (BR7) ✅
+
+### Quy tắc cảnh báo (đã định cỡ trên dữ liệu lịch sử)
+| Quy tắc | Điều kiện | Giao dịch bị gắn cờ |
+|---|---|---:|
+| `HIGH_AMOUNT` | số tiền > 20.000 INR (p99) | 13.734 (0,97%) |
+| `HIGH_BALANCE_RATIO` | số tiền ≥ 5.000 INR **và** > số dư | — |
+| Cả hai | | **25.838 (1,82%)** |
+
+- Đã thử quy tắc "số tiền > ρ × số dư" không có ngưỡng tối thiểu: gắn cờ **8–13%** giao dịch (quá nhiều, vì nhiều tài khoản số dư nhỏ) → thêm ngưỡng 5.000 INR.
+
+### Code
+- [spark/jobs/p4_stream_alerts.py](spark/jobs/p4_stream_alerts.py): Kafka → Structured Streaming (micro-batch 2 s, `maxOffsetsPerTrigger` 200k) → stream-static join với `customer_key_map` / `location_key_map` (khoá chuẩn của star schema) → `foreachBatch` ghi ClickHouse; checkpoint `lake/checkpoints/alerts`.
+- Makefile: `make stream`, `make stream-stop`, `make stream-logs`, `make produce-live RATE=… LIMIT=…`.
+
+### Kết quả (40.000 giao dịch, 2.000 giao dịch/giây)
+| Chỉ số | Giá trị |
+|---|---:|
+| Cảnh báo | 642 (1,6%): HIGH_AMOUNT 358, HIGH_BALANCE_RATIO 284 |
+| Độ trễ đầu-cuối (producer → hiện trong ClickHouse) p50 / p95 / max | **1,96 s / 2,88 s / 3,33 s** (mục tiêu p95 ≤ 5 s: đạt) |
+| Đối chiếu với batch (cùng quy tắc trên 40.000 giao dịch đầu trong DWH) | **642/642 khớp** (giao dịch, quy tắc, customer_key, location_key); 0 trùng |
+
+- Kiểm tra khử trùng: Kafka chứa 1.458.764 sự kiện (40.000 bị phát lại) → `fact_transactions` vẫn 1.418.764; DQ 12/12 PASS.
+
+### Report đã cập nhật
+- Mô tả BR7 trong bảng BR; đoạn quy tắc cảnh báo (kèm lý do thêm ngưỡng 5.000 INR); Listing 3 thay bằng code thật (rút gọn từ `p4_stream_alerts.py`).
+
+---
+
 ## [2026-10-06] Git + P3 — Mart RFM và 10 truy vấn BR ✅
 
 ### Git

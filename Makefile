@@ -2,7 +2,7 @@
 COMPOSE := docker compose
 TOPIC   := transactions
 
-.PHONY: up down ps logs topic smoke clean produce ingest core load dq pipeline marts
+.PHONY: up down ps logs topic smoke clean produce ingest core load dq pipeline marts stream stream-stop stream-logs produce-live
 
 up:            ## Build and start Kafka, ClickHouse, Spark
 	mkdir -p lake
@@ -49,6 +49,24 @@ dq:            ## P2: data correctness checks -> dq.audit
 
 marts:         ## P3: build data marts and run the 10 BR queries (results -> lake/results)
 	$(SPARK) python3 /opt/jobs/p3_marts_and_queries.py
+
+# ---------------------------------------------------------------- streaming (P4, BR7)
+RATE  ?= 2000
+LIMIT ?= 40000
+
+stream:        ## P4: start the alert stream in the background (new events only)
+	$(SPARK) mkdir -p /lake/logs
+	$(COMPOSE) exec -d spark sh -c "spark-submit /opt/jobs/p4_stream_alerts.py > /lake/logs/stream_alerts.log 2>&1"
+	@echo "stream started; follow it with: make stream-logs"
+
+stream-stop:   ## P4: stop the alert stream
+	-$(SPARK) pkill -f p4_stream_alerts.py
+
+stream-logs:
+	$(SPARK) tail -f /lake/logs/stream_alerts.log
+
+produce-live:  ## P4: replay LIMIT events at RATE events/s (e.g. make produce-live RATE=5000 LIMIT=100000)
+	$(SPARK) python3 /opt/ingestion/producer.py --rate $(RATE) --limit $(LIMIT)
 
 pipeline: ingest core load dq marts   ## P1-P3 end to end (run `make produce` once before)
 

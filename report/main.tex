@@ -248,7 +248,7 @@ BR3 & Regional management & Rank cities and regions by transaction value, custom
 BR4 & Marketing / CRM & Segment customers with RFM (recency relative to 2016-10-21) to select campaign targets & \tbl{mart\_rfm} (rebuilt from the fact table) \\
 BR5 & Marketing / CRM & Analyze spending behavior by age group and gender & \tbl{fact\_transactions}, \tbl{dim\_customer} \\
 BR6 & Product development & Analyze the transaction type mix by region and customer group & \tbl{fact\_transactions}, \tbl{dim\_transaction\_type}, \tbl{dim\_customer} \\
-BR7 & Risk management & Detect unusual transactions in near real time (amount above a high percentile, or a large share of the balance) & Kafka stream, \tbl{fact\_transaction\_alert} \\
+BR7 & Risk management & Detect unusual transactions in near real time (amount above the 99th percentile, or at least 5,000 INR and larger than the balance) & Kafka stream, \tbl{fact\_transaction\_alert} \\
 BR8 & Wealth management & List high-balance customers for cross-selling investment and savings products & \tbl{fact\_customer\_balance\_snapshot} \\
 BR9 & Data team & Monitor data quality: defective records, corrected records, and source-to-warehouse reconciliation & Data quality checks, \tbl{audit} \\
 BR10 & Regional management & Analyze the distribution of transaction values by amount band and region & \tbl{fact\_transactions}, \tbl{dim\_location} \\
@@ -598,37 +598,41 @@ cust = (spark.read.parquet("raw/dim_customer")
 \end{lstlisting}
 
 \textbf{Spark Structured Streaming} \cite{armbrust2018structured} implements BR7 with the
-same DataFrame API as the batch jobs. A transaction raises an alert when its amount exceeds
-a threshold $\tau$ (the historical 99th percentile, 20,000 INR) or a fraction $\rho$ of the
-account balance (Listing~\ref{lst:stream}). With $\tau$ alone, 13,734 transactions
-(0.97\%) of the historical data would be flagged.
+same DataFrame API as the batch jobs (Listing~\ref{lst:stream}). A transaction raises a
+\texttt{HIGH\_AMOUNT} alert when its amount exceeds $\tau = 20{,}000$~INR (the historical
+99th percentile), and a \texttt{HIGH\_BALANCE\_RATIO} alert when it is at least 5,000~INR
+and larger than the account balance. The rules were sized on the historical data: a
+balance-ratio rule alone would flag 8--13\% of all transactions, because many balances
+are small, so a minimum amount was added; together the two rules flag 1.82\%. Source keys
+in the events are mapped to the conformed surrogate keys of \tbl{dim\_customer} and
+\tbl{dim\_location} with a stream-static join, so alerts join the star schema directly.
 
-% NOTE: reference design -- replace with the final code from the repository before submission.
-\begin{lstlisting}[language=Python, caption={Near-real-time anomaly detection with Spark Structured Streaming (BR7).}, label={lst:stream}]
-amt = F.col("transaction_amount")
-bal = F.col("account_balance")
-
-txn = (spark.readStream.format("kafka")
-  .option("kafka.bootstrap.servers",
-          "kafka:9092")
+\begin{lstlisting}[language=Python, caption={Near-real-time anomaly detection with Spark Structured Streaming (BR7), simplified from \texttt{p4\_stream\_alerts.py}.}, label={lst:stream}]
+events = (spark.readStream.format("kafka")
+  .option("kafka.bootstrap.servers", BOOTSTRAP)
   .option("subscribe", "transactions")
   .load()
-  .select(F.from_json(
-      F.col("value").cast("string"),
-      schema).alias("t"))
+  .select(F.from_json(F.col("value")
+      .cast("string"), TXN_SCHEMA).alias("t"))
   .select("t.*"))
 
-alerts = (txn
-  .filter((amt > TAU) | (amt > RHO * bal))
+amt = F.col("transaction_amount").cast(DEC)
+bal = F.col("account_balance").cast(DEC)
+alerts = (events
   .withColumn("rule",
-      F.when(amt > TAU, "HIGH_AMOUNT")
-       .otherwise("HIGH_BALANCE_RATIO"))
+      F.when(amt > 20000, "HIGH_AMOUNT")
+       .when((amt >= 5000) & (amt > bal),
+             "HIGH_BALANCE_RATIO"))
+  .filter(F.col("rule").isNotNull())
   .withColumn("detected_at",
-      F.current_timestamp()))
+      F.current_timestamp())
+  # source keys -> conformed surrogate keys
+  .join(cust_map, "source_customer_key")
+  .join(loc_map, "source_location_key"))
 
 (alerts.writeStream
-  .foreachBatch(write_to_clickhouse)
-  .option("checkpointLocation", "/chk/alerts")
+  .foreachBatch(write_batch)  # -> ClickHouse
+  .option("checkpointLocation", CHECKPOINT)
   .trigger(processingTime="2 seconds")
   .start())
 \end{lstlisting}
