@@ -13,3 +13,6 @@ report/*.pdf
 
 .DS_Store
 __pycache__/
+
+# Local secrets
+.env

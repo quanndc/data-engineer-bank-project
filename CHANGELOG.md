@@ -4,6 +4,53 @@ Ghi lại các phát hiện, quyết định thiết kế và thay đổi của 
 
 ---
 
+## [2026-10-06] P5 — Ứng dụng: Superset + Streamlit ✅ (Mốc M2)
+
+### Hạ tầng
+- Service mới trong [docker-compose.yml](docker-compose.yml), profile `app` (không chạy khi `make up`): `bankdw-superset` (Superset 4.1.3 + clickhouse-connect, cổng **8088**, giới hạn 1,5 GB) và `bankdw-streamlit` (Streamlit 1.40, cổng **8501**, 512 MB).
+- [apps/superset/superset_config.py](apps/superset/superset_config.py): cache kết quả 300 s, `DASHBOARD_RBAC`, API quản lý role.
+- Tài khoản admin + secret key sinh ngẫu nhiên trong `.env` (không commit); mẫu ở [.env.example](.env.example).
+- Makefile: `make app-up`, `make app-down`, `make app-bootstrap`.
+
+### Superset — [apps/superset/bootstrap.py](apps/superset/bootstrap.py) (idempotent, qua REST API)
+- 1 kết nối ClickHouse, **13 virtual dataset** (10 BR + 3 dataset phụ), **7 dashboard / 32 biểu đồ**, **7 role** (mỗi nhóm người dùng 1 role, gắn vào dashboard).
+
+| Dashboard | Nhóm người dùng | BR | Biểu đồ | Bộ lọc |
+|---|---|---|---:|---|
+| Executive Overview | Ban điều hành | BR1, BR2 | 6 | — |
+| Regional Performance | Quản lý khu vực | BR3, BR10 | 4 | City |
+| Marketing & CRM | Marketing | BR4, BR5 | 5 | Segment |
+| Product Usage | Phát triển sản phẩm | BR6 | 3 | — |
+| Wealth Management | Quản lý tài sản | BR8 | 5 | — |
+| Risk Alerts (summary) | Quản trị rủi ro | BR7 | 4 | — |
+| Data Quality | Nhóm dữ liệu | BR9 | 5 | — |
+
+### Streamlit — [apps/streamlit/app.py](apps/streamlit/app.py) (BR7)
+- Tự làm mới mỗi 2 s: 4 chỉ số (số cảnh báo, giá trị bị gắn cờ, độ trễ p95, cảnh báo gần nhất), biểu đồ cảnh báo theo 10 s, bảng 50 cảnh báo mới nhất (nối `dim_customer`, `dim_location`); bộ lọc quy tắc, khung thời gian, số tiền tối thiểu.
+
+### Kiểm tra bằng trình duyệt
+- Cả 7 dashboard và trang Streamlit hiển thị đúng dữ liệu. Demo trực tiếp: số cảnh báo trên Streamlit tăng theo thời gian thực khi phát giao dịch.
+- Thời gian phản hồi mỗi biểu đồ (đo trong trình duyệt): **~0,75 s**; trang tải ~1,1 s. (Lúc kiểm tra thấy chờ >10 s là do khung trình duyệt bị ẩn nên bị hạ tốc độ, không phải do hệ thống.)
+- RAM khi chạy toàn bộ: ClickHouse ~1 GB, Kafka ~455 MB, Superset ~310 MB, Streamlit ~117 MB, Spark (rảnh) ~12 MB.
+
+### Lỗi gặp và sửa
+- Mount 1 file đơn lẻ vào container không thấy file mới → mount cả thư mục `apps/superset`.
+- Superset giới hạn API 50 yêu cầu/giây (HTTP 429) → tự chờ và thử lại.
+- Streamlit: định dạng số `%,.2f` không hợp lệ → `%.2f`.
+- Nhóm tuổi `<18` xếp sau `65+` → đổi nhãn thành `0-17`.
+- Ô "Records with a data quality flag" (485k) gây hiểu nhầm (cộng dồn số cờ) → đổi thành "Data quality flags raised".
+- Bảng Campaign target list giới hạn 10.000 dòng → ghi rõ "top 10,000 … by value" trong tiêu đề.
+- Phát lại giao dịch từ đầu sinh **cảnh báo trùng** (1.144 dòng / 642 giao dịch) → thêm `--skip` cho producer (`make produce-live SKIP=…`) và `make stream-reset` (xoá bảng cảnh báo + checkpoint). Chạy lại demo sạch: 642 cảnh báo / 642 giao dịch, p50 2,1 s, p95 3,2 s.
+
+### Phát hiện về dữ liệu (đưa vào report)
+- **Tháng 10 chỉ có 2 ngày dữ liệu** (4.987 giao dịch); tháng 9 có 22 ngày; từ 22/9 mỗi ngày < 10.000 giao dịch. Dữ liệu thực chất đầy đủ từ 1/8 đến ~21/9 → ảnh hưởng cách diễn giải recency (RFM) và biểu đồ xu hướng BR1.
+- Bảng Campaign target list cho thấy trực quan lỗi trùng `customer_id` (ví dụ `C8217728` xuất hiện 2 lần với 2 người khác nhau).
+
+### Ghi chú cho đánh giá hiệu quả (tiêu chí 3)
+- Ảnh chụp cho report nên chụp lại ở độ phân giải cao (khung trình duyệt hiện chỉ cho ảnh ~800 px).
+
+---
+
 ## [2026-10-06] P4 — Streaming phát hiện giao dịch bất thường (BR7) ✅
 
 ### Quy tắc cảnh báo (đã định cỡ trên dữ liệu lịch sử)

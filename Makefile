@@ -2,7 +2,7 @@
 COMPOSE := docker compose
 TOPIC   := transactions
 
-.PHONY: up down ps logs topic smoke clean produce ingest core load dq pipeline marts stream stream-stop stream-logs produce-live
+.PHONY: up down ps logs topic smoke clean produce ingest core load dq pipeline marts stream stream-stop stream-reset stream-logs produce-live app-up app-down app-bootstrap
 
 up:            ## Build and start Kafka, ClickHouse, Spark
 	mkdir -p lake
@@ -53,6 +53,7 @@ marts:         ## P3: build data marts and run the 10 BR queries (results -> lak
 # ---------------------------------------------------------------- streaming (P4, BR7)
 RATE  ?= 2000
 LIMIT ?= 40000
+SKIP  ?= 0
 
 stream:        ## P4: start the alert stream in the background (new events only)
 	$(SPARK) mkdir -p /lake/logs
@@ -62,11 +63,26 @@ stream:        ## P4: start the alert stream in the background (new events only)
 stream-stop:   ## P4: stop the alert stream
 	-$(SPARK) pkill -f p4_stream_alerts.py
 
+stream-reset:  ## P4: stop the stream, empty the alert table and drop the stream checkpoint
+	-$(SPARK) pkill -f p4_stream_alerts.py
+	$(COMPOSE) exec -T clickhouse clickhouse-client -u bank --password bank -q "TRUNCATE TABLE IF EXISTS dwh.fact_transaction_alert"
+	$(SPARK) rm -rf /lake/checkpoints/alerts
+
 stream-logs:
 	$(SPARK) tail -f /lake/logs/stream_alerts.log
 
-produce-live:  ## P4: replay LIMIT events at RATE events/s (e.g. make produce-live RATE=5000 LIMIT=100000)
-	$(SPARK) python3 /opt/ingestion/producer.py --rate $(RATE) --limit $(LIMIT)
+produce-live:  ## P4: replay LIMIT events at RATE events/s from SKIP (e.g. make produce-live RATE=2000 LIMIT=40000 SKIP=100000)
+	$(SPARK) python3 /opt/ingestion/producer.py --rate $(RATE) --limit $(LIMIT) --skip $(SKIP)
+
+# ---------------------------------------------------------------- application (P5)
+app-up:        ## P5: start Superset (http://localhost:8088) and Streamlit (http://localhost:8501)
+	$(COMPOSE) --profile app up -d --build --wait superset streamlit
+
+app-down:
+	$(COMPOSE) --profile app stop superset streamlit
+
+app-bootstrap: ## P5: (re)create the ClickHouse connection, datasets, charts, dashboards
+	$(COMPOSE) exec -T superset python /opt/bootstrap/bootstrap.py
 
 pipeline: ingest core load dq marts   ## P1-P3 end to end (run `make produce` once before)
 

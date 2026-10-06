@@ -100,5 +100,5 @@ Phần III và phần thiết kế của IV có thể viết ngay (dữ liệu �
 ## 7. Checklist mốc
 
 - [x] M1 — Dữ liệu vào DWH, qua hết kiểm tra chất lượng (2026-10-06: 12/12 PASS)
-- [ ] M2 — Demo được cả 10 BR end-to-end
+- [x] M2 — Demo được cả 10 BR end-to-end (2026-10-06: 7 dashboard Superset + trang Streamlit)
 - [ ] M3 — Nộp report, slide, video, gói demo

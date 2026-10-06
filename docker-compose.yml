@@ -77,6 +77,54 @@ services:
       clickhouse: { condition: service_healthy }
     mem_limit: 3g
 
+  # ------------------------------------------------------------ application (P5)
+  # Started with `make app-up` (profile "app"), so the data pipeline stays lean.
+  superset:
+    build: ./apps/superset
+    image: bankdw-superset:4.1.3
+    container_name: bankdw-superset
+    profiles: ["app"]
+    ports:
+      - "8088:8088"
+    env_file: .env
+    command:
+      - /bin/sh
+      - -c
+      - |
+        superset db upgrade &&
+        (superset fab create-admin --username "$$SUPERSET_ADMIN_USER" --firstname Admin \
+           --lastname BankDW --email admin@bankdw.local --password "$$SUPERSET_ADMIN_PASSWORD" || true) &&
+        superset init &&
+        /usr/bin/run-server.sh
+    volumes:
+      - superset-home:/app/superset_home
+      - ./apps/superset:/opt/bootstrap:ro
+      - ./warehouse/queries:/opt/queries:ro
+    depends_on:
+      clickhouse: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fs http://localhost:8088/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+    mem_limit: 1500m
+
+  streamlit:
+    build: ./apps/streamlit
+    image: bankdw-streamlit:1.40
+    container_name: bankdw-streamlit
+    profiles: ["app"]
+    ports:
+      - "8501:8501"
+    environment:
+      CLICKHOUSE_HOST: clickhouse
+      CLICKHOUSE_USER: bank
+      CLICKHOUSE_PASSWORD: bank
+    depends_on:
+      clickhouse: { condition: service_healthy }
+    mem_limit: 512m
+
 volumes:
   kafka-data:
   clickhouse-data:
+  superset-home:

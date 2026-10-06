@@ -77,7 +77,7 @@ def stage_customers(spark):
     age = F.col("age")
     c = c.withColumn("age_group",
                      F.when(age.isNull(), "Unknown")
-                      .when(age < 18, "<18").when(age < 25, "18-24").when(age < 35, "25-34")
+                      .when(age < 18, "0-17").when(age < 25, "18-24").when(age < 35, "25-34")
                       .when(age < 45, "35-44").when(age < 55, "45-54").when(age < 65, "55-64")
                       .otherwise("65+"))
     c.write.mode("overwrite").parquet(f"{STAGING}/customers")
