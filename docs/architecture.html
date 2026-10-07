@@ -1,0 +1,337 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Luồng dữ liệu BankDW</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one wide pipeline diagram (left → right = Nguồn → UI) up top, then reference sections in a single reading column. */
+:root {
+  --bg: #F3F6F7;
+  --panel: #FFFFFF;
+  --sub: #EDF2F4;
+  --fg: #15212B;
+  --muted: #5A6B77;
+  --line: #C9D4DB;
+  --batch: #1E5E89;
+  --batch-soft: #DCE9F2;
+  --stream: #B04E26;
+  --stream-soft: #F6E3DA;
+  --bench: #9A6F0A;
+  --bench-soft: #F5ECD3;
+  --ok: #2B7A4B;
+  --ok-soft: #DCEFE3;
+  --font-display: "Be Vietnam Pro", "Segoe UI", system-ui, sans-serif;
+  --font-body: "Be Vietnam Pro", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0E151B; --panel: #15202A; --sub: #1C2a35; --fg: #E2EAF0; --muted: #91A2AF; --line: #2C3C48;
+    --batch: #72B2E0; --batch-soft: #1A3346; --stream: #E8895B; --stream-soft: #3A2419;
+    --bench: #D8B04A; --bench-soft: #33290F; --ok: #6CC08E; --ok-soft: #173525;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0E151B; --panel: #15202A; --sub: #1C2a35; --fg: #E2EAF0; --muted: #91A2AF; --line: #2C3C48;
+  --batch: #72B2E0; --batch-soft: #1A3346; --stream: #E8895B; --stream-soft: #3A2419;
+  --bench: #D8B04A; --bench-soft: #33290F; --ok: #6CC08E; --ok-soft: #173525;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { margin: 0;
+  background: var(--bg); color: var(--fg);
+  font-family: var(--font-body); font-size: 15px; line-height: 1.6;
+  padding-inline: 20px; padding-block: 36px 64px;
+}
+.wrap { max-width: 1240px; margin: 0 auto; display: grid; gap: 44px; }
+.col { max-width: 900px; display: grid; gap: 14px; min-width: 0; }
+h1, h2 { font-family: var(--font-display); text-wrap: balance; margin: 0; letter-spacing: -0.01em; }
+h1 { font-size: 30px; line-height: 1.2; font-weight: 700; }
+h2 { font-size: 20px; font-weight: 600; }
+p { margin: 0; }
+.eyebrow { font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); font-weight: 600; }
+.lede { color: var(--muted); max-width: 68ch; }
+code, .mono { font-family: var(--font-mono); font-size: 0.86em; }
+code { background: var(--sub); padding: 1px 5px; border-radius: 4px; }
+
+.facts { display: flex; flex-wrap: wrap; gap: 8px 28px; font-variant-numeric: tabular-nums; }
+.facts div { display: grid; }
+.facts b { font-size: 19px; font-weight: 600; }
+.facts span { font-size: 12.5px; color: var(--muted); }
+
+.diagram-card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 18px 18px 14px; display: grid; gap: 12px; min-width: 0; }
+.scroll { overflow-x: auto; }
+.scroll svg { display: block; width: 100%; min-width: 900px; height: auto; }
+.legend { display: flex; flex-wrap: wrap; gap: 8px 22px; font-size: 13px; color: var(--muted); }
+.legend i { display: inline-block; width: 22px; height: 0; border-top: 2.5px solid; vertical-align: middle; margin-right: 7px; }
+.hint { font-size: 12.5px; color: var(--muted); }
+
+/* SVG */
+.band { stroke: none; }
+.box { fill: var(--panel); stroke-width: 1.5; }
+.subbox { fill: var(--sub); stroke: none; }
+.s-batch { stroke: var(--batch); }
+.s-stream { stroke: var(--stream); }
+.s-bench { stroke: var(--bench); stroke-dasharray: 5 4; }
+.s-neutral { stroke: var(--line); }
+.dwbox { fill: var(--batch-soft); stroke-width: 3; }
+.bracket { fill: none; stroke: var(--muted); stroke-width: 1.2; }
+.bracket.dw { stroke: var(--batch); stroke-width: 2; }
+.muted-t { fill: var(--muted); }
+.tag text { font-size: 10.5px; font-weight: 600; }
+.tag-raw rect { fill: var(--sub); } .tag-raw text { fill: var(--muted); }
+.tag-mix rect { fill: var(--ok-soft); } .tag-mix text { fill: var(--ok); }
+.tag-official rect { fill: var(--batch); } .tag-official text { fill: var(--panel); }
+.tag-neutral rect { fill: none; stroke: var(--line); } .tag-neutral text { fill: var(--muted); }
+td.state { white-space: nowrap; }
+.qa { display: grid; gap: 12px; }
+.qa div { display: grid; gap: 2px; }
+.qa b { font-weight: 600; }
+.f-batch { fill: var(--batch-soft); }
+.f-stream { fill: var(--stream-soft); }
+.f-bench { fill: var(--bench-soft); }
+.wire { fill: none; stroke-width: 1.8; }
+.w-batch { stroke: var(--batch); }
+.w-stream { stroke: var(--stream); }
+.w-bench { stroke: var(--bench); stroke-dasharray: 5 4; }
+.w-lookup { stroke: var(--muted); stroke-dasharray: 3 3; }
+svg text { font-family: var(--font-body); fill: var(--fg); }
+.th { font-size: 14px; font-weight: 700; font-family: var(--font-display); }
+.tsub { font-size: 11px; fill: var(--muted); }
+.tt { font-size: 12px; font-weight: 600; }
+.tb { font-size: 11px; }
+.tm { font-family: var(--font-mono); font-size: 10px; fill: var(--muted); }
+.tlabel { font-size: 10.5px; font-weight: 700; letter-spacing: 0.08em; }
+.c-batch { fill: var(--batch); }
+.c-stream { fill: var(--stream); }
+.c-bench { fill: var(--bench); }
+.c-ok { fill: var(--ok); }
+.chip { fill: var(--batch-soft); }
+.chip-stream { fill: var(--stream-soft); }
+.chip text, .chiptext { font-size: 9px; }
+.num { fill: var(--fg); }
+.numtext { font-size: 11px; font-weight: 700; fill: var(--bg); }
+
+/* Steps */
+.steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 0; counter-reset: s; }
+.steps > li { display: grid; grid-template-columns: 34px 1fr; gap: 14px; padding: 14px 0; border-top: 1px solid var(--line); counter-increment: s; }
+.steps > li::before { content: counter(s); width: 26px; height: 26px; border-radius: 50%; background: var(--fg); color: var(--bg); font-weight: 700; font-size: 13px; display: grid; place-items: center; margin-top: 2px; }
+.steps > li > div { min-width: 0; display: grid; gap: 4px; }
+.steps strong { font-weight: 600; }
+.steps .meta { font-size: 13px; color: var(--muted); }
+.steps .stream::before { background: var(--stream); }
+
+/* Tables */
+.tbl { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); }
+table { border-collapse: collapse; width: 100%; font-size: 14px; }
+th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+tr:last-child td { border-bottom: none; }
+th { font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); font-weight: 600; background: var(--sub); }
+td.k { font-family: var(--font-mono); font-size: 13px; white-space: nowrap; font-weight: 500; }
+.pill { display: inline-block; font-size: 12px; font-weight: 600; padding: 1px 9px; border-radius: 999px; white-space: nowrap; }
+.p-done { background: var(--ok-soft); color: var(--ok); }
+.p-doing { background: var(--bench-soft); color: var(--bench); }
+.p-todo { background: var(--sub); color: var(--muted); }
+.muted { color: var(--muted); }
+
+pre { margin: 0; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; overflow-x: auto; font-family: var(--font-mono); font-size: 13px; line-height: 1.75; }
+pre .c { color: var(--muted); }
+
+.two { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; }
+.note { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; display: grid; gap: 6px; min-width: 0; font-size: 14px; }
+.note h3 { margin: 0; font-size: 15px; font-weight: 600; }
+.note .tbl { margin-block: 4px; }
+.note ul { margin: 0; padding-left: 18px; display: grid; gap: 3px; }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+
+  <header class="col">
+    <div class="eyebrow">CO5173 · Nhóm 27 · cập nhật 07/10/2026</div>
+    <h1>Luồng dữ liệu BankDW: từ file CSV đến dashboard</h1>
+    <p class="lede">Dữ liệu đi từ file nguồn đến dashboard qua 6 chặng. Data warehouse là chặng 4: database <code>dwh</code> trong ClickHouse. Các chặng trước đưa dữ liệu vào, các chặng sau dùng dữ liệu từ đó.</p>
+  </header>
+
+  <section class="diagram-card" aria-label="Sơ đồ luồng dữ liệu">
+    <div class="scroll">
+<svg viewBox="0 0 1230 316" role="img" aria-label="Luồng tổng quát: Nguồn → Kafka → Data Lake (Spark) → Data Warehouse (ClickHouse) → Phân tích → UI; nhánh realtime từ Kafka qua Spark Streaming vào ClickHouse">
+  <defs>
+    <marker id="ab" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--batch)"/></marker>
+    <marker id="as" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--stream)"/></marker>
+  </defs>
+  <path class="bracket" d="M20,34 V28 H598 V34"/>
+  <text class="tlabel muted-t" x="20" y="20">CHẶNG 1–3 · ĐƯA DỮ LIỆU VÀO, LÀM SẠCH (STAGING)</text>
+  <path class="bracket dw" d="M632,34 V28 H802 V34"/>
+  <text class="tlabel c-batch" x="632" y="20">★ DATA WAREHOUSE</text>
+  <path class="bracket" d="M836,34 V28 H1210 V34"/>
+  <text class="tlabel muted-t" x="836" y="20">CHẶNG 5–6 · KHAI THÁC DỮ LIỆU</text>
+  <rect class="box s-batch" x="20" y="40" width="170" height="122" rx="8"/>
+  <text class="tlabel c-batch" x="34" y="62">1 · NGUỒN</text>
+  <text class="th" x="34" y="86">Dữ liệu ngân hàng</text>
+  <text class="tm" x="34" y="104">3 file CSV · ./data</text>
+  <text class="tb" x="34" y="128">file tĩnh tải từ Kaggle,</text>
+  <text class="tb" x="34" y="144">không tự sinh thêm</text>
+  <path class="wire w-batch" d="M190,101 H222" marker-end="url(#ab)"/>
+  <rect class="box s-batch" x="224" y="40" width="170" height="122" rx="8"/>
+  <text class="tlabel c-batch" x="238" y="62">2 · THU NHẬN</text>
+  <text class="th" x="238" y="86">Apache Kafka</text>
+  <text class="tm" x="238" y="104">topic transactions</text>
+  <text class="tb" x="238" y="128">producer.py đọc CSV,</text>
+  <text class="tb" x="238" y="144">giả lập luồng giao dịch</text>
+  <path class="wire w-batch" d="M394,101 H426" marker-end="url(#ab)"/>
+  <rect class="box s-batch" x="428" y="40" width="170" height="122" rx="8"/>
+  <text class="tlabel c-batch" x="442" y="62">3 · DATA LAKE</text>
+  <text class="th" x="442" y="86">Apache Spark</text>
+  <text class="tm" x="442" y="104">Parquet: raw → core</text>
+  <text class="tb" x="442" y="128">làm sạch, chuẩn hoá</text>
+  <path class="wire w-batch" d="M598,101 H630" marker-end="url(#ab)"/>
+  <rect class="box s-batch dwbox" x="632" y="40" width="170" height="122" rx="8"/>
+  <text class="tlabel c-batch" x="646" y="62">4 · DATA WAREHOUSE</text>
+  <text class="th" x="646" y="86">ClickHouse · dwh</text>
+  <text class="tm" x="646" y="104">Kimball data mart</text>
+  <text class="tb" x="646" y="128">3 fact + 4 dimension,</text>
+  <text class="tb" x="646" y="144">dimension dùng chung</text>
+  <path class="wire w-batch" d="M802,101 H834" marker-end="url(#ab)"/>
+  <rect class="box s-batch" x="836" y="40" width="170" height="122" rx="8"/>
+  <text class="tlabel c-batch" x="850" y="62">5 · PHÂN TÍCH</text>
+  <text class="th" x="850" y="86">Tổng hợp + SQL</text>
+  <text class="tm" x="850" y="104">10 truy vấn BR</text>
+  <text class="tb" x="850" y="128">bảng tổng hợp RFM,</text>
+  <text class="tb" x="850" y="144">KPI, xếp hạng…</text>
+  <path class="wire w-batch" d="M1006,101 H1038" marker-end="url(#ab)"/>
+  <rect class="box s-batch" x="1040" y="40" width="170" height="122" rx="8"/>
+  <text class="tlabel c-batch" x="1054" y="62">6 · GIAO DIỆN (UI)</text>
+  <text class="th" x="1054" y="86">Superset · Streamlit</text>
+  <text class="tm" x="1054" y="104">dashboard + cảnh báo</text>
+  <text class="tb" x="1054" y="128">mỗi nhóm người dùng</text>
+  <text class="tb" x="1054" y="144">một dashboard</text>
+  <g class="tag tag-raw"><rect x="20" y="170" width="87" height="20" rx="10"/><text x="29" y="184">Dữ liệu thô</text></g>
+  <g class="tag tag-raw"><rect x="224" y="170" width="99" height="20" rx="10"/><text x="233" y="184">Thô (bản sao)</text></g>
+  <g class="tag tag-mix"><rect x="428" y="170" width="106" height="20" rx="10"/><text x="437" y="184">Thô → đã xử lý</text></g>
+  <g class="tag tag-official"><rect x="632" y="170" width="150" height="20" rx="10"/><text x="641" y="184">Đã xử lý · chính thức</text></g>
+  <g class="tag tag-mix"><rect x="836" y="170" width="137" height="20" rx="10"/><text x="845" y="184">Kết quả tính từ dwh</text></g>
+  <g class="tag tag-neutral"><rect x="1040" y="170" width="93" height="20" rx="10"/><text x="1049" y="184">Chỉ hiển thị</text></g>
+  <rect class="box s-stream" x="428" y="214" width="170" height="80" rx="8"/>
+  <text class="tlabel c-stream" x="442" y="236">REALTIME · BR7</text>
+  <text class="th" x="442" y="259">Spark Streaming</text>
+  <text class="tb" x="442" y="281">bắt giao dịch bất thường</text>
+  <path class="wire w-stream" d="M370,162 V254 H426" marker-end="url(#as)"/>
+  <path class="wire w-stream" d="M598,254 H790 V164" marker-end="url(#as)"/>
+  <text class="tsub" x="364" y="236" text-anchor="end">sự kiện mới</text>
+  <text class="tsub" x="626" y="246">ghi cảnh báo</text>
+  <text class="tlabel c-stream" x="806" y="236">LUỒNG REALTIME: CẢNH BÁO</text>
+  <text class="tsub" x="806" y="254">hiện trên Streamlit sau ~2–3 giây</text>
+</svg>
+    </div>
+    <div class="legend">
+      <span><i style="border-color: var(--batch); border-top-width: 6px"></i>Ô tô đậm = data warehouse (database <code>dwh</code> trong ClickHouse)</span>
+      <span><i style="border-color: var(--batch)"></i>Batch: chạy theo lệnh, nạp toàn bộ</span>
+      <span><i style="border-color: var(--stream)"></i>Realtime: cảnh báo giao dịch bất thường (BR7)</span>
+    </div>
+  </section>
+
+  <section class="col">
+    <h2>Giải thích sơ đồ</h2>
+    <p class="lede">Mỗi chặng dưới đây ứng với một ô trên sơ đồ, theo thứ tự từ trái sang phải.</p>
+    <ol class="steps">
+      <li><div><strong>Nguồn.</strong> Bộ dữ liệu ngân hàng mẫu tải từ Kaggle, nằm trong thư mục <code>data/</code>. Bộ này có 8 file CSV, nhóm dùng 3 file: giao dịch (1,4 triệu dòng), khách hàng và địa điểm. 5 file còn lại (<code>dim_date.csv</code> và 4 bảng tổng hợp có sẵn) không dùng vì thiếu thông tin hoặc tính sai. Đây là file tĩnh của năm 2016, không có hệ thống ngân hàng thật nào sinh thêm dữ liệu. Dữ liệu có nhiều lỗi (ngày sinh sai, mã khách trùng, tên thành phố không thống nhất) nên phải làm sạch trước khi dùng.</div></li>
+      <li><div><strong>Thu nhận (Kafka).</strong> Vì không có ngân hàng thật, nhóm viết script <code>producer.py</code> để <em>giả lập</em>: script đọc file CSV giao dịch, gửi từng dòng thành một message vào Kafka, gửi hết thì dừng. Script chỉ chạy khi có người gõ lệnh, theo hai cách:<ul style="margin:4px 0 0;padding-left:18px"><li><code>make produce</code>: gửi toàn bộ 1,4 triệu giao dịch một lần (~5 giây), dùng cho luồng batch.</li><li><code>make produce-live</code>: gửi một đoạn nhỏ theo nhịp, ví dụ 2.000 giao dịch/giây, để demo cảnh báo realtime.</li></ul>Message được Kafka giữ lại sau khi gửi, nên Spark đọc lại được nhiều lần. Đi qua Kafka để một nguồn dùng được cho cả batch lẫn realtime, giống kiến trúc ngân hàng thật. Khách hàng và địa điểm không cần realtime nên Spark đọc thẳng từ CSV.</div></li>
+      <li><div><strong>Data Lake (Spark).</strong> Spark lưu dữ liệu ra file Parquet theo ba lớp: <em>raw</em> chép nguyên file gốc, <em>staging</em> sửa lỗi nhưng vẫn giữ 3 bảng như file gốc, <em>core</em> sắp xếp lại thành 6 bảng dimension + fact. Xem ví dụ ở phần "Bên trong Data Lake" bên dưới. Đây là khu xử lý phía sau, người dùng không truy vấn trực tiếp vào đây.</div></li>
+      <li><div><strong>Data Warehouse (ClickHouse).</strong> Star schema được nạp vào database <code>dwh</code>. Theo Kimball, đây là tập hợp các data mart (giao dịch, số dư, cảnh báo) dùng chung các dimension như khách hàng, ngày, địa điểm. Trước khi dùng, dữ liệu được chạy qua bộ kiểm tra chất lượng.</div></li>
+      <li><div><strong>Phân tích.</strong> Từ data warehouse, nhóm tạo bảng tổng hợp (ví dụ phân khúc khách RFM) và viết 10 truy vấn SQL, mỗi truy vấn trả lời một yêu cầu nghiệp vụ (BR1–BR10).</div></li>
+      <li><div><strong>Giao diện.</strong> Superset hiển thị kết quả thành dashboard, mỗi nhóm người dùng (ban điều hành, marketing, quản lý khu vực…) có dashboard riêng. Streamlit hiển thị cảnh báo realtime.</div></li>
+      <li class="stream"><div><strong>Nhánh realtime (BR7).</strong> Chạy song song với luồng batch. Spark Streaming đọc giao dịch mới từ Kafka vài giây một lần, kiểm tra theo quy tắc (số tiền quá lớn, vượt số dư), rồi ghi cảnh báo vào data warehouse. Cảnh báo hiện trên Streamlit sau khoảng 2–3 giây.</div></li>
+    </ol>
+  </section>
+
+  <section class="col">
+    <h2>Dữ liệu nằm ở đâu</h2>
+    <div class="qa">
+      <div><b>Dữ liệu chính thức nằm ở đâu?</b><span>Trong database <code>dwh</code> của ClickHouse (chặng 4). Đây là bản đã làm sạch, đã kiểm tra chất lượng, và là nơi duy nhất mọi báo cáo đọc vào. Các chỗ khác hoặc là dữ liệu gốc, hoặc là bản trung gian có thể dựng lại bất cứ lúc nào.</span></div>
+      <div><b>Đâu là dữ liệu thô?</b><span>File CSV trong <code>data/</code> là bản gốc. Message trong Kafka và thư mục <code>lake/raw</code> là bản sao nguyên trạng của file đó, chưa sửa gì.</span></div>
+      <div><b>Đâu là dữ liệu đã xử lý?</b><span><code>lake/staging</code> (đã sửa lỗi), <code>lake/core</code> (đã xếp thành bảng dimension + fact) và ClickHouse <code>dwh</code>. Nội dung <code>lake/core</code> và <code>dwh</code> giống nhau, nhưng <code>lake/core</code> chỉ là file chờ nạp. Người dùng chỉ truy vấn <code>dwh</code>.</span></div>
+      <div><b>UI lấy dữ liệu từ đâu?</b><span>Superset và Streamlit đều kết nối thẳng vào ClickHouse và chạy câu SQL mỗi khi mở trang. Không có UI nào đọc file CSV hay thư mục <code>lake/</code>. Superset chỉ lưu cấu hình dashboard, không lưu dữ liệu ngân hàng.</span></div>
+    </div>
+    <div class="tbl">
+      <table>
+        <thead><tr><th>Chặng</th><th>Dữ liệu</th><th>Lưu ở đâu</th><th>Trạng thái</th><th>Công nghệ</th></tr></thead>
+        <tbody>
+          <tr><td>1. Nguồn</td><td>3 file CSV được dùng (trong 8 file của bộ Kaggle)</td><td><code>data/</code></td><td class="state">Thô, bản gốc</td><td>CSV</td></tr>
+          <tr><td>2. Thu nhận</td><td>Giao dịch dạng message JSON</td><td>Kafka, topic <code>transactions</code></td><td class="state">Thô, bản sao</td><td>Apache Kafka, Python</td></tr>
+          <tr><td>3. Data Lake</td><td>raw: chép nguyên 3 file gốc, chưa sửa gì</td><td><code>lake/raw</code></td><td class="state">Thô</td><td>Apache Spark, Parquet</td></tr>
+          <tr><td></td><td>staging: đã sửa lỗi, vẫn giữ 3 bảng như file gốc</td><td><code>lake/staging</code></td><td class="state">Đã xử lý, trung gian</td><td>Apache Spark, Parquet</td></tr>
+          <tr><td></td><td>core: sắp xếp lại thành 6 bảng dimension + fact</td><td><code>lake/core</code></td><td class="state">Đã xử lý, chờ nạp</td><td>Apache Spark, Parquet</td></tr>
+          <tr><td><b>4. Data Warehouse</b></td><td><b>dimension, fact, cảnh báo</b></td><td><b>ClickHouse, database <code>dwh</code></b></td><td class="state"><span class="pill p-done">Chính thức</span></td><td>ClickHouse</td></tr>
+          <tr><td>5. Phân tích</td><td>Bảng tổng hợp RFM, kết quả kiểm tra chất lượng</td><td>ClickHouse, database <code>mart</code>, <code>dq</code></td><td class="state">Tính ra từ <code>dwh</code></td><td>ClickHouse SQL</td></tr>
+          <tr><td></td><td>10 câu truy vấn BR</td><td><code>warehouse/queries/</code></td><td class="state">File SQL, không chứa dữ liệu</td><td>SQL</td></tr>
+          <tr><td>6. Giao diện</td><td>Dashboard (Superset), trang cảnh báo (Streamlit)</td><td>Chỉ lưu cấu hình</td><td class="state">Chỉ hiển thị</td><td>Apache Superset, Streamlit</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="col">
+    <h2>Bên trong Data Lake: raw → staging → core</h2>
+    <p class="lede">Cả ba lớp do Spark tạo ra: raw bằng <code>p1_ingest_raw.py</code> (lệnh <code>make ingest</code>), staging và core bằng <code>p2_build_core.py</code> (lệnh <code>make core</code>). Mỗi lớp làm đúng một việc: raw <b>chép</b>, staging <b>sửa lỗi</b>, core <b>sắp xếp lại</b>.</p>
+
+    <div class="note">
+      <h3>raw: chép nguyên file gốc</h3>
+      <p>Có 3 bảng y như 3 file CSV: <code>customers</code>, <code>locations</code>, <code>transactions</code>. Mọi lỗi vẫn còn nguyên: ngày sinh 1800-01-01, ngày sinh ở tương lai (năm 2073), giới tính ghi linh tinh, tên thành phố viết nhiều kiểu, giao dịch bị trùng.</p>
+    </div>
+
+    <div class="note">
+      <h3>staging: sửa lỗi, vẫn giữ 3 bảng như file gốc</h3>
+      <p>Vẫn là 3 bảng cũ, vẫn dùng mã khách và mã địa điểm của file gốc. Chỉ có giá trị được sửa:</p>
+      <div class="tbl">
+        <table>
+          <thead><tr><th>Lỗi trong raw</th><th>Sau khi vào staging</th></tr></thead>
+          <tbody>
+            <tr><td>Ngày sinh 1800-01-01 (giá trị giả)</td><td>Để trống (NULL)</td></tr>
+            <tr><td>Ngày sinh năm 2073 (lỗi năm 2 chữ số)</td><td>Lùi 100 năm thành 1973</td></tr>
+            <tr><td>Giới tính không phải M/F</td><td>"Unknown"</td></tr>
+            <tr><td>Tên địa điểm lộn xộn</td><td>Gom về 54 thành phố chuẩn, còn lại là "Other"</td></tr>
+            <tr><td>Giao dịch bị trùng</td><td>Chỉ giữ 1 dòng</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>Mỗi dòng bị sửa được gắn một <b>cờ chất lượng</b> (<code>dq_flags</code>) ghi lại đã sửa gì, để còn kiểm tra và báo cáo (BR9).</p>
+    </div>
+
+    <div class="note">
+      <h3>core: sắp xếp lại thành star schema</h3>
+      <p>Dữ liệu đã sạch, giờ được tổ chức lại theo Kimball. 3 bảng cũ thành 6 bảng mới:</p>
+      <div class="tbl">
+        <table>
+          <thead><tr><th>Bảng trong core</th><th>Lấy từ đâu</th></tr></thead>
+          <tbody>
+            <tr><td><code>dim_customer</code></td><td>Từ <code>customers</code> của staging. Mỗi khách được cấp một <b>mã mới</b> (surrogate key: 1, 2, 3…) thay cho mã gốc</td></tr>
+            <tr><td><code>dim_location</code></td><td>Từ <code>locations</code>, cũng được cấp mã mới</td></tr>
+            <tr><td><code>dim_date</code></td><td><b>Dựng từ lịch</b>: mỗi ngày từ 2015 đến 2017 một dòng. Thứ, tuần, quý, cuối tuần được tính từ chính ngày đó. Riêng danh sách 10 ngày lễ Ấn Độ là nhóm nhập tay. File <code>dim_date.csv</code> gốc chỉ có 55 ngày và năm/tháng/ngày nên không dùng.</td></tr>
+            <tr><td><code>dim_transaction_type</code></td><td><b>Tách từ cột <code>transaction_type</code></b> của file giao dịch gốc: 4 giá trị Purchase, Transfer, Bill Payment, Loan Payment, cấp mã 1–4, thêm dòng Unknown (mã 0). Nhãn loại do tác giả bộ dữ liệu suy ra bằng quy tắc, nên bảng có cờ <code>is_rule_inferred</code>.</td></tr>
+            <tr><td><code>fact_transactions</code></td><td>Từ <code>transactions</code>, nhưng mã khách và mã địa điểm gốc được <b>đổi sang mã mới</b> của các dim</td></tr>
+            <tr><td><code>fact_customer_balance_snapshot</code></td><td><b>Tính từ cột số dư</b> trong giao dịch gốc: số dư cuối cùng của mỗi khách tính đến cuối mỗi tháng</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>Sau bước này dữ liệu đã đúng hình dạng của data warehouse. Bước nạp (<code>make load</code>) chỉ chép 6 bảng này vào ClickHouse <code>dwh</code>, không biến đổi gì thêm.</p>
+    </div>
+
+    <div class="note">
+      <h3>Vì sao tách làm hai bước?</h3>
+      <ul>
+        <li>Mỗi bước chỉ làm một việc. Sai ở khâu sửa lỗi thì xem staging, sai ở khâu dựng bảng thì xem core.</li>
+        <li>Staging còn lưu 2 bảng đối chiếu mã gốc → mã mới (<code>customer_key_map</code>, <code>location_key_map</code>). Luồng realtime cần 2 bảng này: giao dịch mới từ Kafka mang mã gốc, phải đổi sang mã mới trước khi ghi cảnh báo vào <code>dwh</code>.</li>
+      </ul>
+    </div>
+  </section>
+
+</div>
+</body>
+</html>

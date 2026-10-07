@@ -4,6 +4,29 @@ Ghi lại các phát hiện, quyết định thiết kế và thay đổi của 
 
 ---
 
+## [2026-10-07] Tài liệu kiến trúc cho team + các điểm cần làm rõ
+
+### Tài liệu
+- [docs/architecture.html](docs/architecture.html): sơ đồ tổng quát 6 chặng (Nguồn → Kafka → Data Lake → Data Warehouse → Phân tích → UI) và nhánh realtime BR7, kèm 3 phần giải thích:
+  - Giải thích từng chặng của sơ đồ.
+  - Dữ liệu nằm ở đâu: thô hay đã xử lý, UI đọc từ đâu, dùng công nghệ gì.
+  - Bên trong Data Lake: raw (chép) → staging (sửa lỗi) → core (dựng star schema).
+
+### Thống nhất cách gọi
+- **Data warehouse = ClickHouse database `dwh`**. Đây là bản chính thức. `lake/` chỉ là khu xử lý trung gian, dựng lại được bất cứ lúc nào.
+- **Data mart (theo Kimball) = 1 fact + các dimension của nó**, nằm trong `dwh`. Có 3 mart: giao dịch, số dư cuối tháng, cảnh báo. Ba mart dùng chung `dim_date` và `dim_customer`.
+- `mart.rfm` **không phải data mart** theo Kimball mà là bảng tổng hợp. Tên database `mart` và chữ "data marts" trong report, `00_databases.sql`, `marts.sql` dễ gây nhầm → **chưa sửa**, nhóm cần chọn: chỉ đổi chữ, hay đổi tên database.
+
+### Phát hiện cần xử lý
+- **Kafka không ghi vào volume** (`bankdw_kafka-data` = 0 B). Nghi do thiếu `KAFKA_LOG_DIRS: /var/lib/kafka/data` (chưa kiểm tra trong container). Hệ quả: `make down` làm mất dữ liệu Kafka, phải `make produce` lại trước `make ingest`. **Chưa sửa.**
+- **Dữ liệu nhập tay chưa có nguồn**: danh sách 10 ngày lễ Ấn Độ (`p2_build_core.py`) và [warehouse/seeds/city_mapping.csv](warehouse/seeds/city_mapping.csv) (thành phố → bang). Cần đối chiếu với nguồn chính thức và trích dẫn trong report.
+- Nguồn Kaggle có **8 file CSV, nhóm dùng 3** (giao dịch, khách hàng, địa điểm). Không dùng `dim_date.csv` (chỉ 55 ngày) và 4 bảng tổng hợp có sẵn (tính sai).
+
+### Git
+- Repo chưa có remote → chưa push được.
+
+---
+
 ## [2026-10-07] P6 — Benchmark ×1 (B1, B2) + dọn .gitignore
 
 - Benchmark ở mức ×1 cho B1 (star schema vs One Big Table, cùng ClickHouse) và B2 (ClickHouse vs PostgreSQL, cùng star schema): 8 BR × 6 lần, 16/16 cặp kết quả khớp. Chi tiết và số liệu: [docs/BENCHMARK.md](docs/BENCHMARK.md).
