@@ -11,7 +11,8 @@ RUN python3 -m pip install --no-cache-dir --upgrade pip && \
       confluent-kafka==2.6.1 \
       clickhouse-connect==0.8.18 \
       pandas==2.0.3 \
-      pyarrow==17.0.0
+      pyarrow==17.0.0 \
+      psycopg2-binary==2.9.9
 
 # Kafka source/sink for Spark SQL and Structured Streaming (matches Spark 3.5.6 / Scala 2.12)
 ARG MAVEN=https://repo1.maven.org/maven2

@@ -4,6 +4,15 @@ Ghi lại các phát hiện, quyết định thiết kế và thay đổi của 
 
 ---
 
+## [2026-10-07] P6 — Benchmark ×1 (B1, B2) + dọn .gitignore
+
+- Benchmark ở mức ×1 cho B1 (star schema vs One Big Table, cùng ClickHouse) và B2 (ClickHouse vs PostgreSQL, cùng star schema): 8 BR × 6 lần, 16/16 cặp kết quả khớp. Chi tiết và số liệu: [docs/BENCHMARK.md](docs/BENCHMARK.md).
+- Code: [benchmark/](benchmark/), [warehouse/postgres/](warehouse/postgres/), [warehouse/clickhouse/ddl/obt.sql](warehouse/clickhouse/ddl/obt.sql); service `postgres` (profile `bench`, cổng 5433) trong [docker-compose.yml](docker-compose.yml); thêm `psycopg2-binary` vào image Spark.
+- Còn lại của P6: chi phí cập nhật, truy vấn/giây nhiều người dùng, B3, B4.
+- `.gitignore`: thêm file build LaTeX, `*.pyc`, `.venv/`, `.vscode/`, `.idea/`; bỏ theo dõi folder template `report/LaTeX_Template_for_Technical_Report/` (giữ ở máy, `main.tex` không dùng).
+
+---
+
 ## [2026-10-06] Demo chạy thử + sửa độ trễ khởi động của stream (BR7)
 
 - Chạy demo toàn bộ (Superset + Streamlit + stream) trong trình duyệt; phát 60.000 giao dịch mới (`SKIP=100000`, 1.000/s): Streamlit hiện **p95 5,42 s**, vượt mục tiêu 5 s.
