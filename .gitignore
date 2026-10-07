@@ -10,9 +10,23 @@ report/*.toc
 report/*.lof
 report/*.lot
 report/*.pdf
+report/*.synctex.gz
+report/*.fls
+report/*.fdb_latexmk
+report/*.bbl
+report/*.blg
 
 .DS_Store
 __pycache__/
+*.pyc
+
+# Local environments and editors
+.venv/
+.vscode/
+.idea/
 
 # Local secrets
 .env
+
+# Original course template (kept locally only)
+report/LaTeX_Template_for_Technical_Report/
