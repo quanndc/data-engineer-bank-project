@@ -1,6 +1,6 @@
 # PLAN PHASE 2 — Triển khai theo các quyết định đã chốt trong Google Sheet
 
-- **Căn cứ:** Google Sheet "Banking Project — Theo dõi quyết định" (chốt 18/10/2026) và bảng đối chiếu [DOI_CHIEU_SHEET.md](DOI_CHIEU_SHEET.md).
+- **Căn cứ:** Google Sheet "Banking Project — Theo dõi quyết định" (chốt 18/10/2026) và bảng đối chiếu sheet với repo Phase 1 [archive/phase1/docs/DOI_CHIEU_SHEET.md](../archive/phase1/docs/DOI_CHIEU_SHEET.md).
 - **Nguyên tắc:** làm đúng những gì sheet đã chốt. Những điểm sheet còn để mở được ghi là **Đề xuất**, kèm phương án mặc định; nhóm cần chốt trước khi làm phần đó.
 - **Phase 1** (Kaggle, Kafka, Superset, RFM…) được giữ lại ở tag `phase1-kaggle` để tham khảo và tái dùng code, **không phát triển tiếp**.
 
