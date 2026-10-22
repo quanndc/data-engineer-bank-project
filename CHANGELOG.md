@@ -5,6 +5,41 @@ Ghi lại các phát hiện, quyết định thiết kế và thay đổi của 
 
 
 
+
+---
+
+## [2026-10-22] Phase 2 — P2-3: pipeline theo lô, nạp toàn bộ lịch sử Berka ✅
+
+### Đã làm
+- [spark/jobs/pipeline.py](spark/jobs/pipeline.py) (PySpark) — luồng L01, L02, L05 của sheet:
+  - **Lô `REF_INITIAL`:** chụp `district`, `account`, `client`, `disp`, `customer_profile_simulated` vào Data Lake → kiểm tra (mỗi tài khoản đúng 1 OWNER, khách nào cũng có hạng, khu vực hợp lệ) → `dim_date`, `dim_district`, `dim_account` (Type 1) → **ETL join `client` ⋈ `disp`(OWNER) ⋈ `district` ⋈ hạng mô phỏng → `stg_customer`** (1 dòng/khách) + `stg_account_owner` (1 dòng/tài khoản) → `dim_customer` SCD2 (phiên bản đầu). Giới tính và ngày sinh tách từ `birth_number` (tháng + 50 = nữ).
+  - **Lô `HIST_YYYY_MM` (72 lô):** `ingest` (chụp vào `lake/batches/<lô>/`) → `validate` (V1–V7, bản ghi lỗi vào `ops.rejected_record`) → `standardize` (NULL/chuỗi trắng → `NOT_RECORDED`, PRIJEM → IN, VYDAJ/VYBER → OUT) → `load_dimensions` (thêm tổ hợp phân loại mới) → `load_fact` (`customer_sk` = phiên bản OWNER hiệu lực tại ngày giao dịch; bỏ qua giao dịch đã nạp bởi chính lô đó) → `reconcile` (số dòng + tiền vào/ra của lô so với kho).
+  - **Chạy lại** một lô từ bản chụp trong Data Lake; **đối chiếu toàn bộ** nguồn ↔ kho.
+  - Mỗi lần chạy và từng bước ghi vào `ops.pipeline_run` / `ops.pipeline_step` (BR06).
+- [spark/jobs/ops_log.py](spark/jobs/ops_log.py): ghi lô, lần chạy, bước, bản ghi bị tách.
+- Thêm quy tắc **V7** (không có phiên bản chủ sở hữu hiệu lực tại ngày giao dịch) vào `ops.dq_rule`.
+- Makefile: `make load-ref`, `make load-history [FROM= TO=]`, `make rerun BATCH=…`, `make reconcile`.
+
+### Kết quả
+| Kiểm tra | Kết quả |
+|---|---|
+| Lô chạy | 73 lô (1 REF + 72 HIST), **73/73 SUCCEEDED**, tổng ~285 s (mỗi lô tháng ~4 s) |
+| Đối chiếu toàn bộ | **1.056.320 / 1.056.320** giao dịch, 1.056.320 ID khác nhau; tiền vào **3.227.472.424,50**, tiền ra **3.030.321.135,80** — khớp nguồn tới từng xu |
+| Chạy lại `HIST_1995_03` | 0 dòng mới, 9.304 dòng "đã nạp"; kho vẫn khớp nguồn → **không nhân đôi** |
+| Bản ghi lỗi trên dữ liệu gốc | 0 (V1–V7) |
+| `dim_transaction_profile` | **15 tổ hợp** (4 IN, 11 OUT) — đúng sheet K04 |
+| SCD2 | 4.500 khách, mỗi khách đúng 1 phiên bản hiện tại |
+| Khóa ngoại của fact (date, account, customer, profile) | 0 khóa mồ côi |
+| Khách của giao dịch = OWNER của tài khoản | 100% |
+
+### Lỗi gặp và sửa
+- `valid_to = 2299-12-31` vượt giới hạn ngày của pandas (2262) → đọc ClickHouse thành đối tượng Python (`date`, `Decimal`) thay vì `query_df`.
+- Phép ghép giao dịch ↔ phiên bản khách hàng lọc *sau* khi ghép → giao dịch không thuộc phiên bản nào có thể mất âm thầm → đưa điều kiện ngày vào trong phép ghép, trường hợp này bị tách theo V7.
+- Kết quả truy vấn rỗng (lần nạp đầu) không có tên cột → lấy tên cột bằng `DESCRIBE`.
+
+### Lưu ý
+- Thư mục `lake/` còn dữ liệu Phase 1 (`raw/`, `core/`, `staging/` cũ của Kaggle, ~0,5 GB, không commit); Phase 2 chỉ dùng `lake/batches/` (24 MB) và các file `stg_*` trong `lake/staging/`.
+
 ---
 
 ## [2026-10-22] Phase 2 — P2-2: lược đồ Data Warehouse và kho vận hành ✅

@@ -136,7 +136,8 @@ INSERT INTO ops.dq_rule (rule_code, description) VALUES
   ('V3', 'Số tiền âm hoặc không phải số'),
   ('V4', 'Ngày không hợp lệ hoặc nằm ngoài lịch'),
   ('V5', 'Mã loại giao dịch lạ (không phải PRIJEM / VYDAJ / VYBER)'),
-  ('V6', 'Trùng transaction_id trong lô hoặc đã có trong kho')
+  ('V6', 'Trùng transaction_id trong lô hoặc đã có trong kho'),
+  ('V7', 'Không có phiên bản chủ sở hữu (dim_customer) hiệu lực tại ngày giao dịch')
 ON CONFLICT (rule_code) DO NOTHING;
 
 INSERT INTO ops.alert_rule (rule_code, description, parameters) VALUES

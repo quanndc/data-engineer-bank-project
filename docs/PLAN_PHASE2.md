@@ -84,9 +84,9 @@
 - **Xong khi:** DDL chạy được, khớp từng cột với Data Dictionary. ✅ *(22/10, `make schema`)*
 
 ### P2-3. Pipeline theo lô (C) — luồng L01, L02, L05
-- [ ] Bước **ingest**: đọc A → ghi bản chụp lô vào B (`lake/batches/<batch_id>/`), ghi `batch` + `pipeline_run` (E).
-- [ ] Bước **standardize**: chuẩn hóa chuỗi; `NULL`/chuỗi trắng → `NOT_RECORDED`; `PRIJEM` → IN, `VYDAJ`/`VYBER` → OUT; 17 → 15 tổ hợp.
-- [ ] Bước **build customer (ETL join → 1 bảng customer)**: từ Data Lake, join các bảng nguồn thành **một bảng customer** trước khi nạp `dim_customer`:
+- [x] Bước **ingest**: đọc A → ghi bản chụp lô vào B (`lake/batches/<batch_id>/`), ghi `batch` + `pipeline_run` (E).
+- [x] Bước **standardize**: chuẩn hóa chuỗi; `NULL`/chuỗi trắng → `NOT_RECORDED`; `PRIJEM` → IN, `VYDAJ`/`VYBER` → OUT; 17 → 15 tổ hợp.
+- [x] Bước **build customer (ETL join → 1 bảng customer)**: từ Data Lake, join các bảng nguồn thành **một bảng customer** trước khi nạp `dim_customer`:
 
   | Bảng nguồn (Data Lake) | Lấy gì | Điều kiện join |
   |---|---|---|
@@ -98,18 +98,18 @@
   - Kết quả: bảng trung gian `stg_customer` (1 dòng / khách OWNER) ở Data Lake, rồi bước SCD2 (P2-4) sinh các phiên bản `dim_customer`.
   - Kèm bảng `stg_account_owner` (1 dòng / tài khoản: `account_id` → `client_id` OWNER) để bước nạp fact tra `customer_sk` theo **tài khoản + ngày giao dịch** (sheet: "trung gian 1 dòng/tài khoản").
   - Kiểm tra sau join (đúng sheet K01–K05): mỗi tài khoản đúng 1 OWNER; không mất / không nhân đôi khách; mọi khách có hạng; khu vực khách có thể khác khu vực tài khoản (không join account ↔ client qua khu vực).
-- [ ] Bước **load dimensions**: `dim_date`, `dim_district` (Type 1), `dim_account` (Type 1), `dim_transaction_profile` (chỉ thêm tổ hợp mới, sửa nhãn Type 1).
-- [ ] Bước **load fact**: tra `customer_sk` theo OWNER **và ngày giao dịch**; chống trùng theo `transaction_id`; gắn `load_batch_id`, `loaded_at`.
-- [ ] Bước **reconcile**: số dòng, ID duy nhất, tổng tiền vào/ra nguồn ↔ kho.
-- [ ] Mỗi bước ghi `pipeline_step` (bắt đầu, kết thúc, trạng thái, số nhận/đạt/lỗi, lỗi) → nền cho BR06.
-- [ ] **Chạy lại cùng lô không nhân đôi** giao dịch hay tổng tiền (L05, N05).
-- [ ] Nạp lịch sử Berka theo lô tháng (Q-D).
-- **Xong khi:** nạp đủ Berka; đối chiếu nguồn ↔ kho khớp 100%; chạy lại 1 lô vẫn khớp.
+- [x] Bước **load dimensions**: `dim_date`, `dim_district` (Type 1), `dim_account` (Type 1), `dim_transaction_profile` (chỉ thêm tổ hợp mới, sửa nhãn Type 1).
+- [x] Bước **load fact**: tra `customer_sk` theo OWNER **và ngày giao dịch**; chống trùng theo `transaction_id`; gắn `load_batch_id`, `loaded_at`.
+- [x] Bước **reconcile**: số dòng, ID duy nhất, tổng tiền vào/ra nguồn ↔ kho.
+- [x] Mỗi bước ghi `pipeline_step` (bắt đầu, kết thúc, trạng thái, số nhận/đạt/lỗi, lỗi) → nền cho BR06.
+- [x] **Chạy lại cùng lô không nhân đôi** giao dịch hay tổng tiền (L05, N05).
+- [x] Nạp lịch sử Berka theo lô tháng (Q-D).
+- **Xong khi:** nạp đủ Berka; đối chiếu nguồn ↔ kho khớp 100%; chạy lại 1 lô vẫn khớp. ✅ *(22/10: 73 lô, 1.056.320/1.056.320 giao dịch, tiền vào/ra khớp tới từng xu; chạy lại `HIST_1995_03` nạp 0 dòng mới)*
 
 ### P2-4. SCD2, dữ liệu mô phỏng và kiểm soát dữ liệu (BR05, BR08)
 - [ ] Lịch đổi hạng: file `customer_profile_changes_kb08.csv` (khách đổi hạng + `tier_effective_from` mới), dùng file hạng ban đầu từ P2-0 làm trạng thái nền.
-- [ ] SCD Type 2 cho `dim_customer`: đóng phiên bản cũ (`valid_to`), mở phiên bản mới (`customer_sk` mới), đúng 1 bản `is_current`, không chồng lấn.
-- [ ] Bước **validate** (Q-G): tách bản ghi lỗi vào `rejected_record` kèm mã quy tắc và lý do; bản ghi đạt vẫn được nạp.
+- [ ] SCD Type 2 cho `dim_customer` *(22/10: đã có hàm đóng/mở phiên bản và nạp 4.500 phiên bản đầu ở lô `REF_INITIAL`; còn kịch bản đổi hạng KB08)*: đóng phiên bản cũ (`valid_to`), mở phiên bản mới (`customer_sk` mới), đúng 1 bản `is_current`, không chồng lấn.
+- [ ] Bước **validate** (Q-G) *(22/10: quy tắc V1–V7 đã chạy trong mọi lô lịch sử, 0 bản ghi lỗi trên dữ liệu gốc; còn lô lỗi chủ đích KB05)*: tách bản ghi lỗi vào `rejected_record` kèm mã quy tắc và lý do; bản ghi đạt vẫn được nạp.
 - [ ] Chuẩn bị lô kịch bản **KB05** (bản ghi lỗi) và **KB08** (đổi hạng + giao dịch kỳ sau).
 - **Xong khi:** KB05 và KB08 chạy ra đúng kết quả mong đợi.
 

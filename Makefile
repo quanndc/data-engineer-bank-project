@@ -11,7 +11,7 @@ COMPOSE := docker compose
 endif
 SPARK := $(COMPOSE) exec -T spark
 
-.PHONY: up down ps logs smoke sql psql clean source-check tiers schema
+.PHONY: up down ps logs smoke sql psql clean source-check tiers schema load-ref load-history rerun reconcile
 
 up:            ## Start D ClickHouse, E PostgreSQL, C Spark, F app (http://localhost:8501)
 	@echo "ClickHouse: $(CLICKHOUSE_HOST)"
@@ -33,6 +33,23 @@ smoke:         ## Check that every block of the architecture answers
 
 schema:        ## P2-2: create dw (ClickHouse) and ops (PostgreSQL); check columns against the Data Dictionary
 	$(SPARK) python3 /opt/jobs/apply_schema.py
+
+# ---------------------------------------------------------------- batch pipeline (P2-3)
+FROM ?= 1993-01
+TO   ?= 1998-12
+PIPELINE := $(SPARK) spark-submit /opt/jobs/pipeline.py
+
+load-ref:      ## REF_INITIAL: district, account, client + OWNER + tier -> dimensions (SCD2 first versions)
+	$(PIPELINE) ref
+
+load-history:  ## HIST_YYYY_MM batches from FROM to TO (default 1993-01 .. 1998-12)
+	$(PIPELINE) history $(FROM) $(TO)
+
+rerun:         ## Re-run one batch from its Data Lake snapshot: make rerun BATCH=HIST_1995_03
+	$(PIPELINE) rerun $(BATCH)
+
+reconcile:     ## Whole Berka source vs. warehouse (count, distinct ids, money in/out)
+	$(PIPELINE) reconcile
 
 sql:           ## One statement on ClickHouse: make sql Q="SELECT count() FROM dw.fact_transaction"
 	$(SPARK) python3 /opt/jobs/ch_sql.py "$(Q)"
