@@ -12,6 +12,26 @@ Ghi lại các phát hiện, quyết định thiết kế và thay đổi của 
 
 
 
+
+---
+
+## [2026-10-22] Phase 2 — P2-8: đánh giá KB01–KB08 + benchmark ClickHouse vs PostgreSQL ✅
+
+### Đã làm
+- [spark/jobs/evaluate.py](spark/jobs/evaluate.py) (`make evaluate`): đối chiếu 8 KB với **nguồn** (Berka + file kịch bản, tính lại bằng pandas), `expected.json` và `ops.*`; thêm 7 kiểm tra chất lượng dữ liệu (ISO/IEC 25012 + SCD2). Chỉ đọc kho; KB04 chạy trong transaction rồi rollback.
+- [spark/jobs/benchmark.py](spark/jobs/benchmark.py) (`make bench-load`, `make bench`): chép 6 bảng sang PostgreSQL (database `dwpg`, có PK/FK, index, ANALYZE), đo 7 truy vấn BR01/BR02/BR08, mỗi truy vấn 6 lần (lần đầu lạnh, median/p95 của lần 2–6), so kết quả giữa 2 hệ; thời gian pipeline lấy từ `ops.pipeline_step`.
+- [docs/EVALUATION_P2.md](docs/EVALUATION_P2.md): bảng kết quả 8 KB + bảng benchmark + giới hạn của phép đo; số liệu gốc ở [docs/results/p2/](docs/results/p2/).
+
+### Kết quả
+- **8/8 KB đạt, 38/38 kiểm tra.** BR01 khớp nguồn tới từng xu cho 4 kỳ; BR02 khớp từng giao dịch của 23 tài khoản.
+- **Truy vấn tổng hợp** (BR01, BR08 theo hạng): ClickHouse nhanh hơn 2,4–19 lần (ví dụ BR08 42 ms so với 802 ms). **Tra cứu một tài khoản hoặc một khách**: PostgreSQL nhanh hơn nhờ B-tree (ví dụ 1,8 ms so với 24 ms), nhưng cả hai đều dưới 25 ms. Fact trên ClickHouse 19 MB, PostgreSQL 169 MB (gồm index).
+- Pipeline: median 3,4 s mỗi lô tháng (p95 5,3 s); 72 lô mất 273,5 s.
+
+### Lỗi tìm ra khi đánh giá và đã sửa
+- **`expected.json` của KB03**: trung bình tiền ra lấy theo tháng 7–12/1998, trong khi R1 cho tháng 2/1999 phải dùng tháng 8/1998–1/1999. Kho đã đúng; sửa [tools/make_scenarios.py](tools/make_scenarios.py) và sinh lại. `trans.csv` của mọi kịch bản không đổi (đã kiểm tra bằng diff).
+- **Bước `load_dimensions`** không ghi `rows_in`: nay ghi số tổ hợp trong lô và số tổ hợp mới. Đã thử bằng `make rerun BATCH=HIST_1993_01`.
+- Benchmark: với tháng không có tiền vào, PostgreSQL trả `NULL` còn ClickHouse `sumIf` trả 0 → thêm `coalesce` (lỗi của truy vấn, không phải của dữ liệu).
+
 ---
 
 ## [2026-10-22] Phase 2 — P2-6 hoàn tất: ứng dụng 3 tab demo đủ 8 BR ✅

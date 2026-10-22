@@ -11,7 +11,7 @@ COMPOSE := docker compose
 endif
 SPARK := $(COMPOSE) exec -T spark
 
-.PHONY: up down ps logs smoke sql psql clean source-check tiers schema load-ref load-history rerun reconcile scenarios scenario alerts backup restore backups
+.PHONY: up down ps logs smoke sql psql clean source-check tiers schema load-ref load-history rerun reconcile scenarios scenario alerts backup restore backups evaluate bench-load bench
 
 up:            ## Start D ClickHouse, E PostgreSQL, C Spark, F app (http://localhost:8501)
 	@echo "ClickHouse: $(CLICKHOUSE_HOST)"
@@ -69,6 +69,20 @@ backups:       ## List the backups in the catalog
 
 reconcile:     ## Whole Berka source vs. warehouse (count, distinct ids, money in/out)
 	$(PIPELINE) reconcile
+
+# ---------------------------------------------------------------- evaluation (P2-8)
+RESULTS := docs/results/p2
+
+evaluate:      ## KB01-KB08 + data-quality checks against the source and expected.json
+	$(SPARK) bash -c "cd /opt/jobs && python3 evaluate.py"; s=$$?; mkdir -p $(RESULTS); \
+	cp lake/eval/kb_results.json $(RESULTS)/; exit $$s
+
+bench-load:    ## Copy the 6 dw tables into PostgreSQL database dwpg (alternative of decision Q-K)
+	$(SPARK) bash -c "cd /opt/jobs && python3 benchmark.py load"
+
+bench:         ## BR01/BR02/BR08 on ClickHouse vs PostgreSQL (6 runs each) + pipeline timing
+	$(SPARK) bash -c "cd /opt/jobs && python3 benchmark.py run"; s=$$?; mkdir -p $(RESULTS); \
+	cp lake/bench/p2/*.csv lake/bench/p2/*.json $(RESULTS)/; exit $$s
 
 sql:           ## One statement on ClickHouse: make sql Q="SELECT count() FROM dw.fact_transaction"
 	$(SPARK) python3 /opt/jobs/ch_sql.py "$(Q)"

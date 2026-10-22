@@ -1,0 +1,15 @@
+query,title,engine,rows,cold_ms,warm_median_ms,warm_p95_ms
+br01_kpi_1998,"BR01 KPI một kỳ (năm 1998): số giao dịch, tiền vào, tiền ra",clickhouse,1,14.4,13.5,14.8
+br01_kpi_1998,"BR01 KPI một kỳ (năm 1998): số giao dịch, tiền vào, tiền ra",postgres,1,65.5,32.2,34.0
+br01_by_month,"BR01 biểu đồ theo tháng, toàn bộ lịch sử",clickhouse,75,28.0,25.9,27.6
+br01_by_month,"BR01 biểu đồ theo tháng, toàn bộ lịch sử",postgres,75,156.6,127.7,134.0
+br01_by_tier_1998,"BR01 theo hạng thành viên (năm 1998): giao dịch, vào, ra, số khách",clickhouse,4,22.6,18.3,19.2
+br01_by_tier_1998,"BR01 theo hạng thành viên (năm 1998): giao dịch, vào, ra, số khách",postgres,4,344.2,343.3,364.6
+br02_account_detail,BR02 tra cứu tài khoản 2378: toàn bộ giao dịch chi tiết,clickhouse,437,31.9,24.3,25.4
+br02_account_detail,BR02 tra cứu tài khoản 2378: toàn bộ giao dịch chi tiết,postgres,437,2.7,1.8,2.2
+br02_account_totals,BR02 tổng của tài khoản 2378 trong năm 1998,clickhouse,1,10.4,8.8,9.2
+br02_account_totals,BR02 tổng của tài khoản 2378 trong năm 1998,postgres,1,0.7,0.3,0.4
+br08_tier_old_new,BR08 báo cáo theo hạng kỳ cũ (1993-1998) và kỳ mới (01/1999),clickhouse,8,43.9,42.0,49.7
+br08_tier_old_new,BR08 báo cáo theo hạng kỳ cũ (1993-1998) và kỳ mới (01/1999),postgres,8,807.7,802.1,842.1
+br08_client_versions,BR08 các phiên bản hạng của 1 khách (client 24) và giao dịch theo phiên bản,clickhouse,2,31.9,19.9,24.2
+br08_client_versions,BR08 các phiên bản hạng của 1 khách (client 24) và giao dịch theo phiên bản,postgres,2,1.3,0.5,0.6

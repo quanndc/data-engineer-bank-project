@@ -1,0 +1,700 @@
+{
+ "evaluated_at": "2026-10-22T13:04:19Z",
+ "summary": {
+  "KB01": "8/8",
+  "KB02": "2/2",
+  "KB03": "4/4",
+  "KB04": "3/3",
+  "KB05": "3/3",
+  "KB06": "4/4",
+  "KB07": "3/3",
+  "KB08": "4/4",
+  "DQ": "7/7"
+ },
+ "checks": [
+  {
+   "kb": "KB01",
+   "check": "BR01 1993-1998 (lịch sử): số giao dịch, tiền vào, tiền ra = nguồn",
+   "status": "PASS",
+   "expected": {
+    "transactions": 1056320,
+    "in": 322747242450,
+    "out": 303032113580
+   },
+   "actual": {
+    "transactions": 1056320,
+    "in": 322747242450,
+    "out": 303032113580
+   },
+   "detail": ""
+  },
+  {
+   "kb": "KB01",
+   "check": "BR01 1993-1998 (lịch sử): theo hạng (giao dịch, vào, ra, số khách) = nguồn",
+   "status": "PASS",
+   "expected": {
+    "Gold": {
+     "transactions": 186421,
+     "in": 95679990130,
+     "out": 91523112740,
+     "clients": 698
+    },
+    "Platinum": {
+     "transactions": 79681,
+     "in": 53021685140,
+     "out": 51366314740,
+     "clients": 289
+    },
+    "Silver": {
+     "transactions": 354967,
+     "in": 116624613820,
+     "out": 109214496870,
+     "clients": 1438
+    },
+    "Standard": {
+     "transactions": 435251,
+     "in": 57420953360,
+     "out": 50928189230,
+     "clients": 2075
+    }
+   },
+   "actual": {
+    "Gold": {
+     "transactions": 186421,
+     "in": 95679990130,
+     "out": 91523112740,
+     "clients": 698
+    },
+    "Platinum": {
+     "transactions": 79681,
+     "in": 53021685140,
+     "out": 51366314740,
+     "clients": 289
+    },
+    "Silver": {
+     "transactions": 354967,
+     "in": 116624613820,
+     "out": 109214496870,
+     "clients": 1438
+    },
+    "Standard": {
+     "transactions": 435251,
+     "in": 57420953360,
+     "out": 50928189230,
+     "clients": 2075
+    }
+   },
+   "detail": ""
+  },
+  {
+   "kb": "KB01",
+   "check": "BR01 năm 1998: số giao dịch, tiền vào, tiền ra = nguồn",
+   "status": "PASS",
+   "expected": {
+    "transactions": 322277,
+    "in": 96096428220,
+    "out": 93381907510
+   },
+   "actual": {
+    "transactions": 322277,
+    "in": 96096428220,
+    "out": 93381907510
+   },
+   "detail": ""
+  },
+  {
+   "kb": "KB01",
+   "check": "BR01 năm 1998: theo hạng (giao dịch, vào, ra, số khách) = nguồn",
+   "status": "PASS",
+   "expected": {
+    "Gold": {
+     "transactions": 55681,
+     "in": 27905697220,
+     "out": 27316405190,
+     "clients": 698
+    },
+    "Platinum": {
+     "transactions": 24214,
+     "in": 15233464020,
+     "out": 15123189660,
+     "clients": 289
+    },
+    "Silver": {
+     "transactions": 109704,
+     "in": 35541196850,
+     "out": 34363604940,
+     "clients": 1438
+    },
+    "Standard": {
+     "transactions": 132678,
+     "in": 17416070130,
+     "out": 16578707720,
+     "clients": 2067
+    }
+   },
+   "actual": {
+    "Gold": {
+     "transactions": 55681,
+     "in": 27905697220,
+     "out": 27316405190,
+     "clients": 698
+    },
+    "Platinum": {
+     "transactions": 24214,
+     "in": 15233464020,
+     "out": 15123189660,
+     "clients": 289
+    },
+    "Silver": {
+     "transactions": 109704,
+     "in": 35541196850,
+     "out": 34363604940,
+     "clients": 1438
+    },
+    "Standard": {
+     "transactions": 132678,
+     "in": 17416070130,
+     "out": 16578707720,
+     "clients": 2067
+    }
+   },
+   "detail": ""
+  },
+  {
+   "kb": "KB01",
+   "check": "BR01 01/1999 (kỳ sau KB08): số giao dịch, tiền vào, tiền ra = nguồn",
+   "status": "PASS",
+   "expected": {
+    "transactions": 1246,
+    "in": 1974040000,
+    "out": 790086000
+   },
+   "actual": {
+    "transactions": 1246,
+    "in": 1974040000,
+    "out": 790086000
+   },
+   "detail": ""
+  },
+  {
+   "kb": "KB01",
+   "check": "BR01 01/1999 (kỳ sau KB08): theo hạng (giao dịch, vào, ra, số khách) = nguồn",
+   "status": "PASS",
+   "expected": {
+    "Gold": {
+     "transactions": 340,
+     "in": 573500000,
+     "out": 229400000,
+     "clients": 170
+    },
+    "Platinum": {
+     "transactions": 356,
+     "in": 1014840000,
+     "out": 405936000,
+     "clients": 178
+    },
+    "Silver": {
+     "transactions": 328,
+     "in": 286400000,
+     "out": 114966000,
+     "clients": 166
+    },
+    "Standard": {
+     "transactions": 222,
+     "in": 99300000,
+     "out": 39784000,
+     "clients": 114
+    }
+   },
+   "actual": {
+    "Gold": {
+     "transactions": 340,
+     "in": 573500000,
+     "out": 229400000,
+     "clients": 170
+    },
+    "Platinum": {
+     "transactions": 356,
+     "in": 1014840000,
+     "out": 405936000,
+     "clients": 178
+    },
+    "Silver": {
+     "transactions": 328,
+     "in": 286400000,
+     "out": 114966000,
+     "clients": 166
+    },
+    "Standard": {
+     "transactions": 222,
+     "in": 99300000,
+     "out": 39784000,
+     "clients": 114
+    }
+   },
+   "detail": ""
+  },
+  {
+   "kb": "KB01",
+   "check": "BR01 toàn bộ: số giao dịch, tiền vào, tiền ra = nguồn",
+   "status": "PASS",
+   "expected": {
+    "transactions": 1057571,
+    "in": 324721282450,
+    "out": 303841199580
+   },
+   "actual": {
+    "transactions": 1057571,
+    "in": 324721282450,
+    "out": 303841199580
+   },
+   "detail": ""
+  },
+  {
+   "kb": "KB01",
+   "check": "BR01 toàn bộ: theo hạng (giao dịch, vào, ra, số khách) = nguồn",
+   "status": "PASS",
+   "expected": {
+    "Gold": {
+     "transactions": 186761,
+     "in": 96253490130,
+     "out": 91752512740,
+     "clients": 868
+    },
+    "Platinum": {
+     "transactions": 80037,
+     "in": 54036525140,
+     "out": 51772250740,
+     "clients": 467
+    },
+    "Silver": {
+     "transactions": 355297,
+     "in": 116911013820,
+     "out": 109330462870,
+     "clients": 1600
+    },
+    "Standard": {
+     "transactions": 435476,
+     "in": 57520253360,
+     "out": 50985973230,
+     "clients": 2183
+    }
+   },
+   "actual": {
+    "Gold": {
+     "transactions": 186761,
+     "in": 96253490130,
+     "out": 91752512740,
+     "clients": 868
+    },
+    "Platinum": {
+     "transactions": 80037,
+     "in": 54036525140,
+     "out": 51772250740,
+     "clients": 467
+    },
+    "Silver": {
+     "transactions": 355297,
+     "in": 116911013820,
+     "out": 109330462870,
+     "clients": 1600
+    },
+    "Standard": {
+     "transactions": 435476,
+     "in": 57520253360,
+     "out": 50985973230,
+     "clients": 2183
+    }
+   },
+   "detail": ""
+  },
+  {
+   "kb": "KB02",
+   "check": "BR02 tra cứu 23 tài khoản: đúng từng giao dịch (id, số tiền, chiều) = nguồn",
+   "status": "PASS",
+   "expected": 0,
+   "actual": 0,
+   "detail": "tài khoản: [11, 14, 2378] + 20 ngẫu nhiên"
+  },
+  {
+   "kb": "KB02",
+   "check": "BR02 lọc theo kỳ (tài khoản 11, năm 1999) = nguồn",
+   "status": "PASS",
+   "expected": 1,
+   "actual": 1,
+   "detail": ""
+  },
+  {
+   "kb": "KB03",
+   "check": "BR03 cảnh báo sinh ra = mong đợi (quy tắc, tài khoản, kỳ)",
+   "status": "PASS",
+   "expected": 5,
+   "actual": 5,
+   "detail": ""
+  },
+  {
+   "kb": "KB03",
+   "check": "BR03 căn cứ (tiền ra tháng, trung bình 6 tháng, số ngày ngủ đông) = mong đợi",
+   "status": "PASS",
+   "expected": null,
+   "actual": null,
+   "detail": ""
+  },
+  {
+   "kb": "KB03",
+   "check": "Chạy lại không sinh cảnh báo trùng (6 lần chạy, vẫn 5 cảnh báo)",
+   "status": "PASS",
+   "expected": 5,
+   "actual": 5,
+   "detail": ""
+  },
+  {
+   "kb": "KB03",
+   "check": "Mở được giao dịch liên quan của mọi cảnh báo trong kho",
+   "status": "PASS",
+   "expected": 5,
+   "actual": 5,
+   "detail": ""
+  },
+  {
+   "kb": "KB04",
+   "check": "BR04 NEW → IN_REVIEW → RESOLVED, mỗi bước có ghi chú trong lịch sử",
+   "status": "PASS",
+   "expected": [
+    "NEW->IN_REVIEW",
+    "IN_REVIEW->RESOLVED"
+   ],
+   "actual": [
+    "NEW->IN_REVIEW",
+    "IN_REVIEW->RESOLVED"
+   ],
+   "detail": ""
+  },
+  {
+   "kb": "KB04",
+   "check": "BR04 chuyển trạng thái không hợp lệ (RESOLVED → NEW) bị từ chối",
+   "status": "PASS",
+   "expected": null,
+   "actual": null,
+   "detail": ""
+  },
+  {
+   "kb": "KB04",
+   "check": "BR04 qua giao diện: đã thử trên trình duyệt ở P2-6 (alert 1699, dữ liệu thử đã xoá)",
+   "status": "PASS",
+   "expected": null,
+   "actual": null,
+   "detail": "kiểm tra tay, xem CHANGELOG P2-6"
+  },
+  {
+   "kb": "KB05",
+   "check": "BR05 số bản ghi bị tách theo quy tắc = mong đợi",
+   "status": "PASS",
+   "expected": {
+    "V1": 2,
+    "V2": 1,
+    "V3": 2,
+    "V4": 2,
+    "V5": 1,
+    "V6": 2
+   },
+   "actual": {
+    "V4": 2,
+    "V6": 2,
+    "V2": 1,
+    "V1": 2,
+    "V5": 1,
+    "V3": 2
+   },
+   "detail": ""
+  },
+  {
+   "kb": "KB05",
+   "check": "Chỉ 10 giao dịch hợp lệ vào kho, đúng id",
+   "status": "PASS",
+   "expected": 10,
+   "actual": 10,
+   "detail": ""
+  },
+  {
+   "kb": "KB05",
+   "check": "Lô không hỏng cả lô: nhận 20, nạp 10, tách 10, SUCCEEDED_WITH_REJECTS",
+   "status": "PASS",
+   "expected": [
+    20,
+    10,
+    10,
+    "SUCCEEDED_WITH_REJECTS"
+   ],
+   "actual": [
+    20,
+    10,
+    10,
+    "SUCCEEDED_WITH_REJECTS"
+   ],
+   "detail": ""
+  },
+  {
+   "kb": "KB06",
+   "check": "BR06 mọi lần chạy (88) có bước, trạng thái, thời gian",
+   "status": "PASS",
+   "expected": 0,
+   "actual": 0,
+   "detail": ""
+  },
+  {
+   "kb": "KB06",
+   "check": "Bước thành công có thời gian kết thúc và số đạt",
+   "status": "PASS",
+   "expected": null,
+   "actual": null,
+   "detail": ""
+  },
+  {
+   "kb": "KB06",
+   "check": "Lần chạy lỗi thấy bước thất bại + nguyên nhân",
+   "status": "PASS",
+   "expected": null,
+   "actual": null,
+   "detail": "run 82 KB03_FRAUD bước detect_alerts: DatabaseError: HTTPDriver for http://clickhouse:8123 received ClickHouse error c"
+  },
+  {
+   "kb": "KB06",
+   "check": "Có chạy lại lô (RERUN) và được ghi nhận",
+   "status": "PASS",
+   "expected": null,
+   "actual": null,
+   "detail": ""
+  },
+  {
+   "kb": "KB07",
+   "check": "BR07 khôi phục SUCCEEDED, 5 nhóm số liệu khớp bản sao lưu",
+   "status": "PASS",
+   "expected": true,
+   "actual": {
+    "rows": true,
+    "by_tier": true,
+    "money_in": true,
+    "money_out": true,
+    "scd_versions": true
+   },
+   "detail": ""
+  },
+  {
+   "kb": "KB07",
+   "check": "Lô nạp sau sao lưu (KB07) không còn trong kho",
+   "status": "PASS",
+   "expected": 0,
+   "actual": 0,
+   "detail": ""
+  },
+  {
+   "kb": "KB07",
+   "check": "Kho hiện tại vẫn bằng số liệu bản sao lưu (sau đó chỉ có chạy lại không thêm dòng)",
+   "status": "PASS",
+   "expected": true,
+   "actual": {
+    "rows": true,
+    "money_in": true,
+    "money_out": true,
+    "by_tier": true,
+    "scd_versions": true
+   },
+   "detail": ""
+  },
+  {
+   "kb": "KB08",
+   "check": "SCD2: tổng / hiện tại / đã đóng = mong đợi",
+   "status": "PASS",
+   "expected": [
+    5118,
+    4500,
+    618
+   ],
+   "actual": [
+    5118,
+    4500,
+    618
+   ],
+   "detail": ""
+  },
+  {
+   "kb": "KB08",
+   "check": "Kỳ mới (giao dịch KB08) tính theo hạng mới = mong đợi",
+   "status": "PASS",
+   "expected": {
+    "Silver": {
+     "clients": 162,
+     "money_in": 2862400.0,
+     "money_out": 1144960.0
+    },
+    "Gold": {
+     "clients": 170,
+     "money_in": 5735000.0,
+     "money_out": 2294000.0
+    },
+    "Standard": {
+     "clients": 108,
+     "money_in": 987600.0,
+     "money_out": 395040.0
+    },
+    "Platinum": {
+     "clients": 178,
+     "money_in": 10148400.0,
+     "money_out": 4059360.0
+    }
+   },
+   "actual": {
+    "Gold": {
+     "clients": 170,
+     "money_in": 5735000.0,
+     "money_out": 2294000.0
+    },
+    "Platinum": {
+     "clients": 178,
+     "money_in": 10148400.0,
+     "money_out": 4059360.0
+    },
+    "Silver": {
+     "clients": 162,
+     "money_in": 2862400.0,
+     "money_out": 1144960.0
+    },
+    "Standard": {
+     "clients": 108,
+     "money_in": 987600.0,
+     "money_out": 395040.0
+    }
+   },
+   "detail": ""
+  },
+  {
+   "kb": "KB08",
+   "check": "Kỳ cũ 1993-1998 vẫn theo hạng cũ (= nguồn với hạng ban đầu)",
+   "status": "PASS",
+   "expected": {
+    "Gold": {
+     "transactions": 186421,
+     "in": 95679990130,
+     "out": 91523112740,
+     "clients": 698
+    },
+    "Platinum": {
+     "transactions": 79681,
+     "in": 53021685140,
+     "out": 51366314740,
+     "clients": 289
+    },
+    "Silver": {
+     "transactions": 354967,
+     "in": 116624613820,
+     "out": 109214496870,
+     "clients": 1438
+    },
+    "Standard": {
+     "transactions": 435251,
+     "in": 57420953360,
+     "out": 50928189230,
+     "clients": 2075
+    }
+   },
+   "actual": {
+    "Gold": {
+     "transactions": 186421,
+     "in": 95679990130,
+     "out": 91523112740,
+     "clients": 698
+    },
+    "Platinum": {
+     "transactions": 79681,
+     "in": 53021685140,
+     "out": 51366314740,
+     "clients": 289
+    },
+    "Silver": {
+     "transactions": 354967,
+     "in": 116624613820,
+     "out": 109214496870,
+     "clients": 1438
+    },
+    "Standard": {
+     "transactions": 435251,
+     "in": 57420953360,
+     "out": 50928189230,
+     "clients": 2075
+    }
+   },
+   "detail": ""
+  },
+  {
+   "kb": "KB08",
+   "check": "618 khách có 2 phiên bản với hạng khác nhau",
+   "status": "PASS",
+   "expected": 618,
+   "actual": 618,
+   "detail": ""
+  },
+  {
+   "kb": "DQ",
+   "check": "Uniqueness: transaction_id không trùng trong fact",
+   "status": "PASS",
+   "expected": 1057571,
+   "actual": 1057571,
+   "detail": ""
+  },
+  {
+   "kb": "DQ",
+   "check": "Completeness: khóa và số tiền của fact không thiếu",
+   "status": "PASS",
+   "expected": null,
+   "actual": null,
+   "detail": ""
+  },
+  {
+   "kb": "DQ",
+   "check": "Consistency: 0 khóa ngoại mồ côi (5 quan hệ)",
+   "status": "PASS",
+   "expected": 0,
+   "actual": {
+    "date": 0,
+    "account": 0,
+    "customer": 0,
+    "profile": 0,
+    "district": 0
+   },
+   "detail": ""
+  },
+  {
+   "kb": "DQ",
+   "check": "SCD2: mỗi khách đúng 1 phiên bản hiện tại",
+   "status": "PASS",
+   "expected": null,
+   "actual": null,
+   "detail": ""
+  },
+  {
+   "kb": "DQ",
+   "check": "SCD2: các phiên bản không chồng lấn, nối liền nhau",
+   "status": "PASS",
+   "expected": null,
+   "actual": null,
+   "detail": ""
+  },
+  {
+   "kb": "DQ",
+   "check": "SCD2: phiên bản hiện tại có valid_to = 2299-12-31",
+   "status": "PASS",
+   "expected": null,
+   "actual": null,
+   "detail": ""
+  },
+  {
+   "kb": "DQ",
+   "check": "SCD2: mọi giao dịch trỏ tới phiên bản hiệu lực đúng ngày giao dịch",
+   "status": "PASS",
+   "expected": null,
+   "actual": null,
+   "detail": ""
+  }
+ ]
+}

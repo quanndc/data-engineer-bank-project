@@ -334,7 +334,8 @@ def validate(spark, log, t):
 
 
 def load_profiles(spark, t):
-    """Add combinations that appear for the first time; labels are Type 1."""
+    """Add combinations that appear for the first time; labels are Type 1.
+    Returns (combinations in the batch, new profiles)."""
     combos = t.select("type_code", "operation_code", "purpose_code").distinct().toPandas()
     combos = combos.assign(
         combo=combos.type_code + "|" + combos.operation_code + "|" + combos.purpose_code,
@@ -351,7 +352,7 @@ def load_profiles(spark, t):
     ch_insert("dim_transaction_profile", new[[
         "transaction_profile_sk", "type_code", "type_name", "operation_code", "operation_name",
         "purpose_code", "purpose_name", "cash_flow_direction", "created_at", "updated_at"]])
-    return len(new)
+    return len(combos), len(new)
 
 
 def load_fact(spark, log, t):
@@ -477,7 +478,7 @@ def run_transactions(spark, batch_id, df, description, period=(None, None), batc
         accepted = standardize_codes(accepted).cache()
         s["rows_in"] = s["rows_out"] = accepted.count()
     with log.step("load_dimensions") as s:
-        s["rows_out"] = load_profiles(spark, accepted)
+        s["rows_in"], s["rows_out"] = load_profiles(spark, accepted)
     with log.step("load_fact") as s:
         n_new, n_v7 = load_fact(spark, log, accepted)
         s["rows_in"], s["rows_out"], s["rows_rejected"] = accepted.count() - n_already, n_new, n_v7

@@ -134,13 +134,14 @@ def kb08():
 # ---------------------------------------------------------------- KB03: fraud patterns (BR03)
 def kb03():
     """Transactions built to meet the alert rules (ops.alert_rule, decision Q-F):
-    R1 -- 3 accounts withdraw 4x their average monthly outflow of Jul-Dec 1998 (>= 60,000 CZK) in Feb 1999;
+    R1 -- 3 accounts withdraw 4x their average monthly outflow of the 6 months before Feb 1999
+          (Aug 1998 - Jan 1999, the rule's window; Berka has no data in Jan 1999) (>= 60,000 CZK) in Feb 1999;
     R2 -- 2 accounts with no transaction after 1998-12-31 withdraw 5,000 CZK on 1999-07-15 (196 days).
     Accounts are disjoint from KB05 (ids 1-10) and KB08 (owners who changed tier)."""
     kb08_accounts = {r[1] for r in csv.reader(open(f"{OUT}/KB08/trans.csv"), delimiter=";") if r[0] != "trans_id"}
     cand = c.sql("""
         SELECT account_id,
-               sum(amount::DECIMAL(18, 2)) FILTER (WHERE trim(type) <> 'PRIJEM' AND date BETWEEN '980701' AND '981231') / 6 AS avg_out,
+               sum(amount::DECIMAL(18, 2)) FILTER (WHERE trim(type) <> 'PRIJEM' AND date BETWEEN '980801' AND '981231') / 6 AS avg_out,
                arg_max(balance::DECIMAL(18, 2), date || lpad(trans_id, 10, '0')) AS last_balance,
                max(date) AS last_date, min(date) AS first_date
         FROM trans GROUP BY account_id
