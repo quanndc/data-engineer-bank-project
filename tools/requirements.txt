@@ -1,0 +1,2 @@
+# Local helper scripts (profiling, simulation). Install: python3 -m pip install -r tools/requirements.txt
+duckdb==1.5.6

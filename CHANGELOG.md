@@ -2,6 +2,16 @@
 
 Ghi lại các phát hiện, quyết định thiết kế và thay đổi của dự án.
 
+
+---
+
+## [2026-10-22] Phase 2 — P2-0: dữ liệu Berka và Membership tier mô phỏng
+
+- Bắt đầu Phase 2 theo [docs/PLAN_PHASE2.md](docs/PLAN_PHASE2.md) (căn cứ: sheet nhóm chốt 18/10). Tag **`phase1-kaggle`** (`4c554aa`) đánh dấu hết Phase 1.
+- ClickHouse chuyển về **container trên máy** (comment các dòng Aiven trong `.env`) để benchmark công bằng và làm được BR07.
+- Tải Berka (bản PKDD'99 trên Kaggle) → `data/berka/raw/`. Script [tools/profile_berka.py](tools/profile_berka.py): **14/15 số liệu khảo sát khớp sheet**; VYBER 9.597 chưa khớp cách đếm nào (16.666 giao dịch VYBER, 0 làm tăng số dư) → cần nhóm xác nhận. Chi tiết: [docs/berka_profile.md](docs/berka_profile.md).
+- Script [tools/simulate_membership_tier.py](tools/simulate_membership_tier.py) → `data/berka/customer_profile_simulated.csv`: 4.500 dòng; hạng theo tiền vào năm đầu (Standard 46,1% / Silver 32,0% / Gold 15,5% / Platinum 6,4%); đạt mọi kiểm tra; chạy lại ra cùng file.
+
 ---
 
 ## [2026-10-07] ClickHouse chạy được cả local lẫn cloud (Aiven), chọn bằng `.env`

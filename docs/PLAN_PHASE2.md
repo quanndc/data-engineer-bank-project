@@ -58,10 +58,11 @@
 ## 4. Các giai đoạn
 
 ### P2-0. Chuẩn bị repo và dữ liệu
-- [ ] Gắn tag `phase1-kaggle`; chuyển code Phase 1 không dùng nữa (Kafka producer, streaming, Superset, RFM, BR Kaggle) vào `archive/phase1/` hoặc xoá khỏi nhánh chính.
-- [ ] Tải Berka từ CTU Relational (`relational.fel.cvut.cz`, database `financial`), xuất 5 bảng ra CSV vào `data/berka/`.
-- [ ] **Kiểm tra lại số liệu khảo sát của sheet (K01–K05):** 4.500 tài khoản, 5.369 khách, 1.056.320 giao dịch, mỗi tài khoản đúng 1 OWNER, 4.091/409 tài khoản cùng/khác khu vực, 17 → 15 tổ hợp phân loại, 183.114 `operation` trống, 481.881 NULL + 53.433 chuỗi trắng ở `k_symbol`.
-- [ ] **Giả lập Membership tier: 1 file CSV tương ứng với dữ liệu Berka** → `data/berka/customer_profile_simulated.csv`
+- [ ] Gắn tag `phase1-kaggle` *(22/10: tag đã tạo tại `4c554aa`, chưa push)*; chuyển code Phase 1 không dùng nữa (Kafka producer, streaming, Superset, RFM, BR Kaggle) vào `archive/phase1/` hoặc xoá khỏi nhánh chính.
+- [x] Tải Berka từ CTU Relational (`relational.fel.cvut.cz`, database `financial`), xuất 5 bảng ra CSV vào `data/berka/`.
+  - *Thực hiện 22/10:* dùng bản PKDD'99 gốc trên Kaggle (không cần đăng nhập) → `data/berka/raw/`; số liệu khớp sheet (xem [berka_profile.md](berka_profile.md)).
+- [x] **Kiểm tra lại số liệu khảo sát của sheet (K01–K05):** *(22/10: 14/15 khớp; VYBER 9.597 cần nhóm xác nhận cách tính — [berka_profile.md](berka_profile.md))* 4.500 tài khoản, 5.369 khách, 1.056.320 giao dịch, mỗi tài khoản đúng 1 OWNER, 4.091/409 tài khoản cùng/khác khu vực, 17 → 15 tổ hợp phân loại, 183.114 `operation` trống, 481.881 NULL + 53.433 chuỗi trắng ở `k_symbol`.
+- [x] **Giả lập Membership tier: 1 file CSV tương ứng với dữ liệu Berka** *(22/10: 4.500 dòng, đạt mọi kiểm tra)* → `data/berka/customer_profile_simulated.csv`
   - Cột (theo Data Dictionary): `client_id`, `membership_tier`, `tier_effective_from`, `updated_at`.
   - Phạm vi: **mỗi `client_id` là OWNER của một tài khoản có đúng 1 dòng** (khớp `client` ⋈ `disp` với `type = OWNER`); `client_id` nào cũng phải tồn tại trong `client`.
   - Cách gán hạng (Q-E): dựa trên tổng tiền vào của các tài khoản khách sở hữu trong năm đầu → 4 hạng Standard / Silver / Gold / Platinum. `tier_effective_from` ≤ ngày giao dịch đầu tiên của khách, để phiên bản đầu bao phủ toàn bộ lịch sử (đúng quy tắc của `valid_from`).
