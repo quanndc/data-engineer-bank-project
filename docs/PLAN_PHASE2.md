@@ -117,14 +117,14 @@
 - [x] Bước **alert** sau khi nạp: đọc D, áp quy tắc R1/R2 (Q-F), ghi `alert` (E) kèm tài khoản, lý do, thời điểm, số liệu làm căn cứ; chống trùng.
 - [x] Trạng thái xử lý + ghi chú (`alert_action`) *(22/10: hàm `ops.set_alert_status`; giao diện ở P2-6)*; **không sửa số tiền hay lịch sử hạng trong DW**.
 - [x] Chuẩn bị lô **KB03** (giao dịch gian lận thỏa R1/R2).
-- **Xong khi:** KB03 sinh đúng cảnh báo; KB04 cập nhật trạng thái thấy trên UI. *(22/10: KB03 ✅ 5/5 cảnh báo; KB04 phần dữ liệu ✅, còn phần UI ở P2-6)*
+- **Xong khi:** KB03 sinh đúng cảnh báo; KB04 cập nhật trạng thái thấy trên UI. *(22/10: KB03 ✅ 5/5 cảnh báo; KB04 ✅ cả dữ liệu và UI)*
 
 ### P2-6. Ứng dụng (F) — 1 app, 3 tab
-- [ ] **Tổng quan (U01):** BR01: chọn kỳ, tiền vào/ra/thuần, số giao dịch, theo hạng, biểu đồ ngày/tháng.
-- [ ] **Phân tích (U02):** BR02 tra cứu tài khoản · BR03 danh sách cảnh báo + căn cứ + mở giao dịch · BR04 cập nhật trạng thái, ghi chú.
-- [ ] **Vận hành (U03):** BR05 lỗi theo lô · BR06 lần chạy + bước · BR07 sao lưu/khôi phục · BR08 báo cáo theo hạng kỳ cũ/kỳ mới.
-- [ ] Luồng kịch bản N01–N05: **chọn và xem trước** (chưa ghi B/D) → **chạy** → **đối chiếu mong đợi vs thực tế** → **chạy lại**.
-- **Xong khi:** demo được 8 BR trên 1 app.
+- [x] **Tổng quan (U01):** BR01: chọn kỳ, tiền vào/ra/thuần, số giao dịch, theo hạng, biểu đồ ngày/tháng.
+- [x] **Phân tích (U02):** BR02 tra cứu tài khoản · BR03 danh sách cảnh báo + căn cứ + mở giao dịch · BR04 cập nhật trạng thái, ghi chú.
+- [x] **Vận hành (U03):** BR05 lỗi theo lô · BR06 lần chạy + bước · BR07 sao lưu/khôi phục · BR08 báo cáo theo hạng kỳ cũ/kỳ mới.
+- [x] Luồng kịch bản N01–N05: **chọn và xem trước** (chưa ghi B/D) → **chạy** → **đối chiếu mong đợi vs thực tế** → **chạy lại**.
+- **Xong khi:** demo được 8 BR trên 1 app. *(22/10 ✅: kiểm tra trên trình duyệt đủ 3 tab; chạy KB03 từ giao diện qua runner → `triggered_by = app`, 0 dòng mới, 0 cảnh báo mới)*
 
 ### P2-7. Sao lưu và khôi phục (BR07) — luồng L06
 - [x] Sao lưu đủ 6 bảng DW (gồm lịch sử SCD) khi pipeline dừng ghi; ghi danh mục, trạng thái, kết quả vào `backup_catalog` / `backup_operation`.

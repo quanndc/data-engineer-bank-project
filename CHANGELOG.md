@@ -11,6 +11,21 @@ Ghi lại các phát hiện, quyết định thiết kế và thay đổi của 
 
 
 
+
+---
+
+## [2026-10-22] Phase 2 — P2-6 hoàn tất: ứng dụng 3 tab demo đủ 8 BR ✅
+
+### Đã kiểm tra trên trình duyệt (sau khi giới hạn bộ đệm ClickHouse)
+- **Chạy kịch bản từ giao diện:** bấm "▶ Chạy KB03" → runner chạy lại lô `KB03_FRAUD`, run 89 `SUCCEEDED`, `triggered_by = app`; nhận 5, nạp mới 0 (5 đã có), cảnh báo 5 tìm thấy / 0 mới; kho vẫn 1.057.571 giao dịch, 1.702 cảnh báo. Ứng dụng không còn lỗi hết bộ nhớ (ClickHouse ~1,1 GB / 2,4 GB khi chạy).
+- **BR05:** danh mục quy tắc V1–V7, số bản ghi bị tách theo lô và quy tắc, chi tiết từng bản ghi + lý do.
+- **BR07:** danh mục bản sao lưu (`before_kb07`, 1.057.571 dòng fact, 5.118 phiên bản SCD), lịch sử thao tác kèm kết quả đối chiếu.
+- **BR08:** báo cáo theo hạng kỳ cũ (1993–1998) và kỳ mới (01/1999); `dim_customer` 5.118 phiên bản / 4.500 hiện tại / 618 đã đóng; khách 24: Standard → Silver từ 1999-01-01.
+- Cùng với các phần đã kiểm tra trước (BR01–BR04, BR06, xem trước kịch bản): **đủ 8 BR trên 1 app**.
+
+### Kế hoạch
+- Tick toàn bộ P2-6 trong [docs/PLAN_PHASE2.md](docs/PLAN_PHASE2.md); P2-5 ghi nhận KB04 có cả phần UI.
+
 ---
 
 ## [2026-10-22] Phase 2 — P2-6 (đang làm): ứng dụng 3 tab + kênh điều khiển F → C 🚧
