@@ -16,6 +16,14 @@ Ghi lại các phát hiện, quyết định thiết kế và thay đổi của 
 
 
 
+
+---
+
+## [2026-10-22] Phase 2 — P2-8: EVALUATION_P2.md có đủ ×1 và ×10 📝
+
+- [docs/EVALUATION_P2.md](docs/EVALUATION_P2.md) mục 2 viết lại thành **một bảng có cột ×1 và ×10** cho từng phép so sánh (B1–B4, pipeline, phát hiện tra cứu tài khoản), kèm cột kết luận ngắn. Trước đây phần ×10 chỉ là một đoạn văn bên dưới bảng ×1 nên dễ bị sót.
+- Sửa chỗ dẫn sai: sự cố khi đo nằm ở mục 9 (×1) và mục 12.8 (×10) của BENCHMARK_P2.md.
+
 ---
 
 ## [2026-10-22] Phase 2 — P2-8: benchmark mức ×10 ✅

@@ -38,21 +38,25 @@ Cả bảng kết quả bên dưới đều do [spark/jobs/evaluate.py](../spark
 
 ---
 
-## 2. Performance — tóm tắt (chi tiết: [BENCHMARK_P2.md](BENCHMARK_P2.md))
+## 2. Performance — tóm tắt ×1 và ×10 (chi tiết: [BENCHMARK_P2.md](BENCHMARK_P2.md))
 
-Mức ×1 (1.057.571 giao dịch). Mỗi phép so sánh chỉ đổi một yếu tố; số dưới đây là warm median.
+Đo ở hai mức dữ liệu: **×1** = dữ liệu thật (1.057.571 giao dịch); **×10** = dữ liệu nhân bản 10 lần (10.575.710 giao dịch, trong database riêng, kho thật vẫn ×1). Mỗi phép so sánh chỉ đổi một yếu tố; số là thời gian điển hình (median).
 
-| Phép so sánh | Kết quả chính |
-|---|---|
-| **B1** Star vs One Big Table (cùng ClickHouse) | One Big Table nhanh hơn 1,5–3,4× (chênh 3–16 ms) nhưng tốn chỗ hơn 1,37×. Sửa tên 1 khu vực: star ghi 1 dòng, One Big Table ghi lại 150.058 dòng |
-| **B2** ClickHouse vs PostgreSQL (cùng star) | Truy vấn tổng hợp BR01/BR03/BR08: ClickHouse nhanh hơn **3,3–22,4×**; tra cứu 1 tài khoản / 1 khách: PostgreSQL nhanh hơn 17–46× (ClickHouse vẫn < 20 ms). Dung lượng: 18,6 so với 162,5 MB. 8 client: 93 so với 12 truy vấn/giây |
-| **B3** Kho vận hành PostgreSQL vs ClickHouse | PostgreSQL nhanh hơn 8–70× ở mọi thao tác của app và pipeline; tự bảo đảm **5/5** ràng buộc (trạng thái, chuyển trạng thái, chống trùng, khóa ngoại, giao dịch), ClickHouse **0/5** |
-| **B4** Spark 1–8 lõi; 1 lô vs 72 lô | Ở ×1, thêm lõi gần như không giúp (7,7 → 5,4 s); 72 lô tháng chậm hơn 1 lô 4–6× do chi phí cố định mỗi lô |
-| Pipeline thật | Median 3,4 s/lô tháng (p95 5,3 s), 72 lô 273,5 s; bước nặng nhất là `load_fact` (1,42 s) |
+| Phép so sánh | ×1 | ×10 | Kết luận |
+|---|---|---|---|
+| **B2** ClickHouse vs PostgreSQL — báo cáo tổng hợp (BR01, BR03, BR08) | ClickHouse nhanh hơn **3–22×** | ClickHouse nhanh hơn **7–28×** (PostgreSQL 0,4–5,4 s; ClickHouse < 0,25 s) | Dữ liệu càng lớn, ClickHouse càng hơn → chọn ClickHouse làm kho là đúng |
+| **B2** — tra cứu 1 tài khoản / 1 khách (BR02) | PostgreSQL nhanh hơn 17–46× (ClickHouse vẫn < 20 ms) | PostgreSQL nhanh hơn 62–268× (ClickHouse 12–80 ms) | PostgreSQL thắng nhờ index, nhưng ClickHouse vẫn đủ nhanh; xem dòng "Phát hiện" |
+| **B2** — 8 người dùng cùng lúc | ClickHouse 93 / PostgreSQL 12 truy vấn/giây | ClickHouse 9,4 / PostgreSQL **0,4** truy vấn/giây (có lúc chờ 38 s) | PostgreSQL không chịu được tải khi dữ liệu lớn |
+| **B2** — dung lượng | 18,6 MB / 162,5 MB | 185,5 MB / 1.612,7 MB | ClickHouse gọn hơn khoảng 9× ở cả hai mức |
+| **B1** Star schema vs One Big Table — tốc độ | One Big Table nhanh hơn 1,5–3,4× (chỉ 3–16 ms) | One Big Table nhanh hơn 1,4–11× (chênh lớn nhất ở tra cứu 1 tài khoản, 1 khách) | Chênh lệch nhỏ với người dùng |
+| **B1** — sửa tên 1 khu vực | Star ghi **1 dòng**, One Big Table **150.058 dòng** | Star **1 dòng**, One Big Table **1.500.580 dòng** | Một bảng to sửa rất đắt và càng đắt khi dữ liệu tăng → chọn star schema là đúng |
+| **B3** Kho vận hành PostgreSQL vs ClickHouse | PostgreSQL nhanh hơn 8–70×; tự chặn **5/5** loại dữ liệu sai, ClickHouse **0/5** | Không đo lại (dữ liệu vận hành không lớn lên theo kho) | Tách PostgreSQL riêng là đúng |
+| **B4** Spark: 1 → 8 lõi (1 lô) | 7,7 → 5,4 s (thêm lõi gần như không giúp) | 28,8 → 14,0 s (**nhanh hơn 2,1×**) | Spark chỉ tận dụng nhiều lõi khi dữ liệu đủ lớn |
+| **B4** — 72 lô tháng so với 1 lô | Chậm hơn 4–6× | Chậm hơn 1,8–4,1× | Chia lô tốn chi phí cố định; đổi lại kiểm soát được từng lô |
+| **Pipeline thật** (chỉ ×1) | 3,4 s/lô tháng, 72 lô 273,5 s; bước nặng nhất `load_fact` 1,42 s | — | |
+| **Phát hiện** tra cứu 1 tài khoản trên star / ClickHouse | Cách app đang viết: 34 ms, đọc cả bảng; lọc `account_sk` trước: 6,1 ms | Cách app: 60 ms, đọc 10,6 triệu dòng; lọc `account_sk` trước: **6,8 ms** | Viết lại truy vấn BR02 thì không chậm đi khi dữ liệu tăng (chưa sửa app) |
 
-**Mức ×10** (10,6 triệu giao dịch nhân bản; chi tiết ở mục 12 của BENCHMARK_P2.md): khoảng cách ClickHouse–PostgreSQL ở truy vấn tổng hợp **nới rộng lên 7–28×** (PostgreSQL 0,4–5,4 s, ClickHouse dưới 0,25 s); với 8 người dùng, PostgreSQL chỉ còn 0,4 truy vấn/giây. Spark 1 lô nhanh hơn 2,1× khi dùng 8 lõi. Phát hiện: tra cứu 1 tài khoản trên star / ClickHouse đọc cả bảng khi lọc qua `dim_account` (60 ms ở ×10); lọc theo `account_sk` trước thì còn 6,8 ms và không phụ thuộc lượng dữ liệu.
-
-Số liệu lần đo đầu của P2-8 (PostgreSQL cấu hình mặc định, chỉ 7 truy vấn) đã được thay bằng lần đo này. Các sự cố khi đo được ghi ở mục 8 của BENCHMARK_P2.md.
+Số liệu lần đo đầu của P2-8 (PostgreSQL cấu hình mặc định, chỉ 7 truy vấn) đã được thay bằng lần đo này. Các sự cố khi đo được ghi ở mục 9 (×1) và mục 12.8 (×10) của BENCHMARK_P2.md.
 
 ---
 
