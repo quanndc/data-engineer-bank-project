@@ -106,9 +106,9 @@ eight scripted evaluation scenarios, each reconciled with the source, and four b
 that each change one factor: data model, warehouse technology, architecture of the
 operational store, and pipeline parallelism. All eight scenarios pass (38 of 38 checks);
 cash-flow totals match the source to the cent. Against the same star schema in PostgreSQL,
-ClickHouse answers aggregation queries 3.3--22 times faster in 8.7 times less space, while
-PostgreSQL is faster for single-account lookups that ClickHouse still answers in under
-20~ms. A One Big Table is 1.5--3.4 times faster than the star schema but must rewrite
+ClickHouse answers aggregation queries 3.3--22 times faster in 8.7 times less space, and
+7--28 times faster on a ten-fold replicated copy, while PostgreSQL is faster for
+single-account lookups that ClickHouse still answers in under 20~ms. A One Big Table is 1.5--3.4 times faster than the star schema but must rewrite
 150,058 rows to correct one district name. Keeping the operational data in PostgreSQL is
 8--70 times faster than in ClickHouse and enforces five integrity guarantees that
 ClickHouse does not.
@@ -924,8 +924,15 @@ or 8 clients repeated a mix of one query per user group (BR01 by tier, BR02 for 
 account, BR08 by tier) for 15~s. The operational workload (B3) was executed one call at a
 time, as the application and the pipeline do: 200 status changes, 200 logged steps, and
 50 reads of each kind. For B4, every configuration ran in a new Spark JVM, and the
-session start-up time was reported separately. Only the original data ($\times$1) was
-measured.
+session start-up time was reported separately.
+
+B1, B2, and B4 were repeated at scale $\times$10. Since Berka has no more data, the
+$\times$10 copy replicates every account, client, and transaction ten times under new keys,
+keeping dates, amounts, tiers, and the SCD2 history, as TPC-style benchmarks generate data
+by scale factor. It holds 10,575,710 fact rows, and its row count, total amount, and numbers
+of accounts and clients were checked to be exactly ten times those of $\times$1. It lives in
+separate databases, so the warehouse itself stayed at $\times$1. B3 was not repeated,
+because the operational data does not grow with the warehouse.
 
 \begin{table*}[!t]
 \centering
@@ -1155,6 +1162,43 @@ scheduling, small files). Splitting the same work into 72 monthly batches took 4
 times longer for the same reason. The real pipeline needs a median of 3.4~s per monthly
 batch, of which the fact load (1.42~s) and validation (0.85~s) are the largest steps.
 
+\textbf{Scale $\times$10.} Table~\ref{tab:scale} compares the two scales. On the
+aggregation queries, ClickHouse became 2--6 times slower when the data grew ten times, but
+PostgreSQL became 4--10 times slower, so the gap widened from 3--22 to 7--28 times; with
+eight concurrent users PostgreSQL served only 0.4 queries per second, with a p95 latency of
+38~s. Lookups of one account stayed under 1~ms on PostgreSQL and on the One Big Table, but
+grew from 17 to 54~ms on the star schema in ClickHouse. A follow-up measurement explains
+why: when the filter is on a dimension column (\tbl{account\_id}), ClickHouse reads the whole
+fact table (10.6 million rows) before the join; filtering the fact by \tbl{account\_sk}
+first reads about 100,000 rows and takes 6.8~ms at both scales. Correcting one district on
+the One Big Table rewrote 1,500,580 rows instead of one. At $\times$10, Spark finally gained
+from more cores (one batch: 28.8~s on one core, 14.0~s on eight), whereas the 72 monthly
+batches, of about 147,000 rows each, still did not.
+
+\begin{table}[!t]
+\centering
+\caption{Scale $\times$1 vs.\ $\times$10: Warm Median (ms) and Growth}
+\label{tab:scale}
+\footnotesize
+\setlength{\tabcolsep}{2.5pt}
+\begin{tabular}{L{2.3cm} r r r r r r}
+\toprule
+ & \multicolumn{3}{c}{\textbf{Star, CH}} & \multicolumn{3}{c}{\textbf{Star, PG}} \\
+\cmidrule(lr){2-4}\cmidrule(lr){5-7}
+\textbf{Query} & $\times$1 & $\times$10 & growth & $\times$1 & $\times$10 & growth \\
+\midrule
+BR01 by month & 28.1 & 121.9 & 4.3 & 105.9 & 837.3 & 7.9 \\
+BR01 by tier & 14.6 & 47.6 & 3.3 & 323.3 & 1,323.7 & 4.1 \\
+BR03 rule R1 & 45.9 & 199.3 & 4.3 & 1,029.6 & 4,209.2 & 4.1 \\
+BR08 by tier & 37.1 & 219.4 & 5.9 & 623.2 & 5,378.4 & 8.6 \\
+BR02 one account & 17.2 & 53.8 & 3.1 & 1.0 & 0.8 & 0.8 \\
+\midrule
+Storage (MB) & 18.6 & 185.5 & 10.0 & 162.5 & 1,612.7 & 9.9 \\
+8 users (q/s) & 93.2 & 9.4 & & 12.4 & 0.4 & \\
+\bottomrule
+\end{tabular}
+\end{table}
+
 \subsection{Effectiveness of Data Exploitation}
 All eight BRs were demonstrated end to end in the application (Table~\ref{tab:br-results}).
 A scenario started from the application (a re-run of KB03) completed in about 10~s,
@@ -1193,7 +1237,7 @@ defective records, idempotent re-runs, alerts without duplicates, restore, and h
 preservation---behaved as specified in every scenario. On performance, the column store
 appears to be the right choice for the workload that defines a warehouse, the aggregations
 of U01 and U03, where it is up to 22 times faster, 8.7 times smaller, and sustains many
-more concurrent users. The One Big Table is faster still, but by milliseconds, at the price
+more concurrent users; the advantage grows with the data (up to 28 times at $\times$10). The One Big Table is faster still, but by milliseconds, at the price
 of rewriting large parts of the fact table for every correction. Each of the two
 alternatives is better at one thing---PostgreSQL at point lookups and single-row updates,
 the One Big Table at join-free scans---and the proposed architecture uses the first of
@@ -1205,10 +1249,9 @@ The results should be interpreted with caution. All systems ran on the same virt
 machine as the client, and PostgreSQL used the moderate settings of the Phase~1
 benchmark; partitioning, BRIN indexes, or materialized views could narrow its gap on
 aggregations. The operating system's page cache could not be dropped from a container, so
-``cold'' runs are only partly cold. Only the original data ($\times$1, about one million
-rows) was measured: at this size Spark does not benefit from more cores, and the
-advantage of the column store on aggregations is expected to grow with volume, but neither
-trend was measured. The membership tier and the scenario data are simulated, so the tier figures
+``cold'' runs are only partly cold. The $\times$10 data is a replica of the original, so it
+repeats its distributions and may compress better than real data; $\times$50 and a
+distributed deployment were not measured. The membership tier and the scenario data are simulated, so the tier figures
 and alert counts describe the method rather than real customer behavior. Finally, the
 interaction counts were taken along the user flow and not from user sessions.
 
@@ -1227,8 +1270,8 @@ the pipeline.
 
 On data correctness, all eight evaluation scenarios passed (38 of 38 checks), and cash-flow
 figures equal the source to the cent. On performance, ClickHouse answered aggregation
-queries 3.3--22 times faster than the same model in PostgreSQL, in 8.7 times less space and
-with eight times the throughput under concurrent use, while PostgreSQL was faster on
+queries 3.3--22 times faster than the same model in PostgreSQL (7--28 times at $\times$10),
+in 8.7 times less space and with eight times the throughput under concurrent use, while PostgreSQL was faster on
 single-account lookups that ClickHouse still answers in under 20~ms. The One Big Table
 saved a few milliseconds per query but made corrections rewrite up to 150,058 rows, and
 the operational store was 8--70 times faster and enforced five integrity guarantees in
@@ -1238,8 +1281,8 @@ application in one to about seven interactions.
 \textbf{Recommendations.} For a bank with this workload, we recommend the proposed
 combination: a column store for the warehouse, because its users mainly aggregate, and a
 relational database for the operational data, because it is updated in place and must
-enforce constraints. Account lookups, if they become the dominant workload, can be served
-from the row store or from a projection sorted by account in ClickHouse.
+enforce constraints. Account lookups should filter the fact on its own key first, which
+keeps them at about 7~ms in ClickHouse regardless of volume.
 
 \textbf{Limitations.} The data ends in 1998 and has about one million transactions; the
 membership tier and the scenarios are simulated; end-of-period balances and internal
@@ -1248,7 +1291,7 @@ store is not part of the backup.
 
 \textbf{Future work.} Add access control per user group; extend the model with loans and
 standing orders as further business processes sharing conformed dimensions; measure the
-solution at larger data volumes ($\times$10, $\times$50) and on a cluster; and replace the rule-based alerts with
+solution at $\times$50 and on a cluster; and replace the rule-based alerts with
 learned anomaly detection evaluated against the same scenarios.
 
 

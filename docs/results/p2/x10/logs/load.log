@@ -1,0 +1,42 @@
+{
+ "ch_star": {
+  "dim_date": 0.0,
+  "dim_district": 0.0,
+  "dim_account": 0.01,
+  "dim_customer": 0.01,
+  "dim_transaction_profile": 0.0,
+  "fact_transaction": 3.85,
+  "total_s": 3.87
+ },
+ "ch_obt": {
+  "build_from_star_s": 9.62
+ },
+ "pg_star": {
+  "dim_date": 0.03,
+  "dim_district": 0.0,
+  "dim_account": 0.13,
+  "dim_customer": 0.15,
+  "dim_transaction_profile": 0.01,
+  "fact_transaction": 18.19,
+  "keys_indexes_analyze_s": 26.49,
+  "total_s": 45.0
+ },
+ "check_scaled_equals_x1_times_scale": true,
+ "x1_figures": [
+  "1057571",
+  "6285624820.30",
+  "4500",
+  "5118"
+ ],
+ "scaled_figures": [
+  "10575710",
+  "62856248203.00",
+  "45000",
+  "51180"
+ ],
+ "fact_rows": {
+  "ch_star": 10575710,
+  "ch_obt": 10575710,
+  "pg_star": 10575710
+ }
+}

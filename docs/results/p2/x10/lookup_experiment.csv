@@ -1,0 +1,5 @@
+database,query_form,rows_returned,warm_median_ms,fact_rows_read
+bench,join dim_account then filter account_id (as the app),437,33.8,1062086
+bench,filter fact by account_sk IN (subquery on dim_account),437,6.1,54918
+bench10,join dim_account then filter account_id (as the app),437,60.3,10620725
+bench10,filter fact by account_sk IN (subquery on dim_account),437,6.8,102924

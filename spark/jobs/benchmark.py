@@ -9,6 +9,12 @@
     python3 benchmark.py concurrency   # 1/4/8 concurrent clients on a query mix
     python3 benchmark.py update    # cost of Type 1 corrections on each solution
 
+Scale: BENCH_SCALE=10 (environment) runs everything on a x10 copy instead: databases bench10
+(ClickHouse) and dwpg10 (PostgreSQL), results in /lake/bench/p2/x10. The x10 copy is built from
+the x1 copy (bench) by repeating every account, client, and transaction 10 times under new keys
+(dates, amounts, tiers, and SCD2 history unchanged), so x10 totals are exactly 10 x the x1 totals.
+dw itself is never written.
+
 All three solutions are loaded from the same CSV export of the warehouse, so they hold the same
 rows. Update tests run on these copies only: dw and ops are never modified.
 PostgreSQL is set up as in Phase 1: PK/FK, indexes on the fact's filter and join keys, ANALYZE;
@@ -36,7 +42,13 @@ import psycopg2
 
 from common import LAKE, WAREHOUSE, clickhouse, postgres
 
-OUT = f"{LAKE}/bench/p2"
+SCALE = int(os.environ.get("BENCH_SCALE", "1"))
+DB = "bench" if SCALE == 1 else f"bench{SCALE}"          # ClickHouse database of this scale
+PGDB = "dwpg" if SCALE == 1 else f"dwpg{SCALE}"         # PostgreSQL database of this scale
+OUT = f"{LAKE}/bench/p2" + ("" if SCALE == 1 else f"/x{SCALE}")
+# key offsets of replica r (larger than every key of the x1 data)
+OFFSET = {"account_sk": 10_000, "account_id": 100_000, "customer_sk": 10_000, "client_id": 100_000,
+          "transaction_id": 100_000_000}
 RUNS = 6
 SOLUTIONS = ["ch_star", "ch_obt", "pg_star"]
 TABLES = ["dim_date", "dim_district", "dim_account", "dim_customer", "dim_transaction_profile",
@@ -281,8 +293,30 @@ def sql_for(name, sol, acc=ACCOUNT):
 
 
 # ------------------------------------------------------------------------------------- engines
+class BenchCH:
+    """ClickHouse client whose SQL is written against database bench and runs against DB."""
+    def __init__(self):
+        self.ch = clickhouse()
+        self.server_version = self.ch.server_version
+
+    def _sql(self, sql):
+        return sql.replace("bench.", f"{DB}.")
+
+    def command(self, sql, **kw):
+        return self.ch.command(self._sql(sql), **kw)
+
+    def query(self, sql, **kw):
+        return self.ch.query(self._sql(sql), **kw)
+
+    def raw_query(self, sql, **kw):
+        return self.ch.raw_query(self._sql(sql), **kw)
+
+    def raw_insert(self, table, **kw):
+        return self.ch.raw_insert(self._sql(table), **kw)
+
+
 def dwpg():
-    conn = psycopg2.connect(host=os.environ.get("POSTGRES_HOST", "postgres"), dbname="dwpg",
+    conn = psycopg2.connect(host=os.environ.get("POSTGRES_HOST", "postgres"), dbname=PGDB,
                             user=os.environ.get("POSTGRES_USER", "bank"),
                             password=os.environ.get("POSTGRES_PASSWORD", "bank"))
     conn.autocommit = True
@@ -297,7 +331,7 @@ class Engine:
     def __init__(self, sol):
         self.sol = sol
         if sol.startswith("ch"):
-            self.ch = clickhouse()
+            self.ch = BenchCH()
         else:
             self.cur = dwpg().cursor()
 
@@ -316,7 +350,9 @@ class Engine:
 # --------------------------------------------------------------------------------------- load
 def load():
     """Same CSV export of dw -> bench star (ClickHouse), OBT (ClickHouse), dwpg (PostgreSQL)."""
-    ch = clickhouse()
+    if SCALE != 1:
+        return load_scaled()
+    ch = BenchCH()
     timings = {"ch_star": {}, "ch_obt": {}, "pg_star": {}}
     exported = {}
     for t in TABLES:
@@ -374,6 +410,101 @@ def load():
     json.dump(timings, open(f"{OUT}/load.json", "w"), indent=1)
 
 
+def load_scaled():
+    """x SCALE copy of bench: every account, client, and transaction repeated under new keys.
+    Dimensions without business keys of their own (date, district, profile) are shared."""
+    ch, base = BenchCH(), clickhouse()
+    if not base.query("SELECT count() FROM system.tables WHERE database = 'bench' AND name = 'fact_obt'"
+                      ).result_rows[0][0]:
+        raise SystemExit("run the x1 load first (make bench-load)")
+    timings, R, o = {"ch_star": {}, "ch_obt": {}, "pg_star": {}}, SCALE, OFFSET
+    assert DB != "bench"                                      # never touch the x1 copy here
+    for stmt in ("SYSTEM DROP MARK CACHE", "SYSTEM JEMALLOC PURGE"):
+        base.command(stmt)
+    base.command(f"DROP DATABASE IF EXISTS {DB} SYNC")
+    base.command(f"CREATE DATABASE {DB}")
+    ddl = re.sub(r"--[^\n]*", "", open(f"{WAREHOUSE}/clickhouse/ddl/dw.sql").read()).replace("dw.", "bench.")
+    for stmt in filter(None, (x.strip() for x in ddl.split(";"))):
+        ch.command(stmt)
+    # sources are the x1 copy (bench); targets are DB
+    fill = {
+        "dim_date": "SELECT * FROM bench_x1.dim_date",
+        "dim_district": "SELECT * FROM bench_x1.dim_district FINAL",
+        "dim_transaction_profile": "SELECT * FROM bench_x1.dim_transaction_profile FINAL",
+        "dim_account": f"""SELECT account_sk + r * {o['account_sk']}, account_id + r * {o['account_id']},
+                account_open_date, statement_frequency_code, statement_frequency_name, account_district_sk,
+                created_at, updated_at
+            FROM bench_x1.dim_account FINAL ARRAY JOIN range({R}) AS r""",
+        "dim_customer": f"""SELECT customer_sk + r * {o['customer_sk']}, client_id + r * {o['client_id']}, gender,
+                birth_date, customer_district_sk, membership_tier, valid_from, valid_to, is_current,
+                created_at, updated_at
+            FROM bench_x1.dim_customer FINAL ARRAY JOIN range({R}) AS r""",
+        # one replica per INSERT: 10 x 1 M rows at once exceeded the 2.2 GiB of ClickHouse (P2-8 x10)
+        "fact_transaction": [f"""SELECT transaction_id + {r * o['transaction_id']}, date_key,
+                account_sk + {r * o['account_sk']}, customer_sk + {r * o['customer_sk']}, transaction_profile_sk,
+                amount, balance_after, counterparty_bank_code, counterparty_account_ref, load_batch_id, loaded_at
+            FROM bench_x1.fact_transaction""" for r in range(R)]}
+    small = {"max_threads": 2, "max_insert_threads": 1, "max_insert_block_size": 262144}
+    for t in TABLES:
+        start = time.perf_counter()
+        for q in (fill[t] if isinstance(fill[t], list) else [fill[t]]):
+            base.command(f"INSERT INTO {DB}.{t} " + q.replace("bench_x1.", "bench."), settings=small)
+        timings["ch_star"][t] = round(time.perf_counter() - start, 2)
+    timings["ch_star"]["total_s"] = round(sum(timings["ch_star"].values()), 2)
+    ch.command("OPTIMIZE TABLE bench.fact_transaction FINAL")
+    base.command("SYSTEM DROP MARK CACHE")
+    ch.command(OBT_DDL)
+    start = time.perf_counter()
+    for r in range(R):           # one replica per INSERT, for the same memory reason as the fact
+        base.command("SYSTEM JEMALLOC PURGE")
+        ch.command(OBT_FILL + f" WHERE intDiv(f.transaction_id, {o['transaction_id']}) = {r}",
+                   settings={**small, "max_threads": 2})
+    timings["ch_obt"]["build_from_star_s"] = round(time.perf_counter() - start, 2)
+    ch.command("OPTIMIZE TABLE bench.fact_obt FINAL")
+
+    # exactly SCALE x the x1 copy: rows, money, distinct accounts and clients
+    figures = """SELECT count(), sum(amount), uniqExact(account_sk), uniqExact(customer_sk)
+                 FROM {db}.fact_transaction"""
+    x1 = base.query(figures.format(db="bench")).result_rows[0]
+    xs = base.query(figures.format(db=DB)).result_rows[0]
+    timings["check_scaled_equals_x1_times_scale"] = all(b == a * R for a, b in zip(x1, xs))
+    timings["x1_figures"], timings["scaled_figures"] = [str(v) for v in x1], [str(v) for v in xs]
+
+    # PostgreSQL: dimensions in one piece, the fact one replica at a time (keeps memory low)
+    ops = postgres()
+    with ops.cursor() as cur:
+        cur.execute("SELECT 1 FROM pg_database WHERE datname = %s", (PGDB,))
+        if cur.fetchone():
+            cur.execute(f"DROP DATABASE {PGDB}")
+        cur.execute(f"CREATE DATABASE {PGDB}")
+    ops.close()
+    pg = dwpg()
+    with pg.cursor() as cur:
+        cur.execute(PG_DDL)
+        for t in TABLES:
+            parts = ([f"SELECT * FROM bench.{t} WHERE intDiv(transaction_id, {o['transaction_id']}) = {r}"
+                      for r in range(R)] if t == "fact_transaction" else
+                     [f"SELECT * FROM bench.{t}{'' if t == 'dim_date' else ' FINAL'}"])
+            start = time.perf_counter()
+            for q in parts:
+                data = ch.raw_query(q + " FORMAT CSV", settings={"date_time_output_format": "simple"})
+                cur.copy_expert(f"COPY {t} FROM STDIN WITH (FORMAT csv, NULL '\\N')", io.BytesIO(data))
+            timings["pg_star"][t] = round(time.perf_counter() - start, 2)
+        start = time.perf_counter()
+        cur.execute(PG_INDEXES)
+        timings["pg_star"]["keys_indexes_analyze_s"] = round(time.perf_counter() - start, 2)
+        cur.execute("VACUUM ANALYZE")
+    timings["pg_star"]["total_s"] = round(sum(timings["pg_star"].values()), 2)
+    timings["fact_rows"] = {
+        "ch_star": ch.query("SELECT count() FROM bench.fact_transaction").result_rows[0][0],
+        "ch_obt": ch.query("SELECT count() FROM bench.fact_obt").result_rows[0][0],
+        "pg_star": Engine("pg_star").run("SELECT count(*) FROM fact_transaction")[0][0]}
+    print(json.dumps(timings, indent=1))
+    json.dump(timings, open(f"{OUT}/load.json", "w"), indent=1)
+    if not timings["check_scaled_equals_x1_times_scale"]:
+        raise SystemExit(f"x{R} copy is not exactly {R} x the x1 copy")
+
+
 # ---------------------------------------------------------------------------------------- run
 def p95(values):
     s = sorted(values)
@@ -399,7 +530,8 @@ def storage(ch):
     out = {}
     for t, rows, comp, raw in ch.query("""
             SELECT table, sum(rows), sum(data_compressed_bytes), sum(data_uncompressed_bytes)
-            FROM system.parts WHERE database = 'bench' AND active GROUP BY table""").result_rows:
+            FROM system.parts WHERE database = %(db)s AND active GROUP BY table""",
+            parameters={"db": DB}).result_rows:
         sol = "ch_obt" if t == "fact_obt" else "ch_star"
         out.setdefault(sol, {})[t] = {"rows": rows, "mb": round(comp / 2**20, 2),
                                       "uncompressed_mb": round(raw / 2**20, 2)}
@@ -469,7 +601,9 @@ def run():
     pg = dwpg()
     env = {"measured_at": dt.datetime.utcnow().isoformat(timespec="seconds") + "Z",
            "clickhouse_version": ch.server_version, "postgres_version": pg.server_version,
-           "storage": storage(ch), "pipeline": pipeline_timing(postgres().cursor()), "postgres_settings": {}}
+           "scale": SCALE, "storage": storage(ch), "postgres_settings": {},
+           # the pipeline itself only ran at x1
+           "pipeline": pipeline_timing(postgres().cursor()) if SCALE == 1 else None}
     with pg.cursor() as cur:
         for s in ("shared_buffers", "work_mem", "max_parallel_workers_per_gather", "jit", "effective_cache_size"):
             cur.execute(f"SHOW {s}")
@@ -487,7 +621,7 @@ MIX = ["br01_by_tier_1998", "br02_account_detail", "br08_tier_old_new"]   # one 
 
 def concurrency(clients=(1, 4, 8), seconds=15):
     """N clients run the mix in a loop for a fixed time; BR02 picks a random account each time."""
-    accounts = [r[0] for r in clickhouse().query("SELECT account_id FROM bench.dim_account FINAL").result_rows]
+    accounts = [r[0] for r in BenchCH().query("SELECT account_id FROM bench.dim_account FINAL").result_rows]
     rows = []
     for sol in SOLUTIONS:
         for n in clients:
@@ -520,7 +654,7 @@ def concurrency(clients=(1, 4, 8), seconds=15):
 # ------------------------------------------------------------------------------------ updates
 def update():
     """Type 1 corrections: what each model must rewrite, and how long it takes (bench copies only)."""
-    ch, pg = clickhouse(), dwpg().cursor()
+    ch, pg = BenchCH(), dwpg().cursor()
     out = []
 
     def timed(fn):

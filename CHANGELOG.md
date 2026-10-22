@@ -15,6 +15,28 @@ Ghi lại các phát hiện, quyết định thiết kế và thay đổi của 
 
 
 
+
+---
+
+## [2026-10-22] Phase 2 — P2-8: benchmark mức ×10 ✅
+
+### Đã làm
+- **Dữ liệu ×10 (nhân bản, không phải dữ liệu mới):** mỗi tài khoản, khách, giao dịch của bản sao ×1 chép thành 10 bản với mã mới; ngày, số tiền, hạng, lịch sử SCD2 giữ nguyên. Nằm trong database riêng `bench10` (ClickHouse) và `dwpg10` (PostgreSQL); **kho `dw` vẫn ×1**. Đã sao lưu `dw` thành `before_x10` trước khi làm; sau khi đo, `dw` vẫn 1.057.571 giao dịch và `make evaluate` vẫn 38/38.
+- Kiểm tra: ×10 có đúng **10 lần** ×1 về số dòng (10.575.710), tổng tiền, số tài khoản, số khách.
+- [spark/jobs/benchmark.py](spark/jobs/benchmark.py), [spark/jobs/bench_spark.py](spark/jobs/bench_spark.py): chạy theo mức (`BENCH_SCALE`); `make bench-all SCALE=10`; `make bench-clean` xoá mọi bản sao benchmark (không đụng `dw`, `ops`).
+- [docs/BENCHMARK_P2.md](docs/BENCHMARK_P2.md) thêm **mục 12** (cùng khung giải thích: câu hỏi → cách đo → đọc bảng → kết luận); số liệu và log ở [docs/results/p2/x10/](docs/results/p2/x10/). Report thêm bảng ×1 so với ×10 và đoạn phân tích.
+
+### Kết quả chính
+- Truy vấn tổng hợp: ClickHouse chậm đi 2–6× khi dữ liệu gấp 10, PostgreSQL chậm đi 4–10× → khoảng cách **nới rộng từ 3–22× lên 7–28×**. 8 người dùng: PostgreSQL chỉ còn 0,4 truy vấn/giây (p95 38 s).
+- **Phát hiện:** tra cứu 1 tài khoản trên star / ClickHouse đọc **cả bảng giao dịch** khi lọc qua `dim_account` (60 ms, 10,6 triệu dòng ở ×10); lọc theo `account_sk` trước chỉ đọc khoảng 100 nghìn dòng, **6,8 ms ở cả ×1 và ×10** ([lookup_experiment.csv](docs/results/p2/x10/lookup_experiment.csv)). Chưa sửa app.
+- One Big Table: sửa tên 1 khu vực phải ghi lại 1.500.580 dòng (star: 1 dòng).
+- Spark: 1 lô ×10 nhanh hơn 2,1× khi dùng 8 lõi (28,8 → 14,0 s); 72 lô tháng vẫn không hưởng lợi.
+
+### Sự cố và cách xử lý
+- ClickHouse hết bộ nhớ khi chép 10 bản bảng giao dịch, rồi khi dựng One Big Table ×10 → chép và dựng **từng bản một**, khối ghi nhỏ hơn, khởi động lại ClickHouse trước khi nạp và đo.
+- PostgreSQL báo "No space left on device": **không phải hết đĩa** (đĩa còn 29 GB) mà là `/dev/shm` 64 MB của container → `shm_size: 256m` trong [docker-compose.yml](docker-compose.yml) (RAM, trong giới hạn 1 GB).
+- Đĩa: dữ liệu ×10 dùng thêm khoảng 2 GB (ClickHouse 0,4 GB, PostgreSQL 1,6 GB); đĩa máy còn khoảng 30 GB, không vượt giới hạn.
+
 ---
 
 ## [2026-10-22] Phase 2 — P2-8: viết lại BENCHMARK_P2.md cho dễ hiểu 📝

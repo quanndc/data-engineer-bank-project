@@ -1,0 +1,13 @@
+U1 sửa tên khu vực 1 (rename)            ch_star  rows rewritten        1        6.1 ms
+U1 sửa tên khu vực 1 (rename)            ch_obt   rows rewritten 1,500,580      241.7 ms
+U1 sửa tên khu vực 1 (rename)            pg_star  rows rewritten        1       12.8 ms
+U1 sửa tên khu vực 1 (rename back)       ch_star  rows rewritten        1        5.6 ms
+U1 sửa tên khu vực 1 (rename back)       ch_obt   rows rewritten 1,500,580      233.4 ms
+U1 sửa tên khu vực 1 (rename back)       pg_star  rows rewritten        1        0.9 ms
+U2 sửa ngày sinh khách 24 (correct)      ch_star  rows rewritten        2        5.0 ms
+U2 sửa ngày sinh khách 24 (correct)      ch_obt   rows rewritten      330       34.8 ms
+U2 sửa ngày sinh khách 24 (correct)      pg_star  rows rewritten        2        5.1 ms
+U2 sửa ngày sinh khách 24 (revert)       ch_star  rows rewritten        2        4.4 ms
+U2 sửa ngày sinh khách 24 (revert)       ch_obt   rows rewritten      330       43.7 ms
+U2 sửa ngày sinh khách 24 (revert)       pg_star  rows rewritten        2        0.5 ms
+results still equal after updates: True

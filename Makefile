@@ -12,7 +12,7 @@ endif
 SPARK := $(COMPOSE) exec -T spark
 SHELL := /bin/bash   # PIPESTATUS in the benchmark targets
 
-.PHONY: up down ps logs smoke sql psql clean source-check tiers schema load-ref load-history rerun reconcile scenarios scenario alerts backup restore backups evaluate bench-load bench bench-concurrency bench-update bench-ops bench-spark bench-all
+.PHONY: up down ps logs smoke sql psql clean source-check tiers schema load-ref load-history rerun reconcile scenarios scenario alerts backup restore backups evaluate bench-load bench bench-concurrency bench-update bench-ops bench-spark bench-all bench-clean
 
 up:            ## Start D ClickHouse, E PostgreSQL, C Spark, F app (http://localhost:8501)
 	@echo "ClickHouse: $(CLICKHOUSE_HOST)"
@@ -78,14 +78,18 @@ evaluate:      ## KB01-KB08 + data-quality checks against the source and expecte
 	$(SPARK) bash -c "cd /opt/jobs && python3 evaluate.py"; s=$$?; mkdir -p $(RESULTS); \
 	cp lake/eval/kb_results.json $(RESULTS)/; exit $$s
 
-# every benchmark step keeps its console log in lake/bench/p2/logs and copies the results to docs
-BENCH = mkdir -p lake/bench/p2/logs $(RESULTS)/logs; \
-	$(SPARK) bash -c "cd /opt/jobs && python3 $(1)" 2>&1 | grep -v -E " (INFO|WARN) |^\[Stage" \
-	| tee lake/bench/p2/logs/$(2).log; s=$${PIPESTATUS[0]}; \
-	cp lake/bench/p2/*.csv lake/bench/p2/*.json $(RESULTS)/ 2>/dev/null; cp lake/bench/p2/logs/*.log $(RESULTS)/logs/; \
+# every benchmark step keeps its console log and copies the results to docs.
+# SCALE=10 runs on the x10 copy (bench10 / dwpg10); results in .../x10. dw is never written.
+SCALE ?= 1
+BDIR := lake/bench/p2$(if $(filter-out 1,$(SCALE)),/x$(SCALE))
+BRES := $(RESULTS)$(if $(filter-out 1,$(SCALE)),/x$(SCALE))
+BENCH = mkdir -p $(BDIR)/logs $(BRES)/logs; \
+	$(COMPOSE) exec -T -e BENCH_SCALE=$(SCALE) spark bash -c "cd /opt/jobs && python3 $(1)" 2>&1 \
+	| grep -v -E " (INFO|WARN) |^\[Stage" | tee $(BDIR)/logs/$(2).log; s=$${PIPESTATUS[0]}; \
+	cp $(BDIR)/*.csv $(BDIR)/*.json $(BRES)/ 2>/dev/null; cp $(BDIR)/logs/*.log $(BRES)/logs/; \
 	exit $$s
 
-bench-load:    ## B1/B2: copy dw into bench (ClickHouse star + One Big Table) and dwpg (PostgreSQL)
+bench-load:    ## B1/B2: copies for the benchmark (x1 from dw; SCALE=10 from the x1 copy)
 	@$(call BENCH,benchmark.py load,load)
 
 bench:         ## B1/B2: 9 BR queries x 3 solutions (6 runs each), result check, storage
@@ -97,13 +101,19 @@ bench-concurrency: ## B2: 1/4/8 concurrent clients on a query mix
 bench-update:  ## B1: cost of Type 1 corrections (star vs One Big Table vs PostgreSQL)
 	@$(call BENCH,benchmark.py update,update)
 
-bench-ops:     ## B3: operational store on PostgreSQL vs ClickHouse (writes, reads, integrity)
+bench-ops:     ## B3: operational store on PostgreSQL vs ClickHouse (x1 only: it does not grow with dw)
 	@$(call BENCH,bench_ops.py,ops)
 
 bench-spark:   ## B4: Spark transformation with 1/2/4/8 cores, one batch vs 72 monthly batches
 	@$(call BENCH,bench_spark.py,spark)
 
-bench-all: bench-load bench bench-concurrency bench-update bench-ops bench-spark ## All benchmarks, in order
+bench-all: bench-load bench bench-concurrency bench-update $(if $(filter 1,$(SCALE)),bench-ops) bench-spark ## All benchmarks (make bench-all SCALE=10)
+
+bench-clean:   ## Drop every benchmark copy (bench*, dwpg*, bench_ops) and the x10 Spark input; dw and ops untouched
+	$(SPARK) python3 -c "import sys; sys.path.insert(0, '/opt/jobs'); from common import clickhouse, postgres; \
+	ch = clickhouse(); [ch.command(f'DROP DATABASE IF EXISTS {d} SYNC') for d in ('bench', 'bench10', 'bench50')]; \
+	c = postgres().cursor(); [c.execute(f'DROP DATABASE IF EXISTS {d}') for d in ('dwpg', 'dwpg10', 'dwpg50')]"
+	rm -rf lake/bench/p2/x*/input lake/bench/p2/b4_out lake/bench/p2/x*/b4_out
 
 sql:           ## One statement on ClickHouse: make sql Q="SELECT count() FROM dw.fact_transaction"
 	$(SPARK) python3 /opt/jobs/ch_sql.py "$(Q)"

@@ -1,0 +1,11 @@
+Setting default log level to "WARN".
+To adjust logging level use sc.setLogLevel(newLevel). For SparkR, use setLogLevel(newLevel).
+prepared x10 input: 10,563,200 transactions
+full     1 cores: session   2.7 s  transform   28.8 s   367,399 rows/s  total process   33.6 s  rows 10,563,200 OK
+full     2 cores: session   1.7 s  transform   19.6 s   538,297 rows/s  total process   23.5 s  rows 10,563,200 OK
+full     4 cores: session   2.0 s  transform   17.1 s   615,940 rows/s  total process   20.7 s  rows 10,563,200 OK
+full     8 cores: session   1.9 s  transform   14.0 s   756,613 rows/s  total process   17.6 s  rows 10,563,200 OK
+monthly  1 cores: session   1.8 s  transform   51.0 s   207,041 rows/s  total process   55.4 s  rows 10,563,200 OK
+monthly  2 cores: session   2.2 s  transform   52.4 s   201,491 rows/s  total process   56.9 s  rows 10,563,200 OK
+monthly  4 cores: session   1.7 s  transform   50.0 s   211,236 rows/s  total process   54.2 s  rows 10,563,200 OK
+monthly  8 cores: session   2.0 s  transform   57.1 s   184,826 rows/s  total process   61.6 s  rows 10,563,200 OK

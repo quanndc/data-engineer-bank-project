@@ -42,6 +42,8 @@ services:
     container_name: bankdw-postgres
     # shared_buffers as in the Phase 1 benchmark (default 128MB); the rest is set per benchmark session
     command: ["postgres", "-c", "shared_buffers=256MB"]
+    # /dev/shm is 64 MB by default: parallel workers on the x10 benchmark data need more (P2-8)
+    shm_size: 256m
     ports:
       - "5433:5432"            # 5432 is used by another project on this machine
     environment:

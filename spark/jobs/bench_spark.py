@@ -12,29 +12,64 @@ warehouse dimensions but writes nothing to ClickHouse or PostgreSQL, so it can b
   monthly  72 jobs, one per batch, in the same Spark session (as the pipeline runs them)
 Each run starts a new JVM (local[cores]); the session start-up time is reported separately.
 Output: /lake/bench/p2/spark_scaling.csv
+
+BENCH_SCALE=10: the input is the 72 snapshots repeated 10 times under new transaction and account
+ids (prepared once, not timed, in /lake/bench/p2/x10/input), and the lookups read the x10 copy of
+the dimensions (database bench10, see benchmark.py). Output: /lake/bench/p2/x10/spark_scaling.csv
 """
 import csv
 import glob
 import json
 import os
+import shutil
 import subprocess
 import sys
 import time
 
-OUT = "/lake/bench/p2"
+from benchmark import DB, OFFSET, OUT, SCALE
+
 CORES = (1, 2, 4, 8)
 MODES = ("full", "monthly")
-EXPECTED_ROWS = 1_056_320
+EXPECTED_ROWS = 1_056_320 * SCALE
+INPUT = f"{OUT}/input"                       # x SCALE snapshots (SCALE > 1)
+
+
+def session(cores, name):
+    from pyspark.sql import SparkSession
+    spark = (SparkSession.builder.master(f"local[{cores}]").appName(name)
+             .config("spark.driver.memory", "2g").config("spark.sql.shuffle.partitions", "8")
+             .config("spark.sql.session.timeZone", "UTC").config("spark.ui.enabled", "false").getOrCreate())
+    spark.sparkContext.setLogLevel("ERROR")
+    return spark
+
+
+def prepare():
+    """Repeat every snapshot and the owner table SCALE times under new ids (same offsets as bench10)."""
+    from pyspark.sql import functions as F
+    from common import STAGING
+    spark = session(4, "b4_prepare")
+    rng = spark.range(SCALE).withColumnRenamed("id", "r")
+
+    def shift(col, offset):
+        return (F.col(col).cast("long") + F.col("r") * offset).cast("string").alias(col)
+    for p in sorted(glob.glob("/lake/batches/HIST_*/trans.parquet")):
+        t = spark.read.parquet(p).crossJoin(rng)
+        cols = [shift("trans_id", OFFSET["transaction_id"]), shift("account_id", OFFSET["account_id"])] + \
+               [c for c in t.columns if c not in ("trans_id", "account_id", "r")]
+        t.select(*cols).coalesce(1).write.mode("overwrite").parquet(f"{INPUT}/{p.split('/')[-2]}/trans.parquet")
+    o = spark.read.parquet(f"{STAGING}/stg_account_owner.parquet").crossJoin(rng)
+    o.select((F.col("account_id") + F.col("r") * OFFSET["account_id"]).alias("account_id"),
+             (F.col("client_id") + F.col("r") * OFFSET["client_id"]).alias("client_id")) \
+     .write.mode("overwrite").parquet(f"{INPUT}/owner.parquet")
+    n = spark.read.parquet(f"{INPUT}/HIST_*/trans.parquet").count()
+    spark.stop()
+    print(f"prepared x{SCALE} input: {n:,} transactions")
 
 
 def one(cores, mode):
     t0 = time.perf_counter()
-    from pyspark.sql import SparkSession
     from pyspark.sql import functions as F
-    spark = (SparkSession.builder.master(f"local[{cores}]").appName(f"b4_{cores}_{mode}")
-             .config("spark.driver.memory", "2g").config("spark.sql.shuffle.partitions", "8")
-             .config("spark.sql.session.timeZone", "UTC").config("spark.ui.enabled", "false").getOrCreate())
-    spark.sparkContext.setLogLevel("ERROR")
+    spark = session(cores, f"b4_{cores}_{mode}")
     t_session = time.perf_counter() - t0
 
     import pandas as pd
@@ -46,13 +81,14 @@ def one(cores, mode):
         r = ch.query(sql)
         return spark.createDataFrame(pd.DataFrame(r.result_rows, columns=r.column_names))
     t1 = time.perf_counter()
-    accounts = F.broadcast(frame("SELECT toString(account_id) AS account_id, account_sk FROM dw.dim_account FINAL"))
+    db = "dw" if SCALE == 1 else DB              # x1: the warehouse itself; x10: its x10 copy
+    accounts = F.broadcast(frame(f"SELECT toString(account_id) AS account_id, account_sk FROM {db}.dim_account FINAL"))
     profiles = F.broadcast(frame("SELECT type_code, operation_code, purpose_code, transaction_profile_sk "
-                                 "FROM dw.dim_transaction_profile FINAL"))
+                                 f"FROM {db}.dim_transaction_profile FINAL"))
     versions = F.broadcast(frame("SELECT client_id AS v_client_id, customer_sk, valid_from, valid_to "
-                                 "FROM dw.dim_customer FINAL"))
-    owner = F.broadcast(spark.read.parquet(f"{STAGING}/stg_account_owner.parquet")
-                        .withColumn("account_id", F.col("account_id").cast("string")))
+                                 f"FROM {db}.dim_customer FINAL"))
+    owner_path = f"{STAGING}/stg_account_owner.parquet" if SCALE == 1 else f"{INPUT}/owner.parquet"
+    owner = F.broadcast(spark.read.parquet(owner_path).withColumn("account_id", F.col("account_id").cast("string")))
 
     def transform(t):
         t = standardize_codes(t.withColumn("txn_date", yymmdd(F.col("date"))))
@@ -66,7 +102,7 @@ def one(cores, mode):
                          F.col("amount").cast("decimal(18,2)").alias("amount"),
                          F.col("balance").cast("decimal(18,2)").alias("balance_after")))
 
-    paths = sorted(glob.glob("/lake/batches/HIST_*/trans.parquet"))
+    paths = sorted(glob.glob("/lake/batches/HIST_*/trans.parquet" if SCALE == 1 else f"{INPUT}/HIST_*/trans.parquet"))
     target = f"{OUT}/b4_out/{cores}_{mode}"
     if mode == "full":
         transform(spark.read.parquet(*paths)).write.mode("overwrite").parquet(target)
@@ -77,6 +113,7 @@ def one(cores, mode):
     out = spark.read.parquet(target)
     rows, missing = out.count(), out.filter(F.col("customer_sk").isNull()).count()
     spark.stop()
+    shutil.rmtree(target, ignore_errors=True)    # outputs are only counted; keep the disk free
     print(json.dumps({"cores": cores, "mode": mode, "batches": 1 if mode == "full" else len(paths),
                       "session_s": round(t_session, 2), "transform_s": round(t_work, 2),
                       "rows": rows, "rows_without_version": missing,
@@ -84,6 +121,8 @@ def one(cores, mode):
 
 
 def main():
+    if SCALE > 1 and not glob.glob(f"{INPUT}/HIST_*"):
+        prepare()
     results = []
     for mode in MODES:
         for cores in CORES:

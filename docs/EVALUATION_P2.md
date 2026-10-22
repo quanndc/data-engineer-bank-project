@@ -50,6 +50,8 @@ Mức ×1 (1.057.571 giao dịch). Mỗi phép so sánh chỉ đổi một yếu
 | **B4** Spark 1–8 lõi; 1 lô vs 72 lô | Ở ×1, thêm lõi gần như không giúp (7,7 → 5,4 s); 72 lô tháng chậm hơn 1 lô 4–6× do chi phí cố định mỗi lô |
 | Pipeline thật | Median 3,4 s/lô tháng (p95 5,3 s), 72 lô 273,5 s; bước nặng nhất là `load_fact` (1,42 s) |
 
+**Mức ×10** (10,6 triệu giao dịch nhân bản; chi tiết ở mục 12 của BENCHMARK_P2.md): khoảng cách ClickHouse–PostgreSQL ở truy vấn tổng hợp **nới rộng lên 7–28×** (PostgreSQL 0,4–5,4 s, ClickHouse dưới 0,25 s); với 8 người dùng, PostgreSQL chỉ còn 0,4 truy vấn/giây. Spark 1 lô nhanh hơn 2,1× khi dùng 8 lõi. Phát hiện: tra cứu 1 tài khoản trên star / ClickHouse đọc cả bảng khi lọc qua `dim_account` (60 ms ở ×10); lọc theo `account_sk` trước thì còn 6,8 ms và không phụ thuộc lượng dữ liệu.
+
 Số liệu lần đo đầu của P2-8 (PostgreSQL cấu hình mặc định, chỉ 7 truy vấn) đã được thay bằng lần đo này. Các sự cố khi đo được ghi ở mục 8 của BENCHMARK_P2.md.
 
 ---

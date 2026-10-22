@@ -134,7 +134,7 @@
 
 ### P2-8. Đánh giá (3 tiêu chí)
 - [x] **Data correctness:** mỗi KB có truy vấn **đối chiếu tại nguồn**; tái dùng khung kiểm tra ISO/IEC 25012 của Phase 1 (completeness, uniqueness, accuracy, consistency) + kiểm tra SCD (không chồng lấn, đúng 1 bản hiện tại).
-- [x] **Performance:** phương án thay thế (Q-K); đo truy vấn BR01/BR02/BR08 và thời gian pipeline mỗi lô; cách đo 6 lần, median/p95 như Phase 1. *(22/10: mở rộng thành B1–B4 ở mức ×1 — mô hình, công nghệ kho, kiến trúc kho vận hành, Spark; xem [BENCHMARK_P2.md](BENCHMARK_P2.md). Mức ×10/×50 chờ nhóm quyết định sau khi xem kết quả ×1)*
+- [x] **Performance:** phương án thay thế (Q-K); đo truy vấn BR01/BR02/BR08 và thời gian pipeline mỗi lô; cách đo 6 lần, median/p95 như Phase 1. *(22/10: mở rộng thành B1–B4 ở mức ×1 — mô hình, công nghệ kho, kiến trúc kho vận hành, Spark; xem [BENCHMARK_P2.md](BENCHMARK_P2.md). Mức ×10 đã đo 22/10 (mục 12 của BENCHMARK_P2.md); ×50 chưa đo)*
 - [x] **Hiệu quả khai thác:** 8/8 KB đạt; số thao tác và thời gian để có câu trả lời trên app.
 - **Xong khi:** bảng kết quả 8 KB + bảng benchmark. *(22/10 ✅: 8/8 KB, 38/38 kiểm tra; 7 truy vấn BR01/BR02/BR08 cùng kết quả trên 2 hệ; xem [EVALUATION_P2.md](EVALUATION_P2.md). Số thao tác trên app cần đo lại bằng đồng hồ khi quay video)*
 

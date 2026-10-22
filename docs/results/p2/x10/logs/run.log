@@ -1,0 +1,29 @@
+br01_kpi_1998          ch_star      1 rows  cold     48.6  median     28.8  p95     36.5 ms
+br01_kpi_1998          ch_obt       1 rows  cold     12.4  median      9.4  p95      9.8 ms
+br01_kpi_1998          pg_star      1 rows  cold    640.5  median    355.6  p95    401.6 ms
+br01_by_month          ch_star     75 rows  cold    140.7  median    121.9  p95    141.9 ms
+br01_by_month          ch_obt      75 rows  cold     36.9  median     29.8  p95     33.5 ms
+br01_by_month          pg_star     75 rows  cold    741.3  median    837.3  p95   1044.2 ms
+br01_by_tier_1998      ch_star      4 rows  cold     77.9  median     47.6  p95     52.5 ms
+br01_by_tier_1998      ch_obt       4 rows  cold     19.9  median     15.7  p95     16.1 ms
+br01_by_tier_1998      pg_star      4 rows  cold   1702.1  median   1323.7  p95   1558.9 ms
+br01_by_region         ch_star      8 rows  cold     75.3  median     48.5  p95     50.9 ms
+br01_by_region         ch_obt       8 rows  cold     16.6  median     16.6  p95     17.6 ms
+br01_by_region         pg_star      8 rows  cold    539.3  median    495.5  p95    505.4 ms
+br02_account_detail    ch_star    437 rows  cold    109.6  median     53.8  p95     80.2 ms
+br02_account_detail    ch_obt     437 rows  cold      8.5  median      5.5  p95      6.0 ms
+br02_account_detail    pg_star    437 rows  cold      5.4  median      0.8  p95      0.9 ms
+br02_account_totals    ch_star      1 rows  cold     13.9  median     12.3  p95     12.8 ms
+br02_account_totals    ch_obt       1 rows  cold      3.7  median      2.5  p95      2.7 ms
+br02_account_totals    pg_star      1 rows  cold      0.6  median      0.2  p95      0.2 ms
+br03_r1_scan           ch_star      1 rows  cold    239.3  median    199.3  p95    345.2 ms
+br03_r1_scan           ch_obt       1 rows  cold    132.6  median    139.2  p95    145.2 ms
+br03_r1_scan           pg_star      1 rows  cold   4806.8  median   4209.2  p95   5658.7 ms
+br08_tier_old_new      ch_star      8 rows  cold    220.6  median    219.4  p95    256.7 ms
+br08_tier_old_new      ch_obt       8 rows  cold     87.9  median     77.8  p95     86.0 ms
+br08_tier_old_new      pg_star      8 rows  cold   6263.9  median   5378.4  p95   6691.1 ms
+br08_client_versions   ch_star      2 rows  cold    189.5  median     80.4  p95    130.4 ms
+br08_client_versions   ch_obt       2 rows  cold     13.5  median      7.6  p95     17.6 ms
+br08_client_versions   pg_star      2 rows  cold     13.5  median      0.3  p95      0.5 ms
+result checks: 18/18 PASS
+storage MB: {'ch_star': 185.5, 'ch_obt': 249.4, 'pg_star': 1612.7}
