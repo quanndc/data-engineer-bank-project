@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Đối chiếu sheet Phase 2</title>
+<style>
+  :root {
+    --bg: #f7f7f5; --surface: #ffffff; --text: #1d1d1b; --muted: #5f5f5a; --border: #e2e1dc;
+    --ok-bg: #e3f3e6; --ok-fg: #1e6b33; --part-bg: #fdf1d8; --part-fg: #8a5a00;
+    --no-bg: #fbe3e1; --no-fg: #9b2c22; --hold-bg: #e7ebf3; --hold-fg: #3d4f73; --ask-bg: #efe6f7; --ask-fg: #6a3d8f;
+    --accent: #2f5d8a;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #161615; --surface: #1f1f1d; --text: #ecebe6; --muted: #a5a49d; --border: #33332f;
+      --ok-bg: #1d3524; --ok-fg: #8fd6a1; --part-bg: #3a2e14; --part-fg: #f0c76b;
+      --no-bg: #3d1f1c; --no-fg: #f2a097; --hold-bg: #232b3b; --hold-fg: #a9bde3; --ask-bg: #2f2340; --ask-fg: #cfa9ee;
+      --accent: #8db7e0;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #161615; --surface: #1f1f1d; --text: #ecebe6; --muted: #a5a49d; --border: #33332f;
+    --ok-bg: #1d3524; --ok-fg: #8fd6a1; --part-bg: #3a2e14; --part-fg: #f0c76b;
+    --no-bg: #3d1f1c; --no-fg: #f2a097; --hold-bg: #232b3b; --hold-fg: #a9bde3; --ask-bg: #2f2340; --ask-fg: #cfa9ee;
+    --accent: #8db7e0;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font: 15px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  main { max-width: 1040px; margin: 0 auto; padding: 32px 16px 64px; }
+  h1 { font-size: 1.6rem; margin: 0 0 4px; }
+  h2 { font-size: 1.15rem; margin: 36px 0 10px; }
+  .meta { color: var(--muted); font-size: .9rem; margin: 0 0 20px; }
+  .summary { background: var(--surface); border: 1px solid var(--border); border-left: 4px solid var(--accent);
+             border-radius: 8px; padding: 14px 18px; }
+  .summary p { margin: 0 0 6px; } .summary p:last-child { margin: 0; }
+  .counts { display: flex; flex-wrap: wrap; gap: 8px; margin: 16px 0 0; }
+  .filters { display: flex; flex-wrap: wrap; gap: 8px; margin: 20px 0 0; }
+  .filters button { border: 1px solid var(--border); background: var(--surface); color: var(--text);
+                    border-radius: 999px; padding: 5px 12px; font: inherit; font-size: .85rem; cursor: pointer; }
+  .filters button[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); font-weight: 600; }
+  .table-wrap { overflow-x: auto; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; }
+  table { width: 100%; border-collapse: collapse; min-width: 560px; }
+  th, td { text-align: left; vertical-align: top; padding: 10px 12px; border-bottom: 1px solid var(--border); }
+  th { font-size: .8rem; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); font-weight: 600; }
+  tr:last-child td { border-bottom: 0; }
+  td:first-child { width: 38%; }
+  td:nth-child(2) { width: 130px; white-space: nowrap; }
+  .badge { display: inline-block; border-radius: 999px; padding: 2px 10px; font-size: .8rem; font-weight: 600; }
+  .ok { background: var(--ok-bg); color: var(--ok-fg); }
+  .part { background: var(--part-bg); color: var(--part-fg); }
+  .no { background: var(--no-bg); color: var(--no-fg); }
+  .hold { background: var(--hold-bg); color: var(--hold-fg); }
+  .ask { background: var(--ask-bg); color: var(--ask-fg); }
+  code { font-size: .85em; background: var(--bg); border: 1px solid var(--border); border-radius: 4px; padding: 0 4px; }
+  ol.todo { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 14px 18px 14px 38px; margin: 0; }
+  ol.todo li { margin: 4px 0; }
+  .hidden { display: none; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Đối chiếu Google Sheet ↔ những gì đã làm (Phase 2)</h1>
+  <p class="meta">Group 27 · CO5173 · Cập nhật 22/10/2026 · Sheet "Banking Project — Theo dõi quyết định" (4 sheet), bản đọc lúc 18:07 ngày 22/10/2026.</p>
+
+  <div class="summary">
+    <p><strong>Kết luận:</strong> hệ thống đã làm đủ những gì sheet chốt về <strong>dữ liệu, mô hình, kiến trúc, 8 BR và đánh giá</strong>.</p>
+    <p>Còn thiếu chủ yếu là <strong>sản phẩm nộp</strong> (slide, video, hoàn thiện report) và các việc <strong>nhóm cần tự chốt</strong>.</p>
+  </div>
+  <div class="counts" id="counts"></div>
+
+  <div class="filters" role="group" aria-label="Lọc theo trạng thái">
+    <button type="button" data-filter="all" aria-pressed="true">Tất cả</button>
+    <button type="button" data-filter="ok" aria-pressed="false">✅ Đã làm</button>
+    <button type="button" data-filter="part" aria-pressed="false">🟡 Làm một phần / khác sheet</button>
+    <button type="button" data-filter="no" aria-pressed="false">❌ Chưa làm</button>
+    <button type="button" data-filter="ask" aria-pressed="false">❓ Cần nhóm xác nhận</button>
+    <button type="button" data-filter="hold" aria-pressed="false">⏸ Ngoài phạm vi</button>
+  </div>
+
+  <h2>1. Sheet "Theo dõi dự án"</h2>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Mục trong sheet</th><th>Trạng thái</th><th>Ghi chú</th></tr></thead>
+    <tbody>
+      <tr data-s="ok"><td>Q02–Q06: banking; dòng tiền chung + hoạt động từng tài khoản; Kimball trên ClickHouse; 3 cách sử dụng</td><td><span class="badge ok">✅ Đã làm</span></td><td>App 3 tab: báo cáo, tra cứu tài khoản, cảnh báo</td></tr>
+      <tr data-s="ok"><td>Q07: ≥ 8 BR, người dùng, nguồn dữ liệu, giải pháp, phương án thay thế</td><td><span class="badge ok">✅ Đã làm</span></td><td>Có trong report <code>report/main.tex</code></td></tr>
+      <tr data-s="ok"><td>Q08: 3 tiêu chí đánh giá</td><td><span class="badge ok">✅ Đã làm</span></td><td>Đúng dữ liệu 38/38 kiểm tra; hiệu năng B1–B4 ở ×1 và ×10; 8/8 BR chạy trên app</td></tr>
+      <tr data-s="ok"><td>Q11: phương án thay thế</td><td><span class="badge ok">✅ Đã làm</span></td><td>One Big Table; PostgreSQL làm kho; kho vận hành dồn vào ClickHouse</td></tr>
+      <tr data-s="ok"><td>D01, D02, D04: 3 nhóm người dùng; Berka + hạng mô phỏng; cảnh báo theo quy tắc dễ giải thích</td><td><span class="badge ok">✅ Đã làm</span></td><td>R1 "tiền ra tăng mạnh", R2 "tài khoản lâu không giao dịch"</td></tr>
+      <tr data-s="part"><td>D03: nhịp cập nhật "theo ngày"</td><td><span class="badge part">🟡 Khác sheet</span></td><td>Đang nạp lịch sử theo <strong>tháng</strong> (72 lô). Pipeline nạp theo ngày được, nhưng nhóm chưa chốt</td></tr>
+      <tr data-s="no"><td>Q03 (ghi chú): bổ sung một số hướng khác để đưa vào báo cáo</td><td><span class="badge no">❌ Chưa làm</span></td><td>Report chưa có phần này</td></tr>
+      <tr data-s="part"><td>Q10: sản phẩm bàn giao (báo cáo, slide + video, sản phẩm cuối)</td><td><span class="badge part">🟡 Một phần</span></td><td>Sản phẩm chạy được ✅; report có bản nháp; <strong>slide và video chưa làm</strong></td></tr>
+      <tr data-s="no"><td>M07: ngày nộp, máy, phân công 4 thành viên</td><td><span class="badge no">❌ Chưa làm</span></td><td>Nhóm cần chốt; report đang để TODO</td></tr>
+    </tbody>
+  </table></div>
+
+  <h2>2. Sheet "Business Requirement"</h2>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Mục trong sheet</th><th>Trạng thái</th><th>Ghi chú</th></tr></thead>
+    <tbody>
+      <tr data-s="ok"><td>U01–U03 và 3 tab Tổng quan / Phân tích / Vận hành</td><td><span class="badge ok">✅ Đã làm</span></td><td></td></tr>
+      <tr data-s="ok"><td>BR01–BR08: hành vi trên hệ thống và kết quả demo cần đạt</td><td><span class="badge ok">✅ Đã làm</span></td><td>Mỗi BR có 1 kịch bản KB01–KB08 đối chiếu với nguồn; 8/8 đạt</td></tr>
+      <tr data-s="ok"><td>"Còn mở": tài khoản/kỳ mẫu, lỗi thực thi, cơ chế sao lưu</td><td><span class="badge ok">✅ Đã làm</span></td><td>Quy tắc lỗi V1–V7; kịch bản KB03/05/07/08; sao lưu và khôi phục của ClickHouse</td></tr>
+      <tr data-s="ask"><td>"Còn mở": ngưỡng cảnh báo</td><td><span class="badge ask">❓ Cần xác nhận</span></td><td>R1: gấp 3 lần trung bình 6 tháng và &gt; 50.000 CZK; R2: ≥ 180 ngày. Đang là đề xuất</td></tr>
+    </tbody>
+  </table></div>
+
+  <h2>3. Sheet "Data Model"</h2>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Mục trong sheet</th><th>Trạng thái</th><th>Ghi chú</th></tr></thead>
+    <tbody>
+      <tr data-s="ok"><td>S01–S06: nguồn Berka, lọc OWNER, bảng hạng mô phỏng</td><td><span class="badge ok">✅ Đã làm</span></td><td>4.500 khách, 4 hạng; 618 khách đổi hạng từ 01/01/1999</td></tr>
+      <tr data-s="ok"><td>M01–M09, C01–C03: star schema, khu vực 2 vai trò, SCD Type 2</td><td><span class="badge ok">✅ Đã làm</span></td><td>5.118 phiên bản, không chồng lấn, giao dịch trỏ đúng phiên bản theo ngày</td></tr>
+      <tr data-s="ok"><td>E01–E05, P01–P05: lưu đầu vào theo lô, chuẩn hóa, tách lỗi, đối chiếu, chạy lại không trùng, 15 tổ hợp phân loại</td><td><span class="badge ok">✅ Đã làm</span></td><td></td></tr>
+      <tr data-s="ok"><td>K01–K05: số liệu khảo sát nguồn</td><td><span class="badge ok">✅ Đã làm</span></td><td>14/15 số liệu khớp</td></tr>
+      <tr data-s="ask"><td>K05: "VYBER đã đối chiếu chiều tiền trên 9.597 trường hợp"</td><td><span class="badge ask">❓ Cần xác nhận</span></td><td>Không khớp cách đếm nào (16.666 VYBER; 12.092 khớp chính xác số dư). Cần nhóm giải thích cách tính</td></tr>
+      <tr data-s="ok"><td>Kiến trúc A–F, vùng sao lưu, luồng L01–L06, luồng kịch bản N01–N05</td><td><span class="badge ok">✅ Đã làm</span></td><td>Xem trước không ghi gì; chạy; so mong đợi với thực tế; chạy lại</td></tr>
+      <tr data-s="ok"><td>T01–T03: D = ClickHouse, E = PostgreSQL; B/C/F chưa chốt</td><td><span class="badge ok">✅ Đã làm</span></td><td>Dùng Parquet, PySpark, Streamlit như đề xuất</td></tr>
+      <tr data-s="part"><td>L06: lệnh sao lưu đi thẳng F → D</td><td><span class="badge part">🟡 Khác sheet</span></td><td>Lệnh từ app đi qua dịch vụ runner nằm trong container pipeline, rồi mới tới ClickHouse</td></tr>
+      <tr data-s="hold"><td>M06 / O01: số dư cuối kỳ, chuyển tiền nội bộ</td><td><span class="badge hold">⏸ Ngoài phạm vi</span></td><td>Để ngoài phạm vi Phase 2 (đã ghi trong report); nhóm cần đồng ý</td></tr>
+    </tbody>
+  </table></div>
+
+  <h2>4. Sheet "Data Dictionary"</h2>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Mục trong sheet</th><th>Trạng thái</th><th>Ghi chú</th></tr></thead>
+    <tbody>
+      <tr data-s="ok"><td>Đủ cột của 6 bảng + bảng hạng mô phỏng</td><td><span class="badge ok">✅ Đã làm</span></td><td><code>make schema</code> kiểm tra từng cột với Data Dictionary</td></tr>
+      <tr data-s="ok"><td>Quy tắc từng bảng: grain, Type 1/Type 2, NOT_RECORDED, không cộng <code>balance_after</code>…</td><td><span class="badge ok">✅ Đã làm</span></td><td></td></tr>
+      <tr data-s="ok"><td>ERD R01–R06, ETL01</td><td><span class="badge ok">✅ Đã làm</span></td><td>0 khóa mồ côi</td></tr>
+      <tr data-s="part"><td><code>valid_to</code> mốc hiện tại = 9999-12-31</td><td><span class="badge part">🟡 Khác sheet</span></td><td>Dùng <strong>2299-12-31</strong> vì giới hạn ngày của ClickHouse (sheet ghi phần vật lý "cần chốt sau")</td></tr>
+    </tbody>
+  </table></div>
+
+  <h2>5. Việc còn lại</h2>
+  <ol class="todo">
+    <li><strong>Slide + video demo</strong> (P2-9).</li>
+    <li><strong>Hoàn thiện report:</strong> ngày nộp, phân công, ảnh chụp 3 tab, phần "các hướng khác" theo ghi chú Q03.</li>
+    <li><strong>Nhóm cần chốt:</strong> nhịp nạp theo ngày hay tháng; ngưỡng cảnh báo R1/R2; để số dư cuối kỳ và chuyển tiền nội bộ ngoài phạm vi; con số VYBER 9.597.</li>
+    <li><strong>Kỹ thuật (tùy chọn):</strong> sửa truy vấn BR02 cho nhanh (lọc <code>account_sk</code> trước); dọn các bản sao benchmark (<code>make bench-clean</code>, khoảng 2 GB).</li>
+  </ol>
+</main>
+<script>
+  const rows = [...document.querySelectorAll("tr[data-s]")];
+  const labels = { ok: "✅ Đã làm", part: "🟡 Một phần / khác sheet", no: "❌ Chưa làm", ask: "❓ Cần xác nhận", hold: "⏸ Ngoài phạm vi" };
+  const counts = {};
+  rows.forEach(r => counts[r.dataset.s] = (counts[r.dataset.s] || 0) + 1);
+  document.getElementById("counts").innerHTML = Object.keys(labels)
+    .filter(k => counts[k]).map(k => `<span class="badge ${k}">${labels[k]}: ${counts[k]}</span>`).join("");
+  document.querySelectorAll(".filters button").forEach(b => b.addEventListener("click", () => {
+    document.querySelectorAll(".filters button").forEach(x => x.setAttribute("aria-pressed", x === b));
+    const f = b.dataset.filter;
+    rows.forEach(r => r.classList.toggle("hidden", f !== "all" && r.dataset.s !== f));
+  }));
+</script>
+</body>
+</html>

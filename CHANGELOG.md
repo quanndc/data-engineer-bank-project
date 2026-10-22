@@ -17,6 +17,14 @@ Ghi lại các phát hiện, quyết định thiết kế và thay đổi của 
 
 
 
+
+---
+
+## [2026-10-22] Phase 2 — Đối chiếu 4 sheet với những gì đã làm 📋
+
+- [docs/DOI_CHIEU_SHEET_P2.html](docs/DOI_CHIEU_SHEET_P2.html): trang HTML (mở trực tiếp bằng trình duyệt) đối chiếu từng mục của 4 sheet "Theo dõi dự án", "Business Requirement", "Data Model", "Data Dictionary" (bản đọc lúc 18:07 ngày 22/10) với hiện trạng: 17 đã làm, 5 làm một phần hoặc khác sheet, 2 chưa làm, 2 cần nhóm xác nhận, 1 ngoài phạm vi; có bộ lọc theo trạng thái và danh sách việc còn lại.
+- Chưa làm: slide + video, phần "các hướng khác" trong report (ghi chú Q03), ngày nộp và phân công (M07). Cần nhóm xác nhận: ngưỡng R1/R2, con số VYBER 9.597.
+
 ---
 
 ## [2026-10-22] Phase 2 — P2-8: EVALUATION_P2.md có đủ ×1 và ×10 📝
