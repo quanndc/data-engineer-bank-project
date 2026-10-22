@@ -61,7 +61,14 @@
 - [ ] Gắn tag `phase1-kaggle`; chuyển code Phase 1 không dùng nữa (Kafka producer, streaming, Superset, RFM, BR Kaggle) vào `archive/phase1/` hoặc xoá khỏi nhánh chính.
 - [ ] Tải Berka từ CTU Relational (`relational.fel.cvut.cz`, database `financial`), xuất 5 bảng ra CSV vào `data/berka/`.
 - [ ] **Kiểm tra lại số liệu khảo sát của sheet (K01–K05):** 4.500 tài khoản, 5.369 khách, 1.056.320 giao dịch, mỗi tài khoản đúng 1 OWNER, 4.091/409 tài khoản cùng/khác khu vực, 17 → 15 tổ hợp phân loại, 183.114 `operation` trống, 481.881 NULL + 53.433 chuỗi trắng ở `k_symbol`.
-- **Xong khi:** có dữ liệu Berka trong repo và bảng khảo sát khớp sheet (hoặc ghi rõ chỗ lệch).
+- [ ] **Giả lập Membership tier: 1 file CSV tương ứng với dữ liệu Berka** → `data/berka/customer_profile_simulated.csv`
+  - Cột (theo Data Dictionary): `client_id`, `membership_tier`, `tier_effective_from`, `updated_at`.
+  - Phạm vi: **mỗi `client_id` là OWNER của một tài khoản có đúng 1 dòng** (khớp `client` ⋈ `disp` với `type = OWNER`); `client_id` nào cũng phải tồn tại trong `client`.
+  - Cách gán hạng (Q-E): dựa trên tổng tiền vào của các tài khoản khách sở hữu trong năm đầu → 4 hạng Standard / Silver / Gold / Platinum. `tier_effective_from` ≤ ngày giao dịch đầu tiên của khách, để phiên bản đầu bao phủ toàn bộ lịch sử (đúng quy tắc của `valid_from`).
+  - Sinh bằng script có **seed cố định** (`tools/simulate_membership_tier.py`): chạy lại ra cùng file; ghi rõ trong report đây là dữ liệu mô phỏng.
+  - File thay đổi hạng cho kịch bản KB08 (`customer_profile_changes_kb08.csv`) làm ở P2-4.
+  - **Xong khi:** số dòng = số khách OWNER; 0 `client_id` lạ; 0 trùng; phân bố hạng hợp lý (in ra bảng thống kê).
+- **Xong khi:** có dữ liệu Berka + file Membership tier trong repo và bảng khảo sát khớp sheet (hoặc ghi rõ chỗ lệch).
 
 ### P2-1. Hạ tầng (A–F)
 - [ ] Docker Compose: ClickHouse (D), PostgreSQL (E), Spark (C), Streamlit (F); thư mục `lake/` (B) và `backups/` (vùng sao lưu).
@@ -78,6 +85,18 @@
 ### P2-3. Pipeline theo lô (C) — luồng L01, L02, L05
 - [ ] Bước **ingest**: đọc A → ghi bản chụp lô vào B (`lake/batches/<batch_id>/`), ghi `batch` + `pipeline_run` (E).
 - [ ] Bước **standardize**: chuẩn hóa chuỗi; `NULL`/chuỗi trắng → `NOT_RECORDED`; `PRIJEM` → IN, `VYDAJ`/`VYBER` → OUT; 17 → 15 tổ hợp.
+- [ ] Bước **build customer (ETL join → 1 bảng customer)**: từ Data Lake, join các bảng nguồn thành **một bảng customer** trước khi nạp `dim_customer`:
+
+  | Bảng nguồn (Data Lake) | Lấy gì | Điều kiện join |
+  |---|---|---|
+  | `client` | `client_id`, `gender`, `birth_date`, `district_id` | bảng gốc |
+  | `disp` | xác định chủ sở hữu (`account_id`) | `disp.client_id = client.client_id` **và** `disp.type = 'OWNER'` |
+  | `district` | `district_id` → `customer_district_sk` | `client.district_id = district.district_id` |
+  | `customer_profile_simulated` | `membership_tier`, `tier_effective_from` | `customer_profile_simulated.client_id = client.client_id` |
+
+  - Kết quả: bảng trung gian `stg_customer` (1 dòng / khách OWNER) ở Data Lake, rồi bước SCD2 (P2-4) sinh các phiên bản `dim_customer`.
+  - Kèm bảng `stg_account_owner` (1 dòng / tài khoản: `account_id` → `client_id` OWNER) để bước nạp fact tra `customer_sk` theo **tài khoản + ngày giao dịch** (sheet: "trung gian 1 dòng/tài khoản").
+  - Kiểm tra sau join (đúng sheet K01–K05): mỗi tài khoản đúng 1 OWNER; không mất / không nhân đôi khách; mọi khách có hạng; khu vực khách có thể khác khu vực tài khoản (không join account ↔ client qua khu vực).
 - [ ] Bước **load dimensions**: `dim_date`, `dim_district` (Type 1), `dim_account` (Type 1), `dim_transaction_profile` (chỉ thêm tổ hợp mới, sửa nhãn Type 1).
 - [ ] Bước **load fact**: tra `customer_sk` theo OWNER **và ngày giao dịch**; chống trùng theo `transaction_id`; gắn `load_batch_id`, `loaded_at`.
 - [ ] Bước **reconcile**: số dòng, ID duy nhất, tổng tiền vào/ra nguồn ↔ kho.
@@ -87,7 +106,7 @@
 - **Xong khi:** nạp đủ Berka; đối chiếu nguồn ↔ kho khớp 100%; chạy lại 1 lô vẫn khớp.
 
 ### P2-4. SCD2, dữ liệu mô phỏng và kiểm soát dữ liệu (BR05, BR08)
-- [ ] Sinh `customer_profile_simulated` (Q-E) + lịch đổi hạng.
+- [ ] Lịch đổi hạng: file `customer_profile_changes_kb08.csv` (khách đổi hạng + `tier_effective_from` mới), dùng file hạng ban đầu từ P2-0 làm trạng thái nền.
 - [ ] SCD Type 2 cho `dim_customer`: đóng phiên bản cũ (`valid_to`), mở phiên bản mới (`customer_sk` mới), đúng 1 bản `is_current`, không chồng lấn.
 - [ ] Bước **validate** (Q-G): tách bản ghi lỗi vào `rejected_record` kèm mã quy tắc và lý do; bản ghi đạt vẫn được nạp.
 - [ ] Chuẩn bị lô kịch bản **KB05** (bản ghi lỗi) và **KB08** (đổi hạng + giao dịch kỳ sau).
