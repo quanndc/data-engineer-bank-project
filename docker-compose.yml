@@ -23,6 +23,7 @@ services:
       - clickhouse-data:/var/lib/clickhouse
       - ./warehouse/clickhouse/init:/docker-entrypoint-initdb.d:ro
       - ./warehouse/clickhouse/config.d/backups.xml:/etc/clickhouse-server/config.d/backups.xml:ro
+      - ./warehouse/clickhouse/config.d/memory.xml:/etc/clickhouse-server/config.d/memory.xml:ro
       - ./lake:/var/lib/clickhouse/user_files/lake      # B -> D: ClickHouse reads Parquet with file()
       - ./backups:/backups                               # BR07 backup area
     ulimits:
@@ -54,12 +55,18 @@ services:
       retries: 20
     mem_limit: 1g
 
-  # C. Pipeline (PySpark, local mode). Jobs are run with `make` via docker compose exec.
+  # C. Pipeline (PySpark, local mode). Jobs run with `make` (docker compose exec) or are started by
+  # the app through the runner (http://spark:8000, Docker network only, allow-listed commands).
   spark:
     build: ./spark
     image: bankdw-spark:3.5.6-p2
     container_name: bankdw-spark
-    command: ["sleep", "infinity"]
+    command: ["python3", "/opt/jobs/runner.py"]
+    healthcheck:
+      test: ["CMD-SHELL", "python3 -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/health')\""]
+      interval: 10s
+      timeout: 5s
+      retries: 12
     environment: &db-env
       CLICKHOUSE_HOST: ${CLICKHOUSE_HOST:-clickhouse}
       CLICKHOUSE_PORT: ${CLICKHOUSE_PORT:-8123}
@@ -88,9 +95,12 @@ services:
     container_name: bankdw-app
     ports:
       - "8501:8501"
-    environment: *db-env
+    environment:
+      <<: *db-env
+      RUNNER_URL: http://spark:8000
     depends_on:
       postgres: { condition: service_healthy }
+      spark: { condition: service_healthy }
       clickhouse: { condition: service_healthy, required: false }
     mem_limit: 512m
 

@@ -1,5 +1,6 @@
 """E. Operational store writer: batches, runs, steps and rejected records (BR05, BR06)."""
 import json
+import os
 from contextlib import contextmanager
 
 from psycopg2.extras import execute_values
@@ -12,7 +13,9 @@ class RunLog:
     fill s["rows_in"], s["rows_out"], s["rows_rejected"]; a failing step marks the run FAILED."""
 
     def __init__(self, batch_id, batch_type, description, period_from=None, period_to=None,
-                 lake_path=None, scenario_code=None, triggered_by="cli"):
+                 lake_path=None, scenario_code=None, triggered_by=None):
+        # "app" when the runner started the job from the application (F -> C), else "cli"
+        triggered_by = triggered_by or os.environ.get("BANKDW_TRIGGERED_BY", "cli")
         self.batch_id = batch_id
         self.conn = postgres()
         with self.conn.cursor() as cur:

@@ -10,6 +10,29 @@ Ghi lại các phát hiện, quyết định thiết kế và thay đổi của 
 
 
 
+
+---
+
+## [2026-10-22] Phase 2 — P2-6 (đang làm): ứng dụng 3 tab + kênh điều khiển F → C 🚧
+
+### Đã làm
+- [spark/jobs/runner.py](spark/jobs/runner.py): dịch vụ HTTP nhỏ trong container Spark (`http://spark:8000`, chỉ trong mạng Docker, không mở cổng ra máy): chạy **lệnh trong danh sách cho phép** (kịch bản KB03/05/07/08, chạy lại lô, quét cảnh báo, đối chiếu, sao lưu, khôi phục), **mỗi lúc 1 việc**, xem trước kịch bản mà không ghi gì (N01). Lần chạy do ứng dụng khởi động ghi `triggered_by = app`.
+- [apps/app/app.py](apps/app/app.py): ứng dụng Streamlit 3 tab — **Tổng quan** (BR01: kỳ, tiền vào/ra/thuần, số giao dịch, theo hạng, biểu đồ ngày/tháng), **Phân tích** (BR02 tra cứu tài khoản; BR03 danh sách + lý do + căn cứ + giao dịch liên quan; BR04 form đổi trạng thái + ghi chú + lịch sử), **Vận hành** (BR06 lần chạy + bước; BR05 bản ghi bị tách; chạy kịch bản N01–N05; BR07 sao lưu / khôi phục + kết quả đối chiếu; BR08 báo cáo theo hạng kỳ cũ / kỳ mới + phiên bản SCD của khách demo).
+- [warehouse/clickhouse/config.d/memory.xml](warehouse/clickhouse/config.d/memory.xml): giới hạn bộ đệm ClickHouse (mark cache 256 MiB thay vì 5 GB mặc định, tắt uncompressed cache) — nguyên nhân gốc của các lỗi hết bộ nhớ ở P2-5 → P2-7.
+
+### Đã kiểm tra trên trình duyệt
+- BR01 hiển thị đúng (năm 1998: vào 960.964.282, ra 933.819.075, thuần 27.145.207, 322.277 giao dịch).
+- BR02 tài khoản 11: 30 giao dịch 7/1998 → 12/1999, thấy giao dịch rút 60.000 của KB03.
+- BR03 chi tiết cảnh báo #1699 (lý do, căn cứ JSON, giao dịch liên quan); **BR04 qua giao diện ghi nhận được** NEW → IN_REVIEW kèm ghi chú (dữ liệu thử đã xoá).
+- BR06 bảng lần chạy; xem trước KB03.
+
+### Lỗi gặp và sửa
+- Màu đường tiền vào/ra bị đảo (Altair gán màu theo thứ tự chữ cái) → khai báo `domain`.
+- Bấm "Chạy KB03" làm ứng dụng lỗi hết bộ nhớ ClickHouse: Streamlit chạy lại toàn bộ script (cả truy vấn tab Tổng quan) và bộ đệm ClickHouse đã đầy → cache truy vấn ứng dụng 60 s, bỏ `FINAL` trên fact trong truy vấn đọc (pipeline đảm bảo không trùng, kiểm tra U3), giới hạn bộ đệm ClickHouse. **Chưa thử lại sau khi sửa.**
+
+### Còn lại của P2-6
+- Thử lại chạy kịch bản từ giao diện; kiểm tra tab BR05, BR07, BR08; tick plan và commit hoàn tất.
+
 ---
 
 ## [2026-10-22] Phase 2 — P2-7: sao lưu và khôi phục Data Warehouse (BR07, KB07) ✅

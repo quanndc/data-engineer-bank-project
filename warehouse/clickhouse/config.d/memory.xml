@@ -1,0 +1,10 @@
+<!-- Caches sized for a 2.5 GB container. ClickHouse defaults (e.g. a 5 GB mark cache) let the
+     resident memory grow to the container limit, and then ordinary queries fail with
+     MEMORY_LIMIT_EXCEEDED (seen during P2-5 to P2-7). -->
+<clickhouse>
+  <mark_cache_size>268435456</mark_cache_size>                 <!-- 256 MiB -->
+  <index_mark_cache_size>67108864</index_mark_cache_size>      <!-- 64 MiB -->
+  <uncompressed_cache_size>0</uncompressed_cache_size>
+  <mmap_cache_size>256</mmap_cache_size>
+  <query_cache><max_size_in_bytes>67108864</max_size_in_bytes></query_cache>
+</clickhouse>
