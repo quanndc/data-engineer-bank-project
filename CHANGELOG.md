@@ -9,6 +9,33 @@ Ghi lại các phát hiện, quyết định thiết kế và thay đổi của 
 
 
 
+
+---
+
+## [2026-10-22] Phase 2 — P2-7: sao lưu và khôi phục Data Warehouse (BR07, KB07) ✅
+
+*(Làm trước P2-6 vì tab Vận hành của ứng dụng cần gọi các chức năng này.)*
+
+### Đã làm
+- [spark/jobs/backup.py](spark/jobs/backup.py) + `make backup [NAME=]`, `make restore NAME=…`, `make backups` (luồng L06):
+  - **Sao lưu:** `BACKUP DATABASE dw TO Disk('backups', …)` — cấu trúc + dữ liệu đủ 6 bảng, gồm lịch sử SCD2; ghi `ops.backup_catalog` kèm **số liệu đối chiếu** (số dòng từng bảng, tiền vào/ra, báo cáo theo hạng, số phiên bản SCD, các lô ngoài lịch sử).
+  - **Khôi phục:** xoá 6 bảng rồi `RESTORE` (không trộn hai trạng thái); tính lại số liệu và so với bản sao lưu → kết quả trước/sau lưu ở `ops.backup_operation.result`.
+  - Chỉ chạy khi **pipeline không ghi** (không có lần chạy `RUNNING`), đúng sheet L06. PostgreSQL ngoài phạm vi sao lưu (sheet T02).
+- Kịch bản **KB07** ([tools/make_scenarios.py](tools/make_scenarios.py)): 20 lần nộp 2.500 CZK ngày 10/3/1999 ở tài khoản chưa dùng trong kịch bản khác.
+
+### Kết quả KB07
+| Bước | Kết quả |
+|---|---|
+| Sao lưu `before_kb07` | AVAILABLE, 0,2 s, ~20 MB trên đĩa |
+| Nạp KB07 | +20 giao dịch → 1.057.591 dòng |
+| Khôi phục `before_kb07` | **SUCCEEDED**; số dòng, tiền vào, tiền ra, báo cáo theo hạng, phiên bản SCD **khớp 5/5** với bản sao lưu; kho về **1.057.571** dòng, 0 dòng KB07 |
+| Nạp tiếp sau khôi phục | chạy lại KB07 → nạp lại đúng 20 dòng (pipeline kiểm tra trùng theo dữ liệu thật trong kho) |
+| Lịch sử Berka | vẫn RECONCILED |
+
+### Lỗi gặp và sửa
+- `dim_date` là `MergeTree` thường → không dùng được `FINAL` (lỗi ClickHouse 181) khi lấy số liệu → bỏ `FINAL` riêng cho bảng này.
+- Ngay sau `RESTORE`, ClickHouse gần chạm giới hạn 2,2 GB nên các truy vấn đối chiếu hết bộ nhớ (lần khôi phục đầu bị ghi FAILED dù dữ liệu đã đúng) → xả bộ đệm (`SYSTEM DROP … CACHE`, `JEMALLOC PURGE`) và giới hạn 2 luồng trước khi đối chiếu. Bản ghi lần khôi phục lỗi được giữ trong `ops.backup_operation` làm ví dụ thật.
+
 ---
 
 ## [2026-10-22] Phase 2 — P2-5: cảnh báo gian lận (BR03) và xử lý cảnh báo (BR04) ✅

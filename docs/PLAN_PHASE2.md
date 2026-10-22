@@ -33,7 +33,7 @@
 | Q-F | Quy tắc / ngưỡng cảnh báo (BR03) | Đang dùng đề xuất (22/10): R1 "tiền ra tăng mạnh": tiền ra trong tháng > **3×** trung bình 6 tháng trước và > 50.000 CZK. R2 "tài khoản ngủ đông hoạt động lại": không giao dịch ≥ **180 ngày** rồi có giao dịch ra. Chống trùng: 1 cảnh báo / (tài khoản, quy tắc, kỳ). Trên lịch sử: R1 1.695, R2 2 cảnh báo; chỉnh ngưỡng trong `ops.alert_rule`, không cần sửa code | P2-5 |
 | Q-G | Quy tắc chất lượng (BR05) | V1 thiếu khóa bắt buộc · V2 tài khoản không tồn tại · V3 `amount` < 0 hoặc không phải số · V4 ngày ngoài lịch · V5 mã `type` lạ · V6 trùng `transaction_id`. Bản ghi lỗi **tách sang PostgreSQL**, không làm hỏng cả lô | P2-4 |
 | Q-H | Số dư cuối kỳ, chuyển tiền nội bộ | **Ngoài phạm vi Phase 2.** Báo cáo chỉ dùng tiền vào/ra từ `amount` + chiều tiền; `balance_after` chỉ để tra cứu (đúng sheet) | — |
-| Q-I | Cấu hình sao lưu (BR07) | ClickHouse `BACKUP DATABASE dw TO Disk('backups', '<tên>')` / `RESTORE`; thư mục backup mount riêng; danh mục bản sao lưu ở PostgreSQL | P2-7 |
+| Q-I | Cấu hình sao lưu (BR07) | ✅ **Đã làm 22/10:** `BACKUP DATABASE dw TO Disk('backups', '<tên>')`; khôi phục = xoá 6 bảng rồi `RESTORE`; thư mục `./backups` mount riêng; danh mục + số liệu đối chiếu ở `ops.backup_*`; chỉ chạy khi pipeline không ghi | P2-7 |
 | Q-J | Mốc `valid_to` "vô cực" | Kiểu `Date32`, mốc **2299-12-31** (giới hạn của ClickHouse; sheet ghi 9999-12-31 là mốc *logic*) | P2-2 |
 | Q-K | Phương án thay thế | Tái dùng khung benchmark Phase 1: **cùng mô hình trên PostgreSQL** (row store) so với ClickHouse, đo các truy vấn BR01/BR02/BR08 và thời gian pipeline | P2-8 |
 | Q-L | Ngày nộp, máy, phân công | Cần nhóm xác nhận (sheet M07) | Lịch ở mục 6 |
@@ -127,10 +127,10 @@
 - **Xong khi:** demo được 8 BR trên 1 app.
 
 ### P2-7. Sao lưu và khôi phục (BR07) — luồng L06
-- [ ] Sao lưu đủ 6 bảng DW (gồm lịch sử SCD) khi pipeline dừng ghi; ghi danh mục, trạng thái, kết quả vào `backup_catalog` / `backup_operation`.
-- [ ] Khôi phục về mốc đã chọn; **đối chiếu** số dòng, tiền vào/ra, báo cáo theo hạng, phiên bản SCD trước/sau.
-- [ ] Quy trình tiếp tục nạp sau khôi phục (sheet còn mở).
-- **Xong khi:** KB07 chạy đúng (sao lưu → nạp lô KB05 → khôi phục → số liệu trở về mốc cũ).
+- [x] Sao lưu đủ 6 bảng DW (gồm lịch sử SCD) khi pipeline dừng ghi; ghi danh mục, trạng thái, kết quả vào `backup_catalog` / `backup_operation`.
+- [x] Khôi phục về mốc đã chọn; **đối chiếu** số dòng, tiền vào/ra, báo cáo theo hạng, phiên bản SCD trước/sau.
+- [x] Quy trình tiếp tục nạp sau khôi phục (sheet còn mở). *(22/10: chạy lại lô đã bị khôi phục mất → nạp lại đúng các dòng đó, vì pipeline kiểm tra trùng theo dữ liệu thật trong kho)*
+- **Xong khi:** KB07 chạy đúng (sao lưu → nạp lô KB05 → khôi phục → số liệu trở về mốc cũ). ✅ *(22/10: dùng lô KB07 riêng; 5/5 nhóm số liệu khớp bản sao lưu)*
 
 ### P2-8. Đánh giá (3 tiêu chí)
 - [ ] **Data correctness:** mỗi KB có truy vấn **đối chiếu tại nguồn**; tái dùng khung kiểm tra ISO/IEC 25012 của Phase 1 (completeness, uniqueness, accuracy, consistency) + kiểm tra SCD (không chồng lấn, đúng 1 bản hiện tại).

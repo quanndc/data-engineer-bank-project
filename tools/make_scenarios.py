@@ -167,7 +167,29 @@ def kb03():
           f"({sum(a['rule'] == 'R1' for a in alerts)} R1, {sum(a['rule'] == 'R2' for a in alerts)} R2)")
 
 
+# ---------------------------------------------------------------- KB07: data loaded after a backup (BR07)
+def kb07():
+    """20 valid deposits on 1999-03-10 for accounts not used by KB03/KB05/KB08. KB07 = back up the
+    warehouse, load this batch, restore -> the warehouse returns exactly to the backup figures."""
+    used = set()
+    for code in ("KB03", "KB05", "KB08"):
+        used |= {r[1] for r in csv.reader(open(f"{OUT}/{code}/trans.csv"), delimiter=";") if r[0] != "trans_id"}
+    accts = [r for r in c.sql("""
+        SELECT account_id, arg_max(balance::DECIMAL(18, 2), date || lpad(trans_id, 10, '0'))
+        FROM trans GROUP BY account_id HAVING max(date) = '981231' ORDER BY account_id::INT""").fetchall()
+             if r[0] not in used][:20]
+    rows = [[93_000_001 + i, acc, "990310", "PRIJEM", "VKLAD", "2500.00", f"{float(bal) + 2500:.2f}", "", "", ""]
+            for i, (acc, bal) in enumerate(accts)]
+    write("KB07", "trans.csv", rows)
+    json.dump({"scenario": "KB07", "batch_id": "KB07_AFTER_BACKUP", "rows_loaded": len(rows),
+               "money_in": 2500 * len(rows),
+               "rule": "after RESTORE the 6 tables equal the backup figures; KB07 rows are gone"},
+              open(f"{OUT}/KB07/expected.json", "w"), indent=2)
+    print(f"KB07: {len(rows)} deposits on 1999-03-10")
+
+
 if __name__ == "__main__":
     kb05()
     kb08()
     kb03()
+    kb07()

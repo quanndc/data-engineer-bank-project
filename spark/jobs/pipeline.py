@@ -498,6 +498,7 @@ def run_transactions(spark, batch_id, df, description, period=(None, None), batc
 SCENARIOS = {  # scenario code -> (batch_id, description); input files in data/berka/scenarios/<code>/
     "KB03": ("KB03_FRAUD", "KB03: giao dịch thỏa quy tắc cảnh báo gian lận"),
     "KB05": ("KB05_DATA_ERRORS", "KB05: giao dịch có lỗi chủ đích (V1-V6) lẫn giao dịch hợp lệ"),
+    "KB07": ("KB07_AFTER_BACKUP", "KB07: lô nạp sau khi sao lưu (bị xoá khi khôi phục)"),
     "KB08": ("KB08_TIER_CHANGE", "KB08: đổi hạng thành viên + giao dịch kỳ sau"),
 }
 
