@@ -6,6 +6,27 @@ Ghi lại các phát hiện, quyết định thiết kế và thay đổi của 
 
 
 
+
+---
+
+## [2026-10-22] Phase 2 — P2-4 (một phần): lô kịch bản và KB05 kiểm soát dữ liệu ✅
+
+### Đã làm
+- `pipeline.py scenario <KB>` / `make scenario KB=…`: chạy lô kịch bản (`batch_type = SCENARIO`) từ `data/berka/scenarios/<KB>/`; hỗ trợ sẵn file đổi hạng `customer_profile_changes.csv` → bước `load_customer_scd2` trước khi nạp giao dịch (dùng cho KB08).
+- [tools/make_scenarios.py](tools/make_scenarios.py) + `make scenarios`: sinh dữ liệu kịch bản (định dạng Berka) kèm `expected.json` (kết quả mong đợi cho đánh giá P2-8).
+- **KB05:** 10 giao dịch hợp lệ (tháng 1/1999, 10 tài khoản thật, số dư nối tiếp số dư cuối 1998) + 10 giao dịch lỗi chủ đích: V1 thiếu số tiền / thiếu tài khoản, V2 tài khoản 99999, V3 số tiền âm / không phải số, V4 ngày 31/02 / năm 2001 ngoài lịch, V5 loại `XYZ`, V6 trùng trong lô / trùng giao dịch đã nạp.
+
+### Kết quả KB05 (khớp `expected.json`)
+| | Mong đợi | Thực tế |
+|---|---:|---:|
+| Nhận | 20 | 20 |
+| Nạp | 10 | 10 |
+| Tách vào `ops.rejected_record` | 10 (V1 2, V2 1, V3 2, V4 2, V5 1, V6 2) | 10 (V1 2, V2 1, V3 2, V4 2, V5 1, V6 2) |
+| Trạng thái lần chạy | lỗi không làm hỏng cả lô | `SUCCEEDED_WITH_REJECTS`, 6/6 bước SUCCEEDED |
+
+### Còn mở
+- **KB08:** cách giả lập đổi hạng cần nhóm chốt (đánh giá lại theo tiền vào 1998 cho ra 618/4.500 khách = 13,7%, khác đề xuất ~5% trong Q-E).
+
 ---
 
 ## [2026-10-22] Phase 2 — P2-3: pipeline theo lô, nạp toàn bộ lịch sử Berka ✅

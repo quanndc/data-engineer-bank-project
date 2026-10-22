@@ -109,8 +109,8 @@
 ### P2-4. SCD2, dữ liệu mô phỏng và kiểm soát dữ liệu (BR05, BR08)
 - [ ] Lịch đổi hạng: file `customer_profile_changes_kb08.csv` (khách đổi hạng + `tier_effective_from` mới), dùng file hạng ban đầu từ P2-0 làm trạng thái nền.
 - [ ] SCD Type 2 cho `dim_customer` *(22/10: đã có hàm đóng/mở phiên bản và nạp 4.500 phiên bản đầu ở lô `REF_INITIAL`; còn kịch bản đổi hạng KB08)*: đóng phiên bản cũ (`valid_to`), mở phiên bản mới (`customer_sk` mới), đúng 1 bản `is_current`, không chồng lấn.
-- [ ] Bước **validate** (Q-G) *(22/10: quy tắc V1–V7 đã chạy trong mọi lô lịch sử, 0 bản ghi lỗi trên dữ liệu gốc; còn lô lỗi chủ đích KB05)*: tách bản ghi lỗi vào `rejected_record` kèm mã quy tắc và lý do; bản ghi đạt vẫn được nạp.
-- [ ] Chuẩn bị lô kịch bản **KB05** (bản ghi lỗi) và **KB08** (đổi hạng + giao dịch kỳ sau).
+- [x] Bước **validate** (Q-G) *(22/10: V1–V7 chạy trong mọi lô; KB05 tách đúng 10/10 bản ghi lỗi)*: tách bản ghi lỗi vào `rejected_record` kèm mã quy tắc và lý do; bản ghi đạt vẫn được nạp.
+- [ ] Chuẩn bị lô kịch bản **KB05** (bản ghi lỗi) và **KB08** (đổi hạng + giao dịch kỳ sau). *(22/10: **KB05 xong** — 20 bản ghi, nạp 10, tách 10 đúng V1–V6; KB08 chờ chốt cách đổi hạng)*
 - **Xong khi:** KB05 và KB08 chạy ra đúng kết quả mong đợi.
 
 ### P2-5. Cảnh báo (BR03, BR04) — luồng L03, L04

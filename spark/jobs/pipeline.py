@@ -4,6 +4,7 @@
     spark-submit pipeline.py history 1993-01 1998-12     # HIST_YYYY_MM batches, one per month
     spark-submit pipeline.py rerun HIST_1995_03          # re-run a batch from its Data Lake snapshot
     spark-submit pipeline.py reconcile                   # whole source vs. warehouse
+    spark-submit pipeline.py scenario KB05               # scenario batch from data/berka/scenarios/KB05
 
 Every run and step is logged in PostgreSQL (ops.pipeline_run / ops.pipeline_step, BR06); rejected
 records go to ops.rejected_record (BR05). Rules follow the group sheet (Data Model E01-E05, P01-P05,
@@ -417,14 +418,38 @@ def reconcile_batch(log, accepted, rejected_v7):
     return int(got.n)
 
 
+def load_tier_changes(log, changes):
+    """C01-C03 for a change file: client_id, membership_tier, tier_effective_from, updated_at.
+    Unchanged attributes (gender, birth date, district) come from the client's current version."""
+    pdf = changes.toPandas()
+    pdf["client_id"] = pdf["client_id"].astype(int)
+    pdf["tier_effective_from"] = pd.to_datetime(pdf["tier_effective_from"]).dt.date
+    cur = ch_df("SELECT client_id, gender, birth_date, customer_district_sk FROM dw.dim_customer FINAL "
+                "WHERE is_current = 1")
+    inc = pdf.merge(cur.assign(client_id=cur.client_id.astype(int)), on="client_id", how="left")
+    unknown = inc[inc.gender.isna()]
+    log.reject(("customer_profile_changes", str(r.client_id), "V2", "khách hàng không tồn tại trong kho",
+                {"client_id": r.client_id, "membership_tier": r.membership_tier}) for r in unknown.itertuples())
+    opened, closed, unchanged, refused = apply_customer_versions(inc[inc.gender.notna()])
+    log.reject(("customer_profile_changes", str(cid), "V4", why, {"client_id": cid}) for cid, why in refused)
+    return len(pdf), opened, closed, unchanged
+
+
 def run_transactions(spark, batch_id, df, description, period=(None, None), batch_type="HISTORICAL",
-                     scenario_code=None, from_snapshot=False):
+                     scenario_code=None, from_snapshot=False, tier_changes=None):
     log = RunLog(batch_id, batch_type, description, period[0], period[1],
                  lake_path=f"{BATCHES}/{batch_id}", scenario_code=scenario_code)
     with log.step("ingest") as s:
         t = (spark.read.parquet(f"{BATCHES}/{batch_id}/trans.parquet") if from_snapshot
              else snapshot(df, batch_id, "trans"))
+        if tier_changes is not None:
+            tier_changes = snapshot(tier_changes, batch_id, "customer_profile_changes")
         log.rows_received = s["rows_in"] = s["rows_out"] = t.count()
+    if tier_changes is not None:
+        with log.step("load_customer_scd2") as s:
+            n, opened, closed, unchanged = load_tier_changes(log, tier_changes)
+            s["rows_in"], s["rows_out"] = n, opened + closed
+            print(f"  dim_customer: {opened} versions opened, {closed} closed, {unchanged} unchanged")
     with log.step("validate") as s:
         accepted, n_bad, n_already = validate(spark, log, t)
         s["rows_in"], s["rows_rejected"] = log.rows_received, n_bad
@@ -444,6 +469,25 @@ def run_transactions(spark, batch_id, df, description, period=(None, None), batc
     print(f"{batch_id}: {status} | received {log.rows_received} | loaded {n_new} new "
           f"({n_already} already loaded) | rejected {log.rows_rejected}")
     return status
+
+
+SCENARIOS = {  # scenario code -> (batch_id, description); input files in data/berka/scenarios/<code>/
+    "KB03": ("KB03_FRAUD", "KB03: giao dịch thỏa quy tắc cảnh báo gian lận"),
+    "KB05": ("KB05_DATA_ERRORS", "KB05: giao dịch có lỗi chủ đích (V1-V6) lẫn giao dịch hợp lệ"),
+    "KB08": ("KB08_TIER_CHANGE", "KB08: đổi hạng thành viên + giao dịch kỳ sau"),
+}
+
+
+def run_scenario(spark, code):
+    batch_id, description = SCENARIOS[code]
+    folder = f"{SOURCE}/scenarios/{code}"
+    trans = (spark.read.option("header", True).option("sep", ";").option("quote", '"')
+             .csv(f"{folder}/trans.csv"))
+    changes_path = f"{folder}/customer_profile_changes.csv"
+    changes = (spark.read.option("header", True).csv(changes_path)
+               if os.path.exists(changes_path) else None)
+    return run_transactions(spark, batch_id, trans, description, batch_type="SCENARIO",
+                            scenario_code=code, tier_changes=changes)
 
 
 def run_history(spark, first, last):
@@ -488,6 +532,8 @@ def main():
     elif cmd == "rerun":
         run_transactions(spark, sys.argv[2], None, "Chạy lại từ bản chụp trong Data Lake",
                          from_snapshot=True)
+    elif cmd == "scenario":
+        run_scenario(spark, sys.argv[2])
     elif cmd == "reconcile":
         sys.exit(0 if reconcile_all(spark) else 1)
     spark.stop()

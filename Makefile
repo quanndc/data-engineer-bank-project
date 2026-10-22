@@ -11,7 +11,7 @@ COMPOSE := docker compose
 endif
 SPARK := $(COMPOSE) exec -T spark
 
-.PHONY: up down ps logs smoke sql psql clean source-check tiers schema load-ref load-history rerun reconcile
+.PHONY: up down ps logs smoke sql psql clean source-check tiers schema load-ref load-history rerun reconcile scenarios scenario
 
 up:            ## Start D ClickHouse, E PostgreSQL, C Spark, F app (http://localhost:8501)
 	@echo "ClickHouse: $(CLICKHOUSE_HOST)"
@@ -47,6 +47,12 @@ load-history:  ## HIST_YYYY_MM batches from FROM to TO (default 1993-01 .. 1998-
 
 rerun:         ## Re-run one batch from its Data Lake snapshot: make rerun BATCH=HIST_1995_03
 	$(PIPELINE) rerun $(BATCH)
+
+scenarios:     ## Generate the scenario input files (data/berka/scenarios/KBxx) on the host
+	python3 tools/make_scenarios.py
+
+scenario:      ## Run one scenario batch: make scenario KB=KB05
+	$(PIPELINE) scenario $(KB)
 
 reconcile:     ## Whole Berka source vs. warehouse (count, distinct ids, money in/out)
 	$(PIPELINE) reconcile
