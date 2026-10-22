@@ -11,7 +11,7 @@ from decimal import Decimal
 
 from pyspark.sql import functions as F
 
-from common import SOURCE, clickhouse, spark_session
+from common import SOURCE, clickhouse, ensure_databases, spark_session
 
 AUDIT_DDL = """
 CREATE TABLE IF NOT EXISTS dq.audit (
@@ -100,6 +100,7 @@ def main():
         rows.append([run_id, run_ts, cid, char, metric, exp, str(obs), None])
         print(f"[INFO] {cid:<4} {metric}: {obs:,}")
 
+    ensure_databases(ch)
     ch.command(AUDIT_DDL)
     ch.insert("dq.audit", rows, column_names=["run_id", "run_ts", "check_id", "characteristic",
                                               "metric", "expected", "observed", "passed"])

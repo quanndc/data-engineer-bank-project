@@ -8,7 +8,7 @@ import glob
 import os
 import time
 
-from common import LAKE, WAREHOUSE, clickhouse, run_sql_file
+from common import LAKE, WAREHOUSE, clickhouse, ensure_databases, run_sql_file
 
 QUERIES = f"{WAREHOUSE}/queries/clickhouse"
 OUT = f"{LAKE}/results/clickhouse_star"
@@ -16,6 +16,7 @@ OUT = f"{LAKE}/results/clickhouse_star"
 
 def main():
     ch = clickhouse()
+    ensure_databases(ch)
     run_sql_file(ch, f"{WAREHOUSE}/clickhouse/ddl/streaming.sql")   # BR7 table (kept across runs)
     start = time.time()
     run_sql_file(ch, f"{WAREHOUSE}/clickhouse/ddl/marts.sql")

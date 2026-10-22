@@ -33,9 +33,12 @@ services:
       retries: 12
     mem_limit: 1g
 
+  # Local ClickHouse. Started only when CLICKHOUSE_HOST is "clickhouse" (the default);
+  # with a cloud service in .env the Makefile leaves this profile off.
   clickhouse:
     image: clickhouse/clickhouse-server:25.3
     container_name: bankdw-clickhouse
+    profiles: ["local-ch"]
     ports:
       - "8123:8123"            # HTTP (Superset, clickhouse-connect)
       - "9000:9000"            # native protocol
@@ -63,9 +66,12 @@ services:
     command: ["sleep", "infinity"]   # jobs are run with `make` via docker compose exec
     environment:
       KAFKA_BOOTSTRAP: kafka:9092
-      CLICKHOUSE_HOST: clickhouse
-      CLICKHOUSE_USER: bank
-      CLICKHOUSE_PASSWORD: bank
+      CLICKHOUSE_HOST: ${CLICKHOUSE_HOST:-clickhouse}
+      CLICKHOUSE_PORT: ${CLICKHOUSE_PORT:-8123}
+      CLICKHOUSE_USER: ${CLICKHOUSE_USER:-bank}
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:-bank}
+      CLICKHOUSE_SECURE: ${CLICKHOUSE_SECURE:-false}
+      CLICKHOUSE_DATABASE_ENGINE: ${CLICKHOUSE_DATABASE_ENGINE:-}
     volumes:
       - ./data:/data/source:ro       # Kaggle CSV files
       - ./lake:/lake                 # raw / staging / core Parquet layers
@@ -75,7 +81,7 @@ services:
       - ./benchmark:/opt/benchmark:ro              # P6 benchmark scripts
     depends_on:
       kafka: { condition: service_healthy }
-      clickhouse: { condition: service_healthy }
+      clickhouse: { condition: service_healthy, required: false }
     mem_limit: 3g
 
   # ------------------------------------------------------------ application (P5)
@@ -102,7 +108,7 @@ services:
       - ./apps/superset:/opt/bootstrap:ro
       - ./warehouse/queries:/opt/queries:ro
     depends_on:
-      clickhouse: { condition: service_healthy }
+      clickhouse: { condition: service_healthy, required: false }
     healthcheck:
       test: ["CMD-SHELL", "curl -fs http://localhost:8088/health"]
       interval: 10s
@@ -118,11 +124,13 @@ services:
     ports:
       - "8501:8501"
     environment:
-      CLICKHOUSE_HOST: clickhouse
-      CLICKHOUSE_USER: bank
-      CLICKHOUSE_PASSWORD: bank
+      CLICKHOUSE_HOST: ${CLICKHOUSE_HOST:-clickhouse}
+      CLICKHOUSE_PORT: ${CLICKHOUSE_PORT:-8123}
+      CLICKHOUSE_USER: ${CLICKHOUSE_USER:-bank}
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:-bank}
+      CLICKHOUSE_SECURE: ${CLICKHOUSE_SECURE:-false}
     depends_on:
-      clickhouse: { condition: service_healthy }
+      clickhouse: { condition: service_healthy, required: false }
     mem_limit: 512m
 
   # ------------------------------------------------------------ benchmark (P6)

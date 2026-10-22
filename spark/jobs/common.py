@@ -29,12 +29,29 @@ def spark_session(app):
     return spark
 
 
+# ClickHouse connection: local container by default, any managed service (e.g. Aiven) via .env
+CH_HOST = os.environ.get("CLICKHOUSE_HOST", "clickhouse")
+CH_LOCAL = CH_HOST == "clickhouse"          # local container: reads /lake directly via file()
+CH_DATABASES = ("dwh", "mart", "dq")
+
+
 def clickhouse():
     import clickhouse_connect
     return clickhouse_connect.get_client(
-        host=os.environ.get("CLICKHOUSE_HOST", "clickhouse"),
+        host=CH_HOST,
+        port=int(os.environ.get("CLICKHOUSE_PORT", "8123")),
         username=os.environ.get("CLICKHOUSE_USER", "bank"),
-        password=os.environ.get("CLICKHOUSE_PASSWORD", "bank"))
+        password=os.environ.get("CLICKHOUSE_PASSWORD", "bank"),
+        secure=os.environ.get("CLICKHOUSE_SECURE", "false").lower() == "true")
+
+
+def ensure_databases(ch, names=CH_DATABASES):
+    """Create the databases if missing. Aiven only accepts ENGINE = Replicated
+    (set CLICKHOUSE_DATABASE_ENGINE=Replicated); the local server uses its default."""
+    engine = os.environ.get("CLICKHOUSE_DATABASE_ENGINE", "")
+    for name in names:
+        ch.command(f"CREATE DATABASE IF NOT EXISTS {name}"
+                   + (f" ENGINE = {engine}" if engine else ""))
 
 
 def run_sql_file(ch, path):

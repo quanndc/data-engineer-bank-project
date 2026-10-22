@@ -1,10 +1,19 @@
 # Banking Data Warehouse (Kimball) -- CO5173 Group 27
-COMPOSE := docker compose
 TOPIC   := transactions
 
-.PHONY: up down ps logs topic smoke clean produce ingest core load dq pipeline marts stream stream-stop stream-reset stream-logs produce-live app-up app-down app-bootstrap
+# ClickHouse target comes from .env: CLICKHOUSE_HOST unset or "clickhouse" = local container,
+# anything else = cloud service (Aiven, ...), and the local container is not started.
+CLICKHOUSE_HOST := $(or $(shell sed -n 's/^CLICKHOUSE_HOST=//p' .env 2>/dev/null),clickhouse)
+ifeq ($(CLICKHOUSE_HOST),clickhouse)
+COMPOSE := docker compose --profile local-ch
+else
+COMPOSE := docker compose
+endif
 
-up:            ## Build and start Kafka, ClickHouse, Spark
+.PHONY: sql up down ps logs topic smoke clean produce ingest core load dq pipeline marts stream stream-stop stream-reset stream-logs produce-live app-up app-down app-bootstrap
+
+up:            ## Build and start Kafka, Spark and (local mode) ClickHouse
+	@echo "ClickHouse: $(CLICKHOUSE_HOST)"
 	mkdir -p lake
 	$(COMPOSE) up -d --build --wait
 	$(MAKE) topic
@@ -24,13 +33,16 @@ topic:         ## Create the transactions topic (3 partitions) if missing
 
 smoke:         ## Check that every service answers
 	@echo "== Kafka topics";      $(COMPOSE) exec -T kafka /opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list
-	@echo "== ClickHouse";        $(COMPOSE) exec -T clickhouse clickhouse-client -u bank --password bank -q "SELECT version(), arrayStringConcat(groupArray(name), ', ') FROM system.databases WHERE name IN ('dwh','mart','dq')"
+	@echo "== ClickHouse ($(CLICKHOUSE_HOST))"; $(COMPOSE) exec -T spark python3 /opt/jobs/ch_sql.py "SELECT version(), arrayStringConcat(groupArray(name), ', ') FROM system.databases WHERE name IN ('dwh','mart','dq')"
 	@echo "== Spark";             $(COMPOSE) exec -T spark spark-submit --version 2>&1 | grep -m1 -o "version [0-9.]*"
 	@echo "== Spark -> Kafka/ClickHouse libs"; $(COMPOSE) exec -T spark python3 -c "import importlib.metadata, confluent_kafka, clickhouse_connect, pyspark; print('confluent-kafka', confluent_kafka.version()[0], '| clickhouse-connect', importlib.metadata.version('clickhouse-connect'), '| pyspark', pyspark.__version__)"
 	@echo "== Source data mounted"; $(COMPOSE) exec -T spark ls /data/source/dwh
 
 # ---------------------------------------------------------------- pipeline (P1-P2)
 SPARK := $(COMPOSE) exec -T spark
+
+sql:           ## Run one statement on the configured ClickHouse: make sql Q="SELECT count() FROM dwh.fact_transactions"
+	$(SPARK) python3 /opt/jobs/ch_sql.py "$(Q)"
 
 produce:       ## P1: replay all source transactions into Kafka (unthrottled)
 	$(SPARK) python3 /opt/ingestion/producer.py
@@ -65,7 +77,7 @@ stream-stop:   ## P4: stop the alert stream
 
 stream-reset:  ## P4: stop the stream, empty the alert table and drop the stream checkpoint
 	-$(SPARK) pkill -f p4_stream_alerts.py
-	$(COMPOSE) exec -T clickhouse clickhouse-client -u bank --password bank -q "TRUNCATE TABLE IF EXISTS dwh.fact_transaction_alert"
+	$(SPARK) python3 /opt/jobs/ch_sql.py "TRUNCATE TABLE IF EXISTS dwh.fact_transaction_alert"
 	$(SPARK) rm -rf /lake/checkpoints/alerts
 
 stream-logs:

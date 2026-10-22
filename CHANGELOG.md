@@ -4,6 +4,22 @@ Ghi lại các phát hiện, quyết định thiết kế và thay đổi của 
 
 ---
 
+## [2026-10-07] ClickHouse chạy được cả local lẫn cloud (Aiven), chọn bằng `.env`
+
+- Các biến mới trong `.env` (mẫu ở [.env.example](.env.example)): `CLICKHOUSE_HOST`, `CLICKHOUSE_PORT`, `CLICKHOUSE_USER`, `CLICKHOUSE_PASSWORD`, `CLICKHOUSE_SECURE`, `CLICKHOUSE_DATABASE_ENGINE`. Không khai báo gì = local như trước.
+- Spark jobs, Streamlit, Superset đọc cùng các biến này. `make app-bootstrap` cập nhật lại kết nối Superset theo `.env`.
+- [docker-compose.yml](docker-compose.yml): service `clickhouse` vào profile `local-ch`; Makefile chỉ bật profile này khi `CLICKHOUSE_HOST` là `clickhouse` (local).
+- [p2_load_clickhouse.py](spark/jobs/p2_load_clickhouse.py): local vẫn dùng `file()` (ClickHouse tự đọc Parquet); cloud gửi từng file Parquet lên qua HTTPS (`INSERT … FORMAT Parquet`). Đã thử đường cloud trên ClickHouse local: 6/6 bảng giống hệt (số dòng và checksum).
+- Aiven chỉ cho tạo database với `ENGINE = Replicated` → `ensure_databases()` tạo `dwh`, `mart`, `dq` theo `CLICKHOUSE_DATABASE_ENGINE`.
+- Lệnh mới `make sql Q="..."` ([ch_sql.py](spark/jobs/ch_sql.py)); `make smoke` và `make stream-reset` không còn gọi `clickhouse-client` trong container nên chạy được với cả cloud.
+- Kiểm tra lại ở chế độ local: `make load`, `make dq` (12/12 PASS), `make marts`, `make app-bootstrap` đều chạy đúng.
+- **Chạy thật trên Aiven** (ClickHouse 26.3): `make pipeline` nạp đủ 6 bảng (số dòng khớp local), 12/12 DQ PASS, 10 truy vấn BR trả cùng số dòng như local, mọi bảng tự thành `ReplicatedMergeTree`. Nạp qua mạng chậm hơn local: ~106 s (dim_customer 73 s) so với ~1,5 s. Superset và Streamlit đã trỏ sang Aiven.
+- Gặp lại lỗi Kafka không ghi vào volume: sau `docker compose down`, topic `transactions` bị tạo mới, phải `make produce` lại.
+- Benchmark vẫn chỉ chạy local (dùng `file()`, `SYSTEM DROP … CACHE` và `clickhouse-client` trong container).
+- Lần đầu chạy `make app-bootstrap` ngay sau `make load` gặp lỗi ClickHouse hết bộ nhớ (giới hạn 2,5 GB); chạy lại thì qua. Không liên quan đến thay đổi này.
+
+---
+
 ## [2026-10-07] Tài liệu kiến trúc cho team + các điểm cần làm rõ
 
 ### Tài liệu

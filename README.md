@@ -180,6 +180,26 @@ Mở Streamlit để xem cảnh báo xuất hiện. Mỗi lần demo nên dùng 
 make stream-stop
 ```
 
+### ☁️ Dùng ClickHouse trên cloud (Aiven) thay cho local
+
+Mặc định ClickHouse chạy trong container trên máy. Muốn cả nhóm dùng chung một ClickHouse trên cloud:
+
+1. Tạo service **Aiven for ClickHouse** (bản dùng thử), mở tab *Connection information* → *ClickHouse HTTPS & JDBC*.
+2. Điền vào `.env` (mẫu ở `.env.example`):
+   ```
+   CLICKHOUSE_HOST=<host>.aivencloud.com
+   CLICKHOUSE_PORT=<port>
+   CLICKHOUSE_USER=avnadmin
+   CLICKHOUSE_PASSWORD=<password>
+   CLICKHOUSE_SECURE=true
+   CLICKHOUSE_DATABASE_ENGINE=Replicated
+   ```
+3. Chạy các bước 3–6 như bình thường. Container ClickHouse local sẽ không được bật; `make load` gửi file Parquet lên cloud qua HTTPS; các database `dwh`, `mart`, `dq` được tạo tự động.
+
+Muốn quay về local: xoá (hoặc comment) các dòng `CLICKHOUSE_*` trong `.env`. Kiểm tra đang dùng ClickHouse nào: `make smoke`. Chạy nhanh một câu SQL: `make sql Q="SELECT count() FROM dwh.fact_transactions"`.
+
+> Benchmark (bước 7) chỉ chạy với ClickHouse local.
+
 ### 7. Benchmark (tuỳ chọn)
 
 So sánh star schema trên ClickHouse với One Big Table và PostgreSQL. Tắt Superset, Streamlit và stream trước khi đo.
@@ -230,6 +250,7 @@ Kết quả thô ở `lake/bench/results/`, tóm tắt ở [docs/BENCHMARK.md](d
 | `make stream` / `stream-stop` / `stream-reset` / `stream-logs` | P4 | Điều khiển luồng cảnh báo realtime |
 | `make produce-live RATE= LIMIT= SKIP=` | P4 | Phát giao dịch có nhịp để demo |
 | `make app-up` / `app-down` / `app-bootstrap` | P5 | Superset và Streamlit |
+| `make sql Q="..."` | — | Chạy một câu SQL trên ClickHouse đang cấu hình (local hoặc cloud) |
 
 ## 📁 Cấu trúc thư mục
 

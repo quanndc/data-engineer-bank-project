@@ -13,13 +13,20 @@ import os
 import re
 import secrets
 import time
+from urllib.parse import quote
 
 import requests
 
 BASE = "http://localhost:8088"
 QUERIES = "/opt/queries/clickhouse"
 DB_NAME = "Bank DWH (ClickHouse)"
-DB_URI = "clickhousedb://bank:bank@clickhouse:8123/dwh"
+# Same ClickHouse settings as the Spark jobs (.env); local container by default
+DB_URI = "clickhousedb://{user}:{pw}@{host}:{port}/dwh{tls}".format(
+    user=quote(os.environ.get("CLICKHOUSE_USER", "bank"), safe=""),
+    pw=quote(os.environ.get("CLICKHOUSE_PASSWORD", "bank"), safe=""),
+    host=os.environ.get("CLICKHOUSE_HOST", "clickhouse"),
+    port=os.environ.get("CLICKHOUSE_PORT", "8123"),
+    tls="?secure=true" if os.environ.get("CLICKHOUSE_SECURE", "false").lower() == "true" else "")
 
 
 # ---------------------------------------------------------------- API helpers
@@ -269,6 +276,8 @@ def cleanup(api):
 def ensure_database(api):
     for db in api.all("database"):
         if db["database_name"] == DB_NAME:
+            # point the existing connection at the ClickHouse currently configured in .env
+            api.call("PUT", f"database/{db['id']}", json={"sqlalchemy_uri": DB_URI})
             return db["id"]
     return api.call("POST", "database/", json={
         "database_name": DB_NAME, "sqlalchemy_uri": DB_URI,

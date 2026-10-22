@@ -17,8 +17,10 @@ st.set_page_config(page_title="Risk Alerts - Bank DWH", page_icon="🚨", layout
 def client():
     return clickhouse_connect.get_client(
         host=os.environ.get("CLICKHOUSE_HOST", "clickhouse"),
+        port=int(os.environ.get("CLICKHOUSE_PORT", "8123")),
         username=os.environ.get("CLICKHOUSE_USER", "bank"),
-        password=os.environ.get("CLICKHOUSE_PASSWORD", "bank"))
+        password=os.environ.get("CLICKHOUSE_PASSWORD", "bank"),
+        secure=os.environ.get("CLICKHOUSE_SECURE", "false").lower() == "true")
 
 
 RULE_LABELS = {"HIGH_AMOUNT": "High amount (> 20,000 INR)",
