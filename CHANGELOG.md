@@ -4,6 +4,24 @@ Ghi lại các phát hiện, quyết định thiết kế và thay đổi của 
 
 
 
+
+---
+
+## [2026-10-22] Phase 2 — P2-2: lược đồ Data Warehouse và kho vận hành ✅
+
+### Đã làm
+- **ClickHouse `dw`** — [warehouse/clickhouse/ddl/dw.sql](warehouse/clickhouse/ddl/dw.sql): 6 bảng theo Data Dictionary của sheet (`fact_transaction`, `dim_customer` SCD2, `dim_account`, `dim_date`, `dim_district`, `dim_transaction_profile`).
+  - Dimension: `ReplacingMergeTree(updated_at)` → sửa Type 1 và đóng phiên bản SCD2 bằng cách ghi dòng mới, đọc bằng `FINAL`.
+  - Fact: `ReplacingMergeTree(loaded_at)`, `ORDER BY (account_sk, date_key, transaction_id)`, phân vùng theo năm; chống trùng khi chạy lại (lưới an toàn, pipeline vẫn tự bỏ ID đã có).
+  - **Q-J đã chốt về vật lý:** `valid_to = 2299-12-31` (`Date32`) thay cho mốc logic 9999-12-31; `birth_date` dùng `Date32` (trước 1970).
+  - Chỉ `CREATE … IF NOT EXISTS`, không bao giờ xoá dữ liệu.
+- **PostgreSQL `ops`** — [warehouse/postgres/ddl/ops.sql](warehouse/postgres/ddl/ops.sql): 10 bảng có PK/FK/CHECK: `batch`, `pipeline_run`, `pipeline_step` (BR06); `dq_rule`, `rejected_record` (BR05); `alert_rule`, `alert` (duy nhất theo tài khoản + quy tắc + kỳ), `alert_action` (BR03, BR04); `backup_catalog`, `backup_operation` (BR07). Dữ liệu mẫu: quy tắc chất lượng V1–V6, quy tắc cảnh báo R1–R2 (theo đề xuất Q-G, Q-F).
+- [spark/jobs/apply_schema.py](spark/jobs/apply_schema.py) + `make schema`: tạo cả hai lược đồ và **đối chiếu từng cột với Data Dictionary**.
+- [docs/data_model.md](docs/data_model.md): ERD (Mermaid) của kho, bảng quyết định vật lý, mô tả kho vận hành.
+
+### Kiểm tra
+- `make schema`: **6/6 bảng ClickHouse khớp đúng thứ tự và tên cột** với Data Dictionary; PostgreSQL 10/10 bảng; chạy lần 2 không lỗi, không nhân đôi dữ liệu mẫu.
+
 ---
 
 ## [2026-10-22] Phase 2 — P2-1: hạ tầng theo kiến trúc A–F ✅

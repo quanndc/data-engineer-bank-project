@@ -11,7 +11,7 @@ COMPOSE := docker compose
 endif
 SPARK := $(COMPOSE) exec -T spark
 
-.PHONY: up down ps logs smoke sql psql clean source-check tiers
+.PHONY: up down ps logs smoke sql psql clean source-check tiers schema
 
 up:            ## Start D ClickHouse, E PostgreSQL, C Spark, F app (http://localhost:8501)
 	@echo "ClickHouse: $(CLICKHOUSE_HOST)"
@@ -30,6 +30,9 @@ logs:
 smoke:         ## Check that every block of the architecture answers
 	$(SPARK) python3 /opt/jobs/smoke.py
 	@curl -fs http://localhost:8501/_stcore/health >/dev/null && echo "F App        : http://localhost:8501 ok"
+
+schema:        ## P2-2: create dw (ClickHouse) and ops (PostgreSQL); check columns against the Data Dictionary
+	$(SPARK) python3 /opt/jobs/apply_schema.py
 
 sql:           ## One statement on ClickHouse: make sql Q="SELECT count() FROM dw.fact_transaction"
 	$(SPARK) python3 /opt/jobs/ch_sql.py "$(Q)"

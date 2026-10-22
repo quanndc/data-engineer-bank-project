@@ -78,10 +78,10 @@
 - **Xong khi:** `make up` dựng đủ D, E, C, F; `make smoke` xanh. ✅ *(22/10)*
 
 ### P2-2. Lược đồ dữ liệu
-- [ ] **ClickHouse (D)** — 6 bảng theo Data Dictionary: `fact_transaction`, `dim_customer` (SCD2), `dim_account`, `dim_date`, `dim_district`, `dim_transaction_profile`. Chốt kiểu vật lý (Q-J).
-- [ ] **PostgreSQL (E)** — kho vận hành: `batch`, `pipeline_run`, `pipeline_step`, `rejected_record`, `alert`, `alert_action`, `backup_catalog`, `backup_operation`.
-- [ ] Viết lại ERD (sheet, dòng 88) thành sơ đồ cho report.
-- **Xong khi:** DDL chạy được, khớp từng cột với Data Dictionary.
+- [x] **ClickHouse (D)** — 6 bảng theo Data Dictionary: `fact_transaction`, `dim_customer` (SCD2), `dim_account`, `dim_date`, `dim_district`, `dim_transaction_profile`. Chốt kiểu vật lý (Q-J). *(22/10: [dw.sql](../warehouse/clickhouse/ddl/dw.sql), 6/6 bảng khớp từng cột với Data Dictionary)*
+- [x] **PostgreSQL (E)** — kho vận hành: `batch`, `pipeline_run`, `pipeline_step`, `rejected_record`, `alert`, `alert_action`, `backup_catalog`, `backup_operation`. *(22/10: [ops.sql](../warehouse/postgres/ddl/ops.sql), 10 bảng + `dq_rule`, `alert_rule` có sẵn V1–V6, R1–R2)*
+- [x] Viết lại ERD (sheet, dòng 88) thành sơ đồ cho report. *(22/10: [data_model.md](data_model.md), Mermaid)*
+- **Xong khi:** DDL chạy được, khớp từng cột với Data Dictionary. ✅ *(22/10, `make schema`)*
 
 ### P2-3. Pipeline theo lô (C) — luồng L01, L02, L05
 - [ ] Bước **ingest**: đọc A → ghi bản chụp lô vào B (`lake/batches/<batch_id>/`), ghi `batch` + `pipeline_run` (E).
