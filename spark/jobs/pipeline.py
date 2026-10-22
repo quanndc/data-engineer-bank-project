@@ -424,13 +424,30 @@ def load_tier_changes(log, changes):
     pdf = changes.toPandas()
     pdf["client_id"] = pdf["client_id"].astype(int)
     pdf["tier_effective_from"] = pd.to_datetime(pdf["tier_effective_from"]).dt.date
-    cur = ch_df("SELECT client_id, gender, birth_date, customer_district_sk FROM dw.dim_customer FINAL "
-                "WHERE is_current = 1")
+    cur = ch_df("SELECT client_id, gender, birth_date, customer_district_sk, "
+                "membership_tier AS current_tier FROM dw.dim_customer FINAL WHERE is_current = 1")
     inc = pdf.merge(cur.assign(client_id=cur.client_id.astype(int)), on="client_id", how="left")
+    same = inc.membership_tier == inc.current_tier          # already on this tier: nothing to do
+    # a change that arrives after transactions dated on/after its effective date were loaded would
+    # leave those facts on the old version (late-arriving change): refuse it (sheet C01-C03)
+    late = ch_df("""SELECT c.client_id AS client_id, max(f.date_key) AS last_txn
+                    FROM dw.fact_transaction AS f FINAL
+                    JOIN (SELECT customer_sk, client_id FROM dw.dim_customer FINAL WHERE is_current = 1) AS c
+                      USING (customer_sk)
+                    WHERE c.client_id IN %(ids)s GROUP BY c.client_id""",
+                 ids=tuple(int(x) for x in pdf.client_id) or (0,))
+    last = dict(zip(late.client_id.astype(int), late.last_txn.astype(int)))
+    eff_key = inc.tier_effective_from.map(lambda d: int(d.strftime("%Y%m%d")))
+    too_late = inc[~same & (inc.client_id.map(lambda c: last.get(int(c), 0)) >= eff_key)]
+    log.reject(("customer_profile_changes", str(r.client_id), "V4",
+                "đã có giao dịch từ ngày hiệu lực trở đi được nạp với hạng cũ",
+                {"client_id": r.client_id, "tier_effective_from": r.tier_effective_from})
+               for r in too_late.itertuples())
+    inc = inc[~inc.client_id.isin(too_late.client_id)]
     unknown = inc[inc.gender.isna()]
     log.reject(("customer_profile_changes", str(r.client_id), "V2", "khách hàng không tồn tại trong kho",
                 {"client_id": r.client_id, "membership_tier": r.membership_tier}) for r in unknown.itertuples())
-    opened, closed, unchanged, refused = apply_customer_versions(inc[inc.gender.notna()])
+    opened, closed, unchanged, refused = apply_customer_versions(inc[inc.gender.notna()].drop(columns="current_tier"))
     log.reject(("customer_profile_changes", str(cid), "V4", why, {"client_id": cid}) for cid, why in refused)
     return len(pdf), opened, closed, unchanged
 

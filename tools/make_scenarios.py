@@ -76,5 +76,61 @@ def kb05():
     print(f"KB05: {len(all_rows)} rows -> expect {len(rows)} loaded, {len(errors)} rejected {rules}")
 
 
+# ---------------------------------------------------------------- KB08: tier change + next period (BR08)
+TIERS = [(550_000, "Platinum"), (300_000, "Gold"), (150_000, "Silver"), (0, "Standard")]
+KB05_ACCOUNTS = 10          # kb05() uses the 10 lowest account ids
+
+
+def tier_of(amount):
+    return next(name for limit, name in TIERS if amount >= limit)
+
+
+def kb08():
+    """Year-end re-evaluation (decision 2026-10-22): tier recomputed on 1998 inflow with the same
+    thresholds; the new tier is effective on 1999-01-01. Next period = January 1999: two
+    transactions (deposit, withdrawal) for every account whose owner changed tier."""
+    c.execute("CREATE OR REPLACE VIEW prof AS SELECT * FROM read_csv('data/berka/customer_profile_simulated.csv', header=true)")
+    rows = c.sql("""
+        SELECT p.client_id, p.membership_tier AS old_tier, d.account_id,
+               coalesce(sum(t.amount::DECIMAL(18, 2)) FILTER (WHERE trim(t.type) = 'PRIJEM' AND t.date LIKE '98%'), 0) AS in98,
+               arg_max(t.balance::DECIMAL(18, 2), t.date || lpad(t.trans_id, 10, '0')) AS last_balance
+        FROM prof AS p
+        JOIN disp AS d ON d.client_id::INT = p.client_id AND d.type = 'OWNER'
+        LEFT JOIN trans AS t ON t.account_id = d.account_id
+        GROUP BY p.client_id, p.membership_tier, d.account_id
+        ORDER BY p.client_id""").fetchall()
+    changes, trans, by_tier = [], [], {}
+    tid = 91_000_001
+    for client_id, old_tier, account_id, in98, last_balance in rows:
+        new_tier = tier_of(in98)
+        if new_tier == old_tier:
+            continue
+        assert int(account_id) > KB05_ACCOUNTS, "KB08 must not touch the KB05 accounts"
+        changes.append([client_id, new_tier, "1999-01-01", "1999-01-04 09:00:00"])
+        deposit = max(round(float(in98) / 12, -2), 100.0)
+        withdrawal = round(deposit * 0.4, -1)
+        bal = float(last_balance) + deposit
+        trans.append([tid, account_id, "990115", "PRIJEM", "VKLAD", f"{deposit:.2f}", f"{bal:.2f}", "", "", ""])
+        bal -= withdrawal
+        trans.append([tid + 1, account_id, "990120", "VYDAJ", "VYBER", f"{withdrawal:.2f}", f"{bal:.2f}", "", "", ""])
+        tid += 2
+        t = by_tier.setdefault(new_tier, {"clients": 0, "money_in": 0.0, "money_out": 0.0})
+        t["clients"] += 1
+        t["money_in"] += deposit
+        t["money_out"] += withdrawal
+    write("KB08", "customer_profile_changes.csv", changes,
+          cols=["client_id", "membership_tier", "tier_effective_from", "updated_at"], delim=",")
+    write("KB08", "trans.csv", trans)
+    expected = {"scenario": "KB08", "batch_id": "KB08_TIER_CHANGE", "tier_changes": len(changes),
+                "versions_closed": len(changes), "versions_opened": len(changes),
+                "versions_total_after": 4500 + len(changes), "current_versions_after": 4500,
+                "rows_loaded": len(trans),
+                "new_period_by_new_tier": {k: {kk: round(vv, 2) for kk, vv in v.items()} for k, v in by_tier.items()},
+                "old_period_rule": "totals by tier for 1993-01-01..1998-12-31 must be identical before and after KB08"}
+    json.dump(expected, open(f"{OUT}/KB08/expected.json", "w"), indent=2)
+    print(f"KB08: {len(changes)} tier changes effective 1999-01-01, {len(trans)} transactions in January 1999")
+
+
 if __name__ == "__main__":
     kb05()
+    kb08()

@@ -29,7 +29,7 @@
 | Q-B | Công nghệ C (Pipeline) | **PySpark** (tái dùng image Spark Phase 1) | P2-3 |
 | Q-C | Công nghệ F (Ứng dụng) | **Streamlit** 1 app, 3 tab (đúng sheet: 1 app, chưa phân quyền) | P2-6 |
 | Q-D | Nhịp nạp, cách chia lô | Lô **lịch sử theo tháng** (1993-01 → 1998-12, ~72 lô) để mô phỏng nạp lịch sử; lô **kịch bản** riêng cho KB03, KB05, KB08 | P2-3 |
-| Q-E | Danh sách hạng, lịch đổi hạng | 4 hạng: Standard / Silver / Gold / Platinum. Hạng ban đầu suy ra từ tổng tiền vào năm đầu (dễ giải thích); **~5% khách đổi hạng** ở 2 mốc ngày cố định | P2-4 |
+| Q-E | Danh sách hạng, lịch đổi hạng | ✅ **Đã chốt 22/10:** 4 hạng Standard / Silver / Gold / Platinum theo tiền vào năm đầu; đổi hạng = **đánh giá lại cuối 1998** theo tiền vào 1998 (cùng ngưỡng), hiệu lực **1999-01-01** → 618 khách (13,7%) | P2-4 |
 | Q-F | Quy tắc / ngưỡng cảnh báo (BR03) | R1 "tiền ra tăng mạnh": tiền ra trong tháng > **3×** trung bình 6 tháng trước và > 50.000 CZK. R2 "tài khoản ngủ đông hoạt động lại": không giao dịch ≥ **180 ngày** rồi có giao dịch ra. Chống trùng: 1 cảnh báo / (tài khoản, quy tắc, kỳ) | P2-5 |
 | Q-G | Quy tắc chất lượng (BR05) | V1 thiếu khóa bắt buộc · V2 tài khoản không tồn tại · V3 `amount` < 0 hoặc không phải số · V4 ngày ngoài lịch · V5 mã `type` lạ · V6 trùng `transaction_id`. Bản ghi lỗi **tách sang PostgreSQL**, không làm hỏng cả lô | P2-4 |
 | Q-H | Số dư cuối kỳ, chuyển tiền nội bộ | **Ngoài phạm vi Phase 2.** Báo cáo chỉ dùng tiền vào/ra từ `amount` + chiều tiền; `balance_after` chỉ để tra cứu (đúng sheet) | — |
@@ -107,11 +107,11 @@
 - **Xong khi:** nạp đủ Berka; đối chiếu nguồn ↔ kho khớp 100%; chạy lại 1 lô vẫn khớp. ✅ *(22/10: 73 lô, 1.056.320/1.056.320 giao dịch, tiền vào/ra khớp tới từng xu; chạy lại `HIST_1995_03` nạp 0 dòng mới)*
 
 ### P2-4. SCD2, dữ liệu mô phỏng và kiểm soát dữ liệu (BR05, BR08)
-- [ ] Lịch đổi hạng: file `customer_profile_changes_kb08.csv` (khách đổi hạng + `tier_effective_from` mới), dùng file hạng ban đầu từ P2-0 làm trạng thái nền.
-- [ ] SCD Type 2 cho `dim_customer` *(22/10: đã có hàm đóng/mở phiên bản và nạp 4.500 phiên bản đầu ở lô `REF_INITIAL`; còn kịch bản đổi hạng KB08)*: đóng phiên bản cũ (`valid_to`), mở phiên bản mới (`customer_sk` mới), đúng 1 bản `is_current`, không chồng lấn.
+- [x] Lịch đổi hạng: file `customer_profile_changes_kb08.csv` (khách đổi hạng + `tier_effective_from` mới), dùng file hạng ban đầu từ P2-0 làm trạng thái nền.
+- [x] SCD Type 2 cho `dim_customer` *(22/10: 4.500 phiên bản đầu + KB08 đóng 618 / mở 618 → 5.118 phiên bản, 4.500 hiện tại, 0 chồng lấn; từ chối thay đổi đến muộn)*: đóng phiên bản cũ (`valid_to`), mở phiên bản mới (`customer_sk` mới), đúng 1 bản `is_current`, không chồng lấn.
 - [x] Bước **validate** (Q-G) *(22/10: V1–V7 chạy trong mọi lô; KB05 tách đúng 10/10 bản ghi lỗi)*: tách bản ghi lỗi vào `rejected_record` kèm mã quy tắc và lý do; bản ghi đạt vẫn được nạp.
-- [ ] Chuẩn bị lô kịch bản **KB05** (bản ghi lỗi) và **KB08** (đổi hạng + giao dịch kỳ sau). *(22/10: **KB05 xong** — 20 bản ghi, nạp 10, tách 10 đúng V1–V6; KB08 chờ chốt cách đổi hạng)*
-- **Xong khi:** KB05 và KB08 chạy ra đúng kết quả mong đợi.
+- [x] Chuẩn bị lô kịch bản **KB05** (bản ghi lỗi) và **KB08** (đổi hạng + giao dịch kỳ sau). *(22/10: KB05 nạp 10 / tách 10 đúng V1–V6; KB08 618 khách đổi hạng theo đánh giá lại cuối 1998, hiệu lực 1999-01-01)*
+- **Xong khi:** KB05 và KB08 chạy ra đúng kết quả mong đợi. ✅ *(22/10: khớp `expected.json`; kỳ cũ 1993–1998 theo hạng giống hệt trước/sau KB08)*
 
 ### P2-5. Cảnh báo (BR03, BR04) — luồng L03, L04
 - [ ] Bước **alert** sau khi nạp: đọc D, áp quy tắc R1/R2 (Q-F), ghi `alert` (E) kèm tài khoản, lý do, thời điểm, số liệu làm căn cứ; chống trùng.

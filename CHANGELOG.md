@@ -7,6 +7,32 @@ Ghi lại các phát hiện, quyết định thiết kế và thay đổi của 
 
 
 
+
+---
+
+## [2026-10-22] Phase 2 — P2-4: SCD2 đổi hạng (KB08) ✅ — hoàn tất P2-4
+
+### Quyết định
+- **Q-E chốt (theo lựa chọn của nhóm):** đổi hạng = **đánh giá lại cuối năm 1998** theo tổng tiền vào 1998, cùng ngưỡng với hạng ban đầu; hạng mới hiệu lực **1999-01-01** → **618/4.500 khách (13,7%)** đổi hạng (12 hướng, ví dụ Gold → Platinum 109, Silver → Gold 86, Gold → Silver 72).
+
+### Đã làm
+- [tools/make_scenarios.py](tools/make_scenarios.py) thêm **KB08**: `customer_profile_changes.csv` (618 dòng) + `trans.csv` kỳ sau (tháng 1/1999: 1 lần nộp + 1 lần rút cho mỗi tài khoản đổi hạng, 1.236 giao dịch, số dư nối tiếp cuối 1998) + `expected.json`. Có kiểm tra KB08 không đụng tài khoản của KB05.
+- Pipeline: bước `load_customer_scd2` trong lô kịch bản; **chặn thay đổi hạng đến muộn**: nếu khách đã có giao dịch từ ngày hiệu lực trở đi được nạp với hạng cũ → từ chối (V4), không đóng/mở phiên bản. Khách đã ở đúng hạng mới → "không đổi" (không phải lỗi).
+
+### Kết quả KB08
+| Kiểm tra | Kết quả |
+|---|---|
+| Phiên bản `dim_customer` | đóng **618**, mở **618** → **5.118** phiên bản, **4.500** hiện tại, **0** khoảng hiệu lực chồng lấn |
+| Báo cáo theo hạng kỳ cũ (1993–1998) | **giống hệt** trước và sau KB08 (Gold / Platinum / Silver / Standard: số giao dịch, tiền vào, tiền ra) |
+| Kỳ mới (1/1999) theo hạng mới | khớp `expected.json`: Gold 170 khách (vào 5.735.000 / ra 2.294.000), Platinum 178 (10.148.400 / 4.059.360), Silver 162 (2.862.400 / 1.144.960), Standard 108 (987.600 / 395.040) |
+| Nạp giao dịch | 1.236 / 1.236, 0 lỗi |
+| Chạy lại KB08 | 0 phiên bản mới, 618 "không đổi", 0 giao dịch mới, `SUCCEEDED` |
+| Kiểm tra âm tính | đổi hạng khách 1 với hiệu lực 1998-06-01 (đã có giao dịch sau đó) → **bị từ chối V4**, khách vẫn 1 phiên bản (lô thử đã xoá khỏi `ops`) |
+| Lịch sử Berka sau mọi kịch bản | vẫn **RECONCILED** với nguồn |
+
+### Lỗi gặp và sửa
+- Lần chạy lại đầu tiên đánh dấu nhầm 618 thay đổi là lỗi "đến muộn" (khách đã ở hạng mới) → chỉ áp dụng kiểm tra cho khách có hạng hiện tại khác hạng mới.
+
 ---
 
 ## [2026-10-22] Phase 2 — P2-4 (một phần): lô kịch bản và KB05 kiểm soát dữ liệu ✅
