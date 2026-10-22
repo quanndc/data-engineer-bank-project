@@ -1,7 +1,3 @@
--- Runs once, when the ClickHouse volume is first created.
--- dwh  : Kimball star schema (dimensions, facts, alerts)
--- mart : data marts built from the star schema (e.g., RFM)
--- dq   : data quality audit results
-CREATE DATABASE IF NOT EXISTS dwh;
-CREATE DATABASE IF NOT EXISTS mart;
-CREATE DATABASE IF NOT EXISTS dq;
+-- Runs once, when the ClickHouse volume is first created (local container only).
+-- dw : Kimball data warehouse of Phase 2 (fact_transaction + 5 dimensions)
+CREATE DATABASE IF NOT EXISTS dw;

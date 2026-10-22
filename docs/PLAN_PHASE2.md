@@ -58,7 +58,7 @@
 ## 4. Các giai đoạn
 
 ### P2-0. Chuẩn bị repo và dữ liệu
-- [ ] Gắn tag `phase1-kaggle` *(22/10: tag đã tạo tại `4c554aa`, chưa push)*; chuyển code Phase 1 không dùng nữa (Kafka producer, streaming, Superset, RFM, BR Kaggle) vào `archive/phase1/` hoặc xoá khỏi nhánh chính.
+- [x] Gắn tag `phase1-kaggle` *(22/10: tag tại `4c554aa`, đã push lên GitHub)*; chuyển code Phase 1 không dùng nữa vào `archive/phase1/` *(22/10: 59 file, `git mv`)*
 - [x] Tải Berka từ CTU Relational (`relational.fel.cvut.cz`, database `financial`), xuất 5 bảng ra CSV vào `data/berka/`.
   - *Thực hiện 22/10:* dùng bản PKDD'99 gốc trên Kaggle (không cần đăng nhập) → `data/berka/raw/`; số liệu khớp sheet (xem [berka_profile.md](berka_profile.md)).
 - [x] **Kiểm tra lại số liệu khảo sát của sheet (K01–K05):** *(22/10: 14/15 khớp; VYBER 9.597 cần nhóm xác nhận cách tính — [berka_profile.md](berka_profile.md))* 4.500 tài khoản, 5.369 khách, 1.056.320 giao dịch, mỗi tài khoản đúng 1 OWNER, 4.091/409 tài khoản cùng/khác khu vực, 17 → 15 tổ hợp phân loại, 183.114 `operation` trống, 481.881 NULL + 53.433 chuỗi trắng ở `k_symbol`.
@@ -72,10 +72,10 @@
 - **Xong khi:** có dữ liệu Berka + file Membership tier trong repo và bảng khảo sát khớp sheet (hoặc ghi rõ chỗ lệch).
 
 ### P2-1. Hạ tầng (A–F)
-- [ ] Docker Compose: ClickHouse (D), PostgreSQL (E), Spark (C), Streamlit (F); thư mục `lake/` (B) và `backups/` (vùng sao lưu).
-- [ ] Bỏ Kafka, Superset khỏi stack chính (giữ trong archive).
-- [ ] Cấu hình ClickHouse `backups` disk (Q-I).
-- **Xong khi:** `make up` dựng đủ D, E, C, F; `make smoke` xanh.
+- [x] Docker Compose: ClickHouse (D), PostgreSQL (E), Spark (C), Streamlit (F); thư mục `lake/` (B) và `backups/` (vùng sao lưu).
+- [x] Bỏ Kafka, Superset khỏi stack chính (giữ trong archive).
+- [x] Cấu hình ClickHouse `backups` disk (Q-I). *(22/10: thử `BACKUP`/`RESTORE` một bảng thật → khôi phục đủ dữ liệu)*
+- **Xong khi:** `make up` dựng đủ D, E, C, F; `make smoke` xanh. ✅ *(22/10)*
 
 ### P2-2. Lược đồ dữ liệu
 - [ ] **ClickHouse (D)** — 6 bảng theo Data Dictionary: `fact_transaction`, `dim_customer` (SCD2), `dim_account`, `dim_date`, `dim_district`, `dim_transaction_profile`. Chốt kiểu vật lý (Q-J).

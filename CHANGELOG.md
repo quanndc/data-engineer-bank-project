@@ -3,6 +3,36 @@
 Ghi lại các phát hiện, quyết định thiết kế và thay đổi của dự án.
 
 
+
+---
+
+## [2026-10-22] Phase 2 — P2-1: hạ tầng theo kiến trúc A–F ✅
+
+### Đã làm
+- **Lưu trữ Phase 1:** chuyển 59 file không dùng ở Phase 2 vào [archive/phase1/](archive/phase1/) bằng `git mv` (Kafka producer, Spark jobs p1–p4, Superset, Streamlit cũ, benchmark ×1, DDL/truy vấn Kaggle). Bản chạy đầy đủ của Phase 1 ở tag **`phase1-kaggle`** (đã push lên GitHub).
+- **[docker-compose.yml](docker-compose.yml) viết lại** theo sheet, không còn Kafka/Superset:
+
+| Khối | Service | Ghi chú |
+|---|---|---|
+| A Nguồn | — | `data/berka` mount chỉ đọc vào Spark |
+| B Data Lake | — | thư mục `lake/` (`batches/`, `staging/`) |
+| C Pipeline | `bankdw-spark` (Spark 3.5.6, PySpark) | image gọn hơn: bỏ jar Kafka, `confluent-kafka` |
+| D Data Warehouse | `bankdw-clickhouse` 25.3 | database `dw`; ổ **`backups`** (mount `./backups`) cho BR07 |
+| E Kho vận hành | `bankdw-postgres` 16.4, database `bankops`, schema `ops` | volume mới `ops-data`, cổng 5433 |
+| F Ứng dụng | `bankdw-app` (Streamlit), http://localhost:8501 | khung 3 tab: Tổng quan / Phân tích / Vận hành |
+
+- [spark/jobs/common.py](spark/jobs/common.py): đường dẫn Berka/lake mới, kết nối PostgreSQL; [spark/jobs/smoke.py](spark/jobs/smoke.py) kiểm tra cả 6 khối.
+- [Makefile](Makefile) viết lại: `up`, `down`, `smoke`, `sql`, `psql`, `source-check`, `tiers`, `clean`.
+- README: thêm ghi chú đang ở Phase 2.
+
+### Kiểm tra
+- `make smoke`: A–F đều trả lời (ClickHouse 25.3.14.14 có database `dw` + ổ `backups`; PostgreSQL 16.4 có schema `ops`; Spark đọc đủ 1.056.320 giao dịch; app khỏe).
+- Thử `BACKUP TABLE … TO Disk('backups', …)` → xoá bảng → `RESTORE` → đủ 3/3 dòng → **BR07 làm được trên ClickHouse cài trên máy**.
+
+### Lưu ý
+- Container `octiq-local-kb` (dự án khác) đang dùng **~4,5 GB** RAM của Docker (8 GB). Giới hạn của stack BankDW cộng lại 7 GB → khi chạy pipeline nặng hoặc benchmark nên tắt container đó.
+- Volume cũ của Phase 1 (`bankdw_kafka-data`, `bankdw_postgres-data`, `bankdw_superset-home`) không còn dùng; có thể xoá để giải phóng đĩa.
+
 ---
 
 ## [2026-10-22] Phase 2 — P2-0: dữ liệu Berka và Membership tier mô phỏng

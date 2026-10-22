@@ -17,6 +17,8 @@
 
 ---
 
+> **🚧 Phase 2 đang triển khai (từ 22/10/2026):** dữ liệu **Berka**, kiến trúc A–F theo sheet nhóm chốt ngày 18/10 — xem [docs/PLAN_PHASE2.md](docs/PLAN_PHASE2.md) và [CHANGELOG.md](CHANGELOG.md). Nội dung bên dưới mô tả **Phase 1** (Kaggle), đã lưu ở tag `phase1-kaggle` và thư mục [archive/phase1](archive/phase1/).
+
 ## 📌 Giới thiệu
 
 Dự án xây dựng một **data warehouse theo mô hình Kimball** cho dữ liệu giao dịch ngân hàng (bộ [Banking Data Warehouse Sample](https://www.kaggle.com/datasets/eserkaraceper/banking-data-warehouse-sample) trên Kaggle: 1,4 triệu giao dịch, 1 triệu khách hàng, Ấn Độ, 2016), nhằm trả lời **10 yêu cầu nghiệp vụ (BR)** cho 7 nhóm người dùng qua dashboard và trang cảnh báo realtime.

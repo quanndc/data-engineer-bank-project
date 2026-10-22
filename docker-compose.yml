@@ -1,46 +1,19 @@
-# Banking Data Warehouse (Kimball) -- CO5173 Group 27
-# Core services for P0-P2: Kafka, ClickHouse, Spark.
-# Docker Desktop has 8 GB RAM here; limits below keep the stack under ~6.5 GB.
+# Banking Data Warehouse (Kimball) -- CO5173 Group 27 -- Phase 2 (Berka)
+# Logical architecture agreed in the group sheet (2026-10-18):
+#   A Source (data/berka)  B Data Lake (lake/)  C Pipeline (spark)  D Data Warehouse (clickhouse)
+#   E Operational store (postgres)  F Application (app)  + backup area (backups/)
+# Docker Desktop has 8 GB RAM here; the limits below total 7 GB.
 name: bankdw
 
 services:
-  kafka:
-    image: apache/kafka:3.9.1
-    container_name: bankdw-kafka
-    ports:
-      - "9094:9094"            # host access (EXTERNAL listener)
-    environment:
-      KAFKA_NODE_ID: 1
-      KAFKA_PROCESS_ROLES: broker,controller
-      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093,EXTERNAL://:9094
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,EXTERNAL://localhost:9094
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT,EXTERNAL:PLAINTEXT
-      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
-      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
-      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
-      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
-      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
-      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
-      KAFKA_NUM_PARTITIONS: 3
-      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
-      KAFKA_HEAP_OPTS: "-Xms512m -Xmx768m"
-    volumes:
-      - kafka-data:/var/lib/kafka/data
-    healthcheck:
-      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list >/dev/null 2>&1"]
-      interval: 10s
-      timeout: 10s
-      retries: 12
-    mem_limit: 1g
-
-  # Local ClickHouse. Started only when CLICKHOUSE_HOST is "clickhouse" (the default);
-  # with a cloud service in .env the Makefile leaves this profile off.
+  # D. Data Warehouse. Started only when CLICKHOUSE_HOST is "clickhouse" (default);
+  # with a cloud service in .env the Makefile leaves the "local-ch" profile off.
   clickhouse:
     image: clickhouse/clickhouse-server:25.3
     container_name: bankdw-clickhouse
     profiles: ["local-ch"]
     ports:
-      - "8123:8123"            # HTTP (Superset, clickhouse-connect)
+      - "8123:8123"            # HTTP (clickhouse-connect)
       - "9000:9000"            # native protocol
     environment:
       CLICKHOUSE_USER: bank
@@ -49,7 +22,9 @@ services:
     volumes:
       - clickhouse-data:/var/lib/clickhouse
       - ./warehouse/clickhouse/init:/docker-entrypoint-initdb.d:ro
-      - ./lake:/var/lib/clickhouse/user_files/lake      # Parquet core layer written by Spark (entrypoint chowns it, so not :ro)
+      - ./warehouse/clickhouse/config.d/backups.xml:/etc/clickhouse-server/config.d/backups.xml:ro
+      - ./lake:/var/lib/clickhouse/user_files/lake      # B -> D: ClickHouse reads Parquet with file()
+      - ./backups:/backups                               # BR07 backup area
     ulimits:
       nofile: { soft: 262144, hard: 262144 }
     healthcheck:
@@ -59,117 +34,66 @@ services:
       retries: 12
     mem_limit: 2500m
 
+  # E. Operational store: runs, steps, rejected records, alerts, alert actions, backup catalog
+  postgres:
+    image: postgres:16.4-alpine
+    container_name: bankdw-postgres
+    ports:
+      - "5433:5432"            # 5432 is used by another project on this machine
+    environment:
+      POSTGRES_USER: bank
+      POSTGRES_PASSWORD: bank
+      POSTGRES_DB: bankops
+    volumes:
+      - ops-data:/var/lib/postgresql/data
+      - ./warehouse/postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U bank -d bankops"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    mem_limit: 1g
+
+  # C. Pipeline (PySpark, local mode). Jobs are run with `make` via docker compose exec.
   spark:
     build: ./spark
-    image: bankdw-spark:3.5.6
+    image: bankdw-spark:3.5.6-p2
     container_name: bankdw-spark
-    command: ["sleep", "infinity"]   # jobs are run with `make` via docker compose exec
-    environment:
-      KAFKA_BOOTSTRAP: kafka:9092
+    command: ["sleep", "infinity"]
+    environment: &db-env
       CLICKHOUSE_HOST: ${CLICKHOUSE_HOST:-clickhouse}
       CLICKHOUSE_PORT: ${CLICKHOUSE_PORT:-8123}
       CLICKHOUSE_USER: ${CLICKHOUSE_USER:-bank}
       CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:-bank}
       CLICKHOUSE_SECURE: ${CLICKHOUSE_SECURE:-false}
       CLICKHOUSE_DATABASE_ENGINE: ${CLICKHOUSE_DATABASE_ENGINE:-}
+      POSTGRES_HOST: postgres
+      POSTGRES_DB: bankops
+      POSTGRES_USER: bank
+      POSTGRES_PASSWORD: bank
     volumes:
-      - ./data:/data/source:ro       # Kaggle CSV files
-      - ./lake:/lake                 # raw / staging / core Parquet layers
+      - ./data/berka:/data/source:ro          # A. Berka CSV + simulated membership tier
+      - ./lake:/lake                          # B. Data Lake (batch snapshots, staging)
       - ./spark/jobs:/opt/jobs:ro
-      - ./ingestion:/opt/ingestion:ro
-      - ./warehouse:/opt/warehouse:ro              # DDL, BR queries, seeds (city mapping)
-      - ./benchmark:/opt/benchmark:ro              # P6 benchmark scripts
+      - ./warehouse:/opt/warehouse:ro         # DDL for ClickHouse and PostgreSQL
     depends_on:
-      kafka: { condition: service_healthy }
+      postgres: { condition: service_healthy }
       clickhouse: { condition: service_healthy, required: false }
     mem_limit: 3g
 
-  # ------------------------------------------------------------ application (P5)
-  # Started with `make app-up` (profile "app"), so the data pipeline stays lean.
-  superset:
-    build: ./apps/superset
-    image: bankdw-superset:4.1.3
-    container_name: bankdw-superset
-    profiles: ["app"]
-    ports:
-      - "8088:8088"
-    env_file: .env
-    command:
-      - /bin/sh
-      - -c
-      - |
-        superset db upgrade &&
-        (superset fab create-admin --username "$$SUPERSET_ADMIN_USER" --firstname Admin \
-           --lastname BankDW --email admin@bankdw.local --password "$$SUPERSET_ADMIN_PASSWORD" || true) &&
-        superset init &&
-        /usr/bin/run-server.sh
-    volumes:
-      - superset-home:/app/superset_home
-      - ./apps/superset:/opt/bootstrap:ro
-      - ./warehouse/queries:/opt/queries:ro
-    depends_on:
-      clickhouse: { condition: service_healthy, required: false }
-    healthcheck:
-      test: ["CMD-SHELL", "curl -fs http://localhost:8088/health"]
-      interval: 10s
-      timeout: 5s
-      retries: 30
-    mem_limit: 1500m
-
-  streamlit:
-    build: ./apps/streamlit
-    image: bankdw-streamlit:1.40
-    container_name: bankdw-streamlit
-    profiles: ["app"]
+  # F. Application: one Streamlit app, three tabs (Tổng quan / Phân tích / Vận hành)
+  app:
+    build: ./apps/app
+    image: bankdw-app:p2
+    container_name: bankdw-app
     ports:
       - "8501:8501"
-    environment:
-      CLICKHOUSE_HOST: ${CLICKHOUSE_HOST:-clickhouse}
-      CLICKHOUSE_PORT: ${CLICKHOUSE_PORT:-8123}
-      CLICKHOUSE_USER: ${CLICKHOUSE_USER:-bank}
-      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:-bank}
-      CLICKHOUSE_SECURE: ${CLICKHOUSE_SECURE:-false}
+    environment: *db-env
     depends_on:
+      postgres: { condition: service_healthy }
       clickhouse: { condition: service_healthy, required: false }
     mem_limit: 512m
 
-  # ------------------------------------------------------------ benchmark (P6)
-  # Alternative solution A2: the same star schema in a row store. `make bench-up`.
-  postgres:
-    image: postgres:16.4-alpine
-    container_name: bankdw-postgres
-    profiles: ["bench"]
-    ports:
-      - "5433:5432"            # 5432 is used by another project on this machine
-    environment:
-      POSTGRES_USER: bank
-      POSTGRES_PASSWORD: bank
-      POSTGRES_DB: bank
-    command:
-      - postgres
-      - -c
-      - shared_buffers=256MB
-      - -c
-      - work_mem=64MB
-      - -c
-      - effective_cache_size=768MB
-      - -c
-      - max_parallel_workers_per_gather=4
-      - -c
-      - random_page_cost=1.1
-      - -c
-      - jit=off
-    volumes:
-      - postgres-data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U bank -d bank"]
-      interval: 5s
-      timeout: 5s
-      retries: 20
-    mem_limit: 1g
-
 volumes:
-  kafka-data:
   clickhouse-data:
-  superset-home:
-  postgres-data:
+  ops-data:
