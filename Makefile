@@ -11,7 +11,7 @@ COMPOSE := docker compose
 endif
 SPARK := $(COMPOSE) exec -T spark
 
-.PHONY: up down ps logs smoke sql psql clean source-check tiers schema load-ref load-history rerun reconcile scenarios scenario
+.PHONY: up down ps logs smoke sql psql clean source-check tiers schema load-ref load-history rerun reconcile scenarios scenario alerts
 
 up:            ## Start D ClickHouse, E PostgreSQL, C Spark, F app (http://localhost:8501)
 	@echo "ClickHouse: $(CLICKHOUSE_HOST)"
@@ -53,6 +53,9 @@ scenarios:     ## Generate the scenario input files (data/berka/scenarios/KBxx) 
 
 scenario:      ## Run one scenario batch: make scenario KB=KB05
 	$(PIPELINE) scenario $(KB)
+
+alerts:        ## Evaluate the alert rules on loaded data (back-fill): make alerts [ON=all|BATCH_ID]
+	$(PIPELINE) alerts $(or $(ON),all)
 
 reconcile:     ## Whole Berka source vs. warehouse (count, distinct ids, money in/out)
 	$(PIPELINE) reconcile

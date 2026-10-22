@@ -8,6 +8,31 @@ Ghi lại các phát hiện, quyết định thiết kế và thay đổi của 
 
 
 
+
+---
+
+## [2026-10-22] Phase 2 — P2-5: cảnh báo gian lận (BR03) và xử lý cảnh báo (BR04) ✅
+
+### Đã làm
+- [spark/jobs/alerts.py](spark/jobs/alerts.py): 2 quy tắc tính trên kho sau khi nạp (luồng L03), tham số đọc từ `ops.alert_rule`:
+  - **R1 – tiền ra tăng mạnh:** tiền ra của tài khoản trong tháng > 3 × trung bình 6 tháng trước và > 50.000 CZK (cần đủ 6 tháng lịch sử).
+  - **R2 – tài khoản ngủ đông hoạt động lại:** giao dịch ra sau ≥ 180 ngày không có giao dịch.
+  - Mỗi cảnh báo có lý do dễ đọc, căn cứ (`evidence`) và các giao dịch liên quan; **duy nhất theo (tài khoản, quy tắc, kỳ)**.
+- Pipeline thêm bước **`detect_alerts`** sau `reconcile` cho mọi lô; lệnh quét lại `make alerts [ON=all|<lô>]`.
+- **KB03** ([tools/make_scenarios.py](tools/make_scenarios.py)): 3 tài khoản rút 60.000 CZK tháng 2/1999 (gấp 10–20 lần mức thường) → R1; 2 tài khoản không giao dịch từ 31/12/1998 rồi rút 5.000 CZK ngày 15/7/1999 (196 ngày) → R2. Không trùng tài khoản KB05, KB08.
+- **BR04:** hàm `ops.set_alert_status(alert_id, trạng thái, ghi chú, người xử lý)` — đổi trạng thái + ghi lịch sử trong 1 giao dịch; cho phép NEW → IN_REVIEW → RESOLVED, NEW → RESOLVED, mở lại RESOLVED → IN_REVIEW; chặn bước khác. Không đụng dữ liệu kho.
+
+### Kết quả
+| Kiểm tra | Kết quả |
+|---|---|
+| Quét lịch sử 1993–1998 (+ KB05, KB08) | **1.697** cảnh báo: R1 1.695 (843 tài khoản, ~24/tháng), R2 2 |
+| KB03 | 5 giao dịch → **5/5 cảnh báo mới** đúng tài khoản, đúng quy tắc, đúng kỳ (khớp `expected.json`) |
+| Chạy lại KB03 / quét lại toàn bộ | **0 cảnh báo mới** (không trùng); tổng 1.702 |
+| BR04 | NEW → IN_REVIEW → RESOLVED ghi đủ lịch sử + ghi chú; RESOLVED → NEW **bị chặn**. Dữ liệu thử đã đặt lại về NEW |
+
+### Lỗi gặp và sửa
+- Lần chạy lại KB03 thứ nhất **FAILED ở bước `detect_alerts`**: ClickHouse hết bộ nhớ (2,2 GB) vì hàm cửa sổ chạy trên toàn bộ 1 triệu giao dịch rồi mới lọc theo lô → chỉ đọc các tài khoản lô có chạm tới; giới hạn 2 luồng và cho sắp xếp tràn ra đĩa khi quét toàn bộ. Bản ghi lần chạy lỗi được **giữ lại trong `ops.pipeline_run`** làm ví dụ thật cho BR06 (bước thất bại + nguyên nhân).
+
 ---
 
 ## [2026-10-22] Phase 2 — P2-4: SCD2 đổi hạng (KB08) ✅ — hoàn tất P2-4

@@ -5,6 +5,7 @@
     spark-submit pipeline.py rerun HIST_1995_03          # re-run a batch from its Data Lake snapshot
     spark-submit pipeline.py reconcile                   # whole source vs. warehouse
     spark-submit pipeline.py scenario KB05               # scenario batch from data/berka/scenarios/KB05
+    spark-submit pipeline.py alerts all                  # back-fill the alert rules on loaded data
 
 Every run and step is logged in PostgreSQL (ops.pipeline_run / ops.pipeline_step, BR06); rejected
 records go to ops.rejected_record (BR05). Rules follow the group sheet (Data Model E01-E05, P01-P05,
@@ -20,6 +21,7 @@ from pyspark.sql import Window
 from pyspark.sql import functions as F
 
 from common import BATCHES, SOURCE, SOURCE_RAW, STAGING, clickhouse, spark_session
+import alerts
 from ops_log import RunLog
 
 OPEN_END = dt.date(2299, 12, 31)          # valid_to of the current SCD2 version (decision Q-J)
@@ -482,6 +484,11 @@ def run_transactions(spark, batch_id, df, description, period=(None, None), batc
     with log.step("reconcile") as s:
         log.rows_loaded = reconcile_batch(log, accepted, n_v7)
         s["rows_in"] = s["rows_out"] = log.rows_loaded
+    with log.step("detect_alerts") as s:   # L03: after the load, rules read the warehouse
+        new, found = alerts.detect(batch_id, log.run_id)
+        s["rows_in"], s["rows_out"] = found, sum(new.values())
+        if found:
+            print(f"  alerts: {found} found, {sum(new.values())} new {new}")
     status = log.finish()
     print(f"{batch_id}: {status} | received {log.rows_received} | loaded {n_new} new "
           f"({n_already} already loaded) | rejected {log.rows_rejected}")
@@ -551,6 +558,10 @@ def main():
                          from_snapshot=True)
     elif cmd == "scenario":
         run_scenario(spark, sys.argv[2])
+    elif cmd == "alerts":  # back-fill: evaluate the rules on batches loaded before this step existed
+        target = None if sys.argv[2] == "all" else sys.argv[2]
+        new, found = alerts.detect(target)
+        print(f"alerts on {sys.argv[2]}: {found} found, {sum(new.values())} new {new}")
     elif cmd == "reconcile":
         sys.exit(0 if reconcile_all(spark) else 1)
     spark.stop()

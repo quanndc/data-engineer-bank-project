@@ -30,7 +30,7 @@
 | Q-C | Công nghệ F (Ứng dụng) | **Streamlit** 1 app, 3 tab (đúng sheet: 1 app, chưa phân quyền) | P2-6 |
 | Q-D | Nhịp nạp, cách chia lô | Lô **lịch sử theo tháng** (1993-01 → 1998-12, ~72 lô) để mô phỏng nạp lịch sử; lô **kịch bản** riêng cho KB03, KB05, KB08 | P2-3 |
 | Q-E | Danh sách hạng, lịch đổi hạng | ✅ **Đã chốt 22/10:** 4 hạng Standard / Silver / Gold / Platinum theo tiền vào năm đầu; đổi hạng = **đánh giá lại cuối 1998** theo tiền vào 1998 (cùng ngưỡng), hiệu lực **1999-01-01** → 618 khách (13,7%) | P2-4 |
-| Q-F | Quy tắc / ngưỡng cảnh báo (BR03) | R1 "tiền ra tăng mạnh": tiền ra trong tháng > **3×** trung bình 6 tháng trước và > 50.000 CZK. R2 "tài khoản ngủ đông hoạt động lại": không giao dịch ≥ **180 ngày** rồi có giao dịch ra. Chống trùng: 1 cảnh báo / (tài khoản, quy tắc, kỳ) | P2-5 |
+| Q-F | Quy tắc / ngưỡng cảnh báo (BR03) | Đang dùng đề xuất (22/10): R1 "tiền ra tăng mạnh": tiền ra trong tháng > **3×** trung bình 6 tháng trước và > 50.000 CZK. R2 "tài khoản ngủ đông hoạt động lại": không giao dịch ≥ **180 ngày** rồi có giao dịch ra. Chống trùng: 1 cảnh báo / (tài khoản, quy tắc, kỳ). Trên lịch sử: R1 1.695, R2 2 cảnh báo; chỉnh ngưỡng trong `ops.alert_rule`, không cần sửa code | P2-5 |
 | Q-G | Quy tắc chất lượng (BR05) | V1 thiếu khóa bắt buộc · V2 tài khoản không tồn tại · V3 `amount` < 0 hoặc không phải số · V4 ngày ngoài lịch · V5 mã `type` lạ · V6 trùng `transaction_id`. Bản ghi lỗi **tách sang PostgreSQL**, không làm hỏng cả lô | P2-4 |
 | Q-H | Số dư cuối kỳ, chuyển tiền nội bộ | **Ngoài phạm vi Phase 2.** Báo cáo chỉ dùng tiền vào/ra từ `amount` + chiều tiền; `balance_after` chỉ để tra cứu (đúng sheet) | — |
 | Q-I | Cấu hình sao lưu (BR07) | ClickHouse `BACKUP DATABASE dw TO Disk('backups', '<tên>')` / `RESTORE`; thư mục backup mount riêng; danh mục bản sao lưu ở PostgreSQL | P2-7 |
@@ -114,10 +114,10 @@
 - **Xong khi:** KB05 và KB08 chạy ra đúng kết quả mong đợi. ✅ *(22/10: khớp `expected.json`; kỳ cũ 1993–1998 theo hạng giống hệt trước/sau KB08)*
 
 ### P2-5. Cảnh báo (BR03, BR04) — luồng L03, L04
-- [ ] Bước **alert** sau khi nạp: đọc D, áp quy tắc R1/R2 (Q-F), ghi `alert` (E) kèm tài khoản, lý do, thời điểm, số liệu làm căn cứ; chống trùng.
-- [ ] Trạng thái xử lý + ghi chú (`alert_action`); **không sửa số tiền hay lịch sử hạng trong DW**.
-- [ ] Chuẩn bị lô **KB03** (giao dịch gian lận thỏa R1/R2).
-- **Xong khi:** KB03 sinh đúng cảnh báo; KB04 cập nhật trạng thái thấy trên UI.
+- [x] Bước **alert** sau khi nạp: đọc D, áp quy tắc R1/R2 (Q-F), ghi `alert` (E) kèm tài khoản, lý do, thời điểm, số liệu làm căn cứ; chống trùng.
+- [x] Trạng thái xử lý + ghi chú (`alert_action`) *(22/10: hàm `ops.set_alert_status`; giao diện ở P2-6)*; **không sửa số tiền hay lịch sử hạng trong DW**.
+- [x] Chuẩn bị lô **KB03** (giao dịch gian lận thỏa R1/R2).
+- **Xong khi:** KB03 sinh đúng cảnh báo; KB04 cập nhật trạng thái thấy trên UI. *(22/10: KB03 ✅ 5/5 cảnh báo; KB04 phần dữ liệu ✅, còn phần UI ở P2-6)*
 
 ### P2-6. Ứng dụng (F) — 1 app, 3 tab
 - [ ] **Tổng quan (U01):** BR01: chọn kỳ, tiền vào/ra/thuần, số giao dịch, theo hạng, biểu đồ ngày/tháng.

@@ -131,6 +131,43 @@ def kb08():
     print(f"KB08: {len(changes)} tier changes effective 1999-01-01, {len(trans)} transactions in January 1999")
 
 
+# ---------------------------------------------------------------- KB03: fraud patterns (BR03)
+def kb03():
+    """Transactions built to meet the alert rules (ops.alert_rule, decision Q-F):
+    R1 -- 3 accounts withdraw 4x their average monthly outflow of Jul-Dec 1998 (>= 60,000 CZK) in Feb 1999;
+    R2 -- 2 accounts with no transaction after 1998-12-31 withdraw 5,000 CZK on 1999-07-15 (196 days).
+    Accounts are disjoint from KB05 (ids 1-10) and KB08 (owners who changed tier)."""
+    kb08_accounts = {r[1] for r in csv.reader(open(f"{OUT}/KB08/trans.csv"), delimiter=";") if r[0] != "trans_id"}
+    cand = c.sql("""
+        SELECT account_id,
+               sum(amount::DECIMAL(18, 2)) FILTER (WHERE trim(type) <> 'PRIJEM' AND date BETWEEN '980701' AND '981231') / 6 AS avg_out,
+               arg_max(balance::DECIMAL(18, 2), date || lpad(trans_id, 10, '0')) AS last_balance,
+               max(date) AS last_date, min(date) AS first_date
+        FROM trans GROUP BY account_id
+        HAVING min(date) <= '980101' AND max(date) = '981231'
+        ORDER BY account_id::INT""").fetchall()
+    cand = [r for r in cand if int(r[0]) > KB05_ACCOUNTS and r[0] not in kb08_accounts]
+    rows, alerts = [], []
+    tid = 92_000_001
+    for acc, avg_out, bal, _, _ in cand[:3]:
+        amount = max(60_000, int(-(-float(avg_out) * 4 // 1000)) * 1000)
+        rows.append([tid, acc, "990210", "VYDAJ", "VYBER", f"{amount:.2f}", f"{float(bal) - amount:.2f}", "", "", ""])
+        alerts.append({"rule": "R1", "account_id": int(acc), "period_start": "1999-02-01",
+                       "outflow": amount, "avg_outflow_previous": round(float(avg_out), 2)})
+        tid += 1
+    for acc, _, bal, _, _ in cand[3:5]:
+        rows.append([tid, acc, "990715", "VYDAJ", "VYBER", "5000.00", f"{float(bal) - 5000:.2f}", "", "", ""])
+        alerts.append({"rule": "R2", "account_id": int(acc), "period_start": "1999-07-01", "gap_days": 196})
+        tid += 1
+    write("KB03", "trans.csv", rows)
+    expected = {"scenario": "KB03", "batch_id": "KB03_FRAUD", "rows_loaded": len(rows),
+                "new_alerts": len(alerts), "alerts": alerts}
+    json.dump(expected, open(f"{OUT}/KB03/expected.json", "w"), indent=2)
+    print(f"KB03: {len(rows)} transactions -> expect {len(alerts)} new alerts "
+          f"({sum(a['rule'] == 'R1' for a in alerts)} R1, {sum(a['rule'] == 'R2' for a in alerts)} R2)")
+
+
 if __name__ == "__main__":
     kb05()
     kb08()
+    kb03()

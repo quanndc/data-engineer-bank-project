@@ -146,3 +146,33 @@ INSERT INTO ops.alert_rule (rule_code, description, parameters) VALUES
   ('R2', 'Tài khoản ngủ đông hoạt động lại: không giao dịch >= 180 ngày rồi có giao dịch ra',
    '{"dormant_days": 180}')
 ON CONFLICT (rule_code) DO NOTHING;
+
+-- ---------------------------------------------------------------- BR04: change an alert's status
+-- One call = status change + history row, in one transaction. Allowed transitions:
+--   NEW -> IN_REVIEW -> RESOLVED, NEW -> RESOLVED, RESOLVED -> IN_REVIEW (reopen);
+--   same status = add a note only. Never touches warehouse data (sheet L04).
+CREATE OR REPLACE FUNCTION ops.set_alert_status(p_alert_id bigint, p_to_status text,
+                                                p_note text DEFAULT NULL,
+                                                p_acted_by text DEFAULT 'analyst')
+RETURNS bigint LANGUAGE plpgsql AS $$
+DECLARE
+  v_from text;
+  v_action bigint;
+BEGIN
+  SELECT status INTO v_from FROM ops.alert WHERE alert_id = p_alert_id FOR UPDATE;
+  IF v_from IS NULL THEN
+    RAISE EXCEPTION 'alert % does not exist', p_alert_id;
+  END IF;
+  IF NOT (v_from = p_to_status
+          OR (v_from, p_to_status) IN (('NEW', 'IN_REVIEW'), ('IN_REVIEW', 'RESOLVED'),
+                                       ('NEW', 'RESOLVED'), ('RESOLVED', 'IN_REVIEW'))) THEN
+    RAISE EXCEPTION 'transition % -> % is not allowed', v_from, p_to_status;
+  END IF;
+  IF v_from <> p_to_status THEN
+    UPDATE ops.alert SET status = p_to_status, status_changed_at = now() WHERE alert_id = p_alert_id;
+  END IF;
+  INSERT INTO ops.alert_action (alert_id, from_status, to_status, note, acted_by)
+  VALUES (p_alert_id, v_from, p_to_status, p_note, p_acted_by)
+  RETURNING action_id INTO v_action;
+  RETURN v_action;
+END $$;
