@@ -1,218 +1,305 @@
-# Benchmark Phase 2 — mức dữ liệu ×1
+# Benchmark Phase 2 — mức dữ liệu ×1 (có giải thích)
 
-- **Ngày đo:** 22/10/2026. Lần chạy hoàn chỉnh: `make bench-all` (truy vấn lúc 20:34–20:35); đo lại tải đồng thời lúc 22:38 và B3 lúc 22:40 (lý do ở mục 8).
-- **Dữ liệu:** kho sau P2-8 gồm **1.057.571 giao dịch** (1.056.320 Berka và 1.251 giao dịch kịch bản), 5.118 phiên bản khách hàng, 4.500 tài khoản, 77 khu vực, 15 hồ sơ giao dịch.
-- **Số liệu gốc:** [docs/results/p2/](results/p2/) gồm các file `*.csv` và `*.json`, cùng log console của từng bước trong `logs/`.
-- **Code:** [spark/jobs/benchmark.py](../spark/jobs/benchmark.py) (B1, B2), [spark/jobs/bench_ops.py](../spark/jobs/bench_ops.py) (B3), [spark/jobs/bench_spark.py](../spark/jobs/bench_spark.py) (B4).
+> **Cách đọc tài liệu này.** Mục 1 cho biết benchmark trả lời câu hỏi gì. Mục 2 giải nghĩa các thuật ngữ dùng trong bảng. Từ mục 4 trở đi, mỗi phép đo có cùng một khung: **Câu hỏi → Cách đo → Đọc bảng thế nào → Kết quả → Kết luận**. Nếu chỉ cần kết luận, đọc mục 1 và mục 10.
 
-```bash
-make bench-all       # bench-load → bench → bench-concurrency → bench-update → bench-ops → bench-spark
-```
-
-Mọi phép thử ghi (B1 cập nhật, B3) chạy trên **bản sao**: database `bench` trong ClickHouse, database `dwpg` và schema `bench_ops` trong PostgreSQL. Kho `dw` và kho vận hành `ops` chỉ được đọc.
+- **Ngày đo:** 22/10/2026. Lần chạy hoàn chỉnh bằng `make bench-all` (phần truy vấn chạy lúc 20:34–20:35); phần nhiều người dùng đo lại lúc 22:38, B3 đo lại lúc 22:40 (lý do ở mục 9).
+- **Dữ liệu đo:** toàn bộ kho sau P2-8: **1.057.571 giao dịch** (1.056.320 của Berka và 1.251 của các kịch bản KB), 5.118 phiên bản khách hàng, 4.500 tài khoản, 77 khu vực, 15 loại giao dịch. Đây là mức **×1**, tức dữ liệu gốc, chưa nhân bản.
+- **Số liệu gốc:** [docs/results/p2/](results/p2/) (file `.csv`, `.json`) và log màn hình của từng bước trong [docs/results/p2/logs/](results/p2/logs/).
+- **Code:** [benchmark.py](../spark/jobs/benchmark.py) (B1, B2), [bench_ops.py](../spark/jobs/bench_ops.py) (B3), [bench_spark.py](../spark/jobs/bench_spark.py) (B4). Chạy lại tất cả: `make bench-all`.
+- **An toàn dữ liệu:** mọi phép thử có ghi dữ liệu đều chạy trên **bản sao** (database `bench` trong ClickHouse; database `dwpg` và schema `bench_ops` trong PostgreSQL). Kho thật `dw` và kho vận hành `ops` chỉ được đọc.
 
 ---
 
-## 1. Các phép so sánh — mỗi phép chỉ đổi 1 yếu tố
+## 1. Benchmark này trả lời câu hỏi gì?
 
-| Mã | So sánh | Giữ nguyên | Đổi | Câu hỏi |
+Giải pháp của nhóm gồm ba lựa chọn chính: **(1)** mô hình Kimball (star schema), **(2)** đặt kho trên ClickHouse, **(3)** tách một kho vận hành riêng trên PostgreSQL. Ngoài ra pipeline chạy bằng **Spark theo lô tháng**. Benchmark kiểm tra từng lựa chọn bằng cách so nó với một phương án thay thế hợp lý.
+
+**Nguyên tắc: mỗi phép so sánh chỉ đổi đúng một yếu tố, mọi thứ khác giữ nguyên.** Nhờ vậy khi kết quả khác nhau, ta biết chắc là do yếu tố đã đổi.
+
+| Mã | So sánh | Giữ nguyên | Chỉ đổi | Câu hỏi bằng lời thường |
 |---|---|---|---|---|
-| **B1** | Star schema vs One Big Table | ClickHouse | Mô hình dữ liệu | Mô hình Kimball có đáng chi phí join không? |
-| **B2** | ClickHouse vs PostgreSQL | Star schema | Công nghệ kho (cột / dòng) | Lưu theo cột có lợi cho các BR không? (quyết định Q-K) |
-| **B3** | Kho vận hành PostgreSQL riêng vs dồn hết vào ClickHouse | Dữ liệu cảnh báo, thao tác của app và pipeline | Kiến trúc khối E | Có cần một kho vận hành riêng không? |
-| **B4** | Apache Spark 1 / 2 / 4 / 8 lõi; 1 lô vs 72 lô tháng | Phép biến đổi của pipeline | Số lõi, cách chia lô | Pipeline có mở rộng theo lõi không? Chia lô tốn bao nhiêu? |
+| **B1** | Star schema ↔ One Big Table | Cùng ClickHouse, cùng dữ liệu | **Cách tổ chức bảng** | Chia dữ liệu thành bảng fact + các bảng dimension (phải nối bảng khi truy vấn) có đáng không, hay gộp hết thành một bảng to cho nhanh? |
+| **B2** | ClickHouse ↔ PostgreSQL | Cùng star schema, cùng dữ liệu | **Phần mềm cơ sở dữ liệu** (lưu theo cột ↔ lưu theo dòng) | Dùng ClickHouse làm kho có thật sự nhanh hơn một cơ sở dữ liệu thông thường không? |
+| **B3** | Kho vận hành trên PostgreSQL ↔ trên ClickHouse | Cùng dữ liệu cảnh báo, cùng thao tác | **Nơi lưu dữ liệu vận hành** | Có cần thêm PostgreSQL không, hay để luôn cảnh báo, lịch sử xử lý, log pipeline trong ClickHouse cho gọn? |
+| **B4** | Spark 1 / 2 / 4 / 8 lõi; 1 lô ↔ 72 lô | Cùng phép biến đổi dữ liệu | **Số lõi CPU, cách chia lô** | Thêm CPU có làm pipeline nhanh hơn không? Chia thành 72 lô tháng thì tốn thêm bao nhiêu? |
 
-Ba giải pháp kho trong B1 và B2:
+---
 
-| Mã | Giải pháp | Vai trò |
+## 2. Giải nghĩa thuật ngữ
+
+| Thuật ngữ | Nghĩa |
+|---|---|
+| **ms** | mili giây = 1/1000 giây. 100 ms = 0,1 giây; con người bắt đầu cảm thấy "chậm" từ khoảng 100–300 ms |
+| **Truy vấn** | Một câu SQL hỏi kho, ví dụ "tổng tiền vào năm 1998 là bao nhiêu" |
+| **Cold** (lần chạy lạnh) | Lần chạy **đầu tiên** của một truy vấn, sau khi xoá bộ nhớ đệm của ClickHouse. Giống lần đầu mở một ứng dụng: thường chậm hơn |
+| **Warm** (lần chạy nóng) | Các lần chạy **sau** (lần 2–6), khi dữ liệu đã nằm sẵn trong bộ nhớ. Đây là tình huống thường gặp khi người dùng bấm xem nhiều lần |
+| **Median** (trung vị) | Xếp 5 lần chạy warm từ nhanh đến chậm, lấy **lần ở giữa** (lần thứ 3). Cho biết thời gian "điển hình", không bị kéo lệch bởi một lần bất thường |
+| **p95** (phân vị 95) | Mốc mà **95% số lần chạy nhanh hơn hoặc bằng**. Cho biết trường hợp chậm nhưng vẫn thường gặp. Với chỉ 5 lần đo, p95 gần như là lần chậm nhất |
+| **Nhanh hơn N×** | Lấy median của bên chậm chia cho median của bên nhanh. Ví dụ 41,7 ms ÷ 12,8 ms = 3,3× |
+| **Star schema** (`ch_star`) | Mô hình Kimball của nhóm: 1 bảng **fact** (mỗi giao dịch 1 dòng, chỉ có số tiền và các khóa) + 5 bảng **dimension** (ngày, tài khoản, khách hàng, khu vực, loại giao dịch). Muốn biết "giao dịch này của khách hạng nào" phải **join** (nối) fact với `dim_customer` |
+| **One Big Table** (`ch_obt`) | Phương án gộp: chép mọi thông tin của dimension vào **từng dòng** giao dịch (tên khu vực, hạng, giới tính…). Truy vấn không cần join, nhưng thông tin bị lặp lại hàng triệu lần |
+| **Join** | Nối hai bảng qua khóa chung, ví dụ nối giao dịch với khách hàng qua `customer_sk` |
+| **Lưu theo cột / theo dòng** | ClickHouse lưu **từng cột** riêng: truy vấn chỉ cần cột `amount` thì chỉ đọc cột đó, và nén rất tốt. PostgreSQL lưu **từng dòng** liền nhau: đọc 1 dòng rất nhanh, nhưng tính tổng 1 cột phải đọc cả dòng |
+| **Index** (chỉ mục) | "Mục lục" giúp PostgreSQL tìm ngay các dòng của 1 tài khoản mà không phải đọc cả bảng. Tốn thêm dung lượng |
+| **Truy vấn/giây (q/s)** | Trong 1 giây hệ thống trả lời được bao nhiêu truy vấn khi nhiều người dùng cùng hỏi. Càng cao càng tốt |
+| **Client** | Một "người dùng ảo" gửi truy vấn liên tục. 8 client ≈ 8 người cùng dùng app một lúc |
+| **Mutation** (ClickHouse) | Cách ClickHouse sửa dữ liệu đã ghi: nó **ghi lại cả khối dữ liệu** chứa các dòng cần sửa, chứ không sửa tại chỗ như PostgreSQL |
+| **ReplacingMergeTree, FINAL** | Cách nhóm dùng để "sửa" trong ClickHouse: ghi **thêm một dòng mới** cùng khóa, dòng mới hơn thắng. Khi đọc phải thêm `FINAL` để chỉ lấy dòng mới nhất |
+| **Data part** | Mỗi lần INSERT vào ClickHouse tạo ra một "khối" dữ liệu mới trên đĩa; sau đó ClickHouse tự gộp dần. Quá nhiều INSERT nhỏ thì sinh quá nhiều khối, ClickHouse khuyên tránh |
+| **Transaction** (giao dịch CSDL) | Nhóm nhiều lệnh thành một khối "hoặc làm hết, hoặc không làm gì". Ví dụ đổi trạng thái + ghi lịch sử: nếu ghi lịch sử lỗi thì trạng thái cũng được hoàn tác |
+| **Ràng buộc (constraint)** | Luật do chính cơ sở dữ liệu kiểm tra: CHECK (giá trị hợp lệ), UNIQUE (không trùng), khóa ngoại (phải tham chiếu tới dòng có thật) |
+| **Lõi (core)** | Số nhân CPU Spark được dùng song song |
+
+---
+
+## 3. Môi trường đo
+
+| Hạng mục | Giá trị | Vì sao quan trọng |
 |---|---|---|
-| `ch_star` | Kimball star schema trên ClickHouse 25.3 (1 fact + 5 dimension, SCD2) | **Đề xuất** |
-| `ch_obt` | One Big Table trên ClickHouse: mọi thuộc tính dimension (cả 2 vai trò khu vực, hạng và khoảng hiệu lực của phiên bản) chép vào từng dòng fact | Đối chứng B1 |
-| `pg_star` | Cùng star schema trên PostgreSQL 16.4, có PK, FK và index | Đối chứng B2 |
-
-Ba giải pháp được nạp từ **cùng một bản xuất CSV** của kho `dw`, nên có cùng số dòng (1.057.571 dòng fact ở cả ba).
-
----
-
-## 2. Môi trường
-
-| Hạng mục | Giá trị |
-|---|---|
-| Máy | Apple M3 Pro, 11 lõi CPU, 18 GB RAM, macOS |
-| Docker | Docker Desktop 28.3.3, Compose 2.39.2; máy ảo 11 vCPU, 7,65 GiB RAM, nhân Linux 6.10.14 |
-| Container khi đo | **chỉ 4 container BankDW** (người dùng đã tắt các tiến trình khác) |
-| ClickHouse | 25.3.14.14; giới hạn 2,5 GB; `max_threads` = auto(11); mark cache 256 MiB, tắt uncompressed cache; **tắt log hệ thống chạy ngầm** (mục 8) |
-| PostgreSQL | 16.4; giới hạn 1 GB; `shared_buffers` 256 MB (server); trong phiên: `work_mem` 64 MB, `max_parallel_workers_per_gather` 4, `jit` off, `effective_cache_size` 4 GB. **Giống cấu hình benchmark Phase 1** |
-| Spark | 3.5.6, PySpark, Python 3.8, `local[n]`, driver 2 GB, `spark.sql.shuffle.partitions` 8; giới hạn container 3 GB |
-| Client đo | Python trong container Spark (`clickhouse-connect` 0.8.18, `psycopg2` 2.9.9), cùng mạng Docker |
+| Máy | Apple M3 Pro, 11 lõi CPU, 18 GB RAM | Mọi con số chỉ có nghĩa trên máy này |
+| Docker | Docker Desktop 28.3.3; máy ảo 11 vCPU, 7,65 GiB RAM | Tất cả chạy chung một máy ảo |
+| Container chạy lúc đo | **chỉ 4 container BankDW** (các tiến trình khác đã tắt) | Không bị chương trình khác tranh CPU, RAM |
+| ClickHouse | 25.3.14.14; tối đa 2,5 GB RAM; dùng đủ 11 luồng; tắt các log hệ thống chạy ngầm (mục 9) | |
+| PostgreSQL | 16.4; tối đa 1 GB RAM; **cấu hình giống benchmark Phase 1**: `shared_buffers` 256 MB, `work_mem` 64 MB, tối đa 4 worker song song, tắt JIT | Để so sánh công bằng và nhất quán với Phase 1 |
+| Spark | 3.5.6, chạy cục bộ, driver 2 GB | |
+| Nơi chạy lệnh đo | Python trong container Spark, cùng mạng Docker | Thời gian đo là thời gian người gọi chờ, gồm cả nhận kết quả |
 
 ---
 
-## 3. Cách đo
+## 4. Bộ truy vấn dùng cho B1 và B2
 
-| Hạng mục | Cách làm |
-|---|---|
-| Truy vấn (B1, B2) | 9 truy vấn lấy từ app, phủ BR01, BR02, BR03, BR08. Mỗi truy vấn chạy **6 lần** trên mỗi giải pháp |
-| Cold / warm | Lần 1 là **cold**: xoá mark cache và uncompressed cache của ClickHouse trước khi chạy. Không xoá được page cache của hệ điều hành từ trong container, nên "cold" chỉ là *lần chạy đầu*. Lần 2–6 là **warm**: báo median và p95 |
-| Thời gian | Wall-clock phía client, **gồm cả thời gian truyền kết quả** |
-| Kiểm tra đúng | Kết quả `ch_obt` và `pg_star` được so **từng dòng, từng ô** với `ch_star` (số làm tròn tới 0,01) |
-| Đồng thời (B2) | 1 / 4 / 8 client chạy vòng lặp hỗn hợp **BR01 theo hạng → BR02 một tài khoản ngẫu nhiên → BR08 theo hạng** (mỗi nhóm người dùng một truy vấn) trong 15 giây; báo số truy vấn/giây, median và p95 |
-| Cập nhật (B1) | Sửa Type 1 rồi sửa ngược lại: đo thời gian và số dòng phải ghi lại. ClickHouse One Big Table dùng `ALTER TABLE … UPDATE` và chờ mutation xong (`mutations_sync = 2`) |
-| B3 | Mỗi thao tác gọi tuần tự, 1 client, đúng như app và pipeline đang làm: 200 lần đổi trạng thái, 200 lần ghi bước, 50 lần đọc. Thêm 5 phép thử toàn vẹn |
-| B4 | Mỗi cấu hình (số lõi × cách chia lô) chạy trong **một JVM mới**; tách riêng thời gian khởi động phiên Spark |
+9 truy vấn này lấy đúng từ những gì app hỏi kho khi người dùng xem các tab. Mỗi truy vấn được viết 3 lần, một lần cho mỗi giải pháp, và **phải cho ra cùng kết quả**.
 
-### Bộ truy vấn
+| Mã | Thuộc BR | Hỏi gì (lời thường) | Nặng hay nhẹ? | Số dòng trả về |
+|---|---|---|---|---:|
+| `br01_kpi_1998` | BR01 | Năm 1998 có bao nhiêu giao dịch, tổng tiền vào, tổng tiền ra? | Đọc khoảng 322 nghìn giao dịch rồi cộng | 1 |
+| `br01_by_month` | BR01 | Tiền vào/ra từng tháng từ 1993 đến 1999 (để vẽ biểu đồ) | Đọc toàn bộ hơn 1 triệu giao dịch, gom theo 75 tháng | 75 |
+| `br01_by_tier_1998` | BR01 | Năm 1998, mỗi hạng thành viên có bao nhiêu giao dịch, tiền vào/ra, **bao nhiêu khách** | Nặng: phải nối với bảng khách hàng và đếm khách không trùng | 4 |
+| `br01_by_region` | BR01 | Năm 1998, tiền vào/ra theo vùng của chi nhánh | Nối 3 bảng | 8 |
+| `br02_account_detail` | BR02 | Liệt kê **mọi giao dịch của tài khoản 2378** | Nhẹ: chỉ 1 tài khoản, nhưng trả về 437 dòng | 437 |
+| `br02_account_totals` | BR02 | Tổng tiền vào/ra của tài khoản 2378 năm 1998 | Rất nhẹ: 1 tài khoản, 1 năm | 1 |
+| `br03_r1_scan` | BR03 | Chạy quy tắc cảnh báo R1 trên toàn bộ lịch sử: tháng nào của tài khoản nào có tiền ra > 3 lần trung bình 6 tháng trước? | Nặng nhất: tính "cửa sổ 6 tháng" cho từng tài khoản trong 4.500 tài khoản | 1 |
+| `br08_tier_old_new` | BR08 | Báo cáo theo hạng cho kỳ cũ (1993–1998) và kỳ mới (01/1999) | Nặng: toàn bộ giao dịch, nối khách hàng, đếm khách | 8 |
+| `br08_client_versions` | BR08 | Khách 24 có những phiên bản hạng nào, mỗi phiên bản bao nhiêu giao dịch? | Nhẹ: 1 khách | 2 |
 
-| Mã | BR | Câu hỏi | Star schema: join | One Big Table | Phép tính nặng | Dòng |
-|---|---|---|---|---|---|---:|
-| `br01_kpi_1998` | BR01 | KPI một kỳ (1998) | fact ⋈ profile | không join | `sumIf` | 1 |
-| `br01_by_month` | BR01 | Biểu đồ theo tháng, toàn bộ lịch sử | fact ⋈ profile ⋈ date | không join | gom 75 tháng | 75 |
-| `br01_by_tier_1998` | BR01 | Theo hạng thành viên, có số khách | fact ⋈ profile ⋈ customer | không join | **đếm khách khác nhau** | 4 |
-| `br01_by_region` | BR01 | Theo vùng của chi nhánh | fact ⋈ profile ⋈ account ⋈ district (vai trò chi nhánh) | không join | 3 join | 8 |
-| `br02_account_detail` | BR02 | Toàn bộ giao dịch của tài khoản 2378 | fact ⋈ account ⋈ profile | không join | lọc 1 tài khoản, trả 437 dòng | 437 |
-| `br02_account_totals` | BR02 | Tổng của tài khoản 2378, năm 1998 | fact ⋈ account ⋈ profile | không join | lọc tài khoản + kỳ | 1 |
-| `br03_r1_scan` | BR03 | Quy tắc R1 trên toàn bộ lịch sử | fact ⋈ profile | không join | **window 6 tháng** trên 4.500 tài khoản; kết quả 1.698 = đúng số cảnh báo R1 trong `ops.alert` | 1 |
-| `br08_tier_old_new` | BR08 | Theo hạng, kỳ cũ và kỳ mới | fact ⋈ profile ⋈ customer (SCD2) | không join | đếm khách khác nhau | 8 |
-| `br08_client_versions` | BR08 | Các phiên bản hạng của khách 24 | fact ⋈ profile ⋈ customer | không join | lọc 1 khách | 2 |
+Kiểm tra chéo: `br03_r1_scan` cho kết quả **1.698**, đúng bằng số cảnh báo R1 đang có trong `ops.alert`.
 
 ---
 
-## 4. B1 + B2 — Thời gian truy vấn (ms)
+## 5. B1 + B2 — Tốc độ truy vấn
 
-| Truy vấn | Star / ClickHouse: cold | median | p95 | One Big Table / ClickHouse: cold | median | p95 | Star / PostgreSQL: cold | median | p95 | **One Big Table nhanh hơn star** (B1) | **So với ClickHouse star, PostgreSQL** (B2) |
-|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|
-| br01_kpi_1998 | 24,0 | 12,8 | 21,1 | 9,1 | 8,6 | 13,6 | 62,5 | 41,7 | 51,0 | 1,5× | chậm hơn 3,3× |
-| br01_by_month | 32,1 | 28,1 | 31,1 | 14,4 | 11,8 | 15,1 | 131,5 | 105,9 | 108,8 | 2,4× | chậm hơn 3,8× |
-| br01_by_tier_1998 | 17,4 | 14,6 | 15,7 | 7,5 | 7,1 | 7,7 | 378,3 | 323,3 | 339,3 | 2,1× | **chậm hơn 22,1×** |
-| br01_by_region | 18,3 | 14,9 | 16,3 | 7,5 | 6,8 | 7,5 | 62,0 | 51,4 | 54,0 | 2,2× | chậm hơn 3,4× |
-| br03_r1_scan | 46,6 | 45,9 | 51,7 | 30,2 | 30,0 | 30,8 | 1.031,2 | 1.029,6 | 1.065,5 | 1,5× | **chậm hơn 22,4×** |
-| br08_tier_old_new | 45,8 | 37,1 | 37,7 | 23,2 | 22,5 | 25,3 | 622,8 | 623,2 | 651,2 | 1,6× | **chậm hơn 16,8×** |
-| br02_account_detail | 21,2 | 17,2 | 18,0 | 7,5 | 5,8 | 6,2 | 2,0 | 1,0 | 1,1 | 3,0× | **nhanh hơn 17×** |
-| br02_account_totals | 7,0 | 6,2 | 6,6 | 3,6 | 3,4 | 3,4 | 0,7 | 0,3 | 0,3 | 1,8× | **nhanh hơn 21×** |
-| br08_client_versions | 26,1 | 18,3 | 21,5 | 6,9 | 5,4 | 5,6 | 1,5 | 0,4 | 0,5 | 3,4× | **nhanh hơn 46×** |
+### Câu hỏi
+- **B1:** gộp thành One Big Table thì nhanh hơn star schema bao nhiêu?
+- **B2:** ClickHouse nhanh hơn hay chậm hơn PostgreSQL bao nhiêu, với cùng một star schema?
 
-Tỉ lệ tính trên warm median. **18/18 cặp so sánh cho kết quả khớp** từng dòng, từng ô ([result_check.csv](results/p2/result_check.csv)).
+### Cách đo
+1. Xuất toàn bộ kho `dw` ra file CSV **một lần**, rồi nạp cùng file đó vào 3 nơi: star schema trên ClickHouse, One Big Table trên ClickHouse, star schema trên PostgreSQL. Cả 3 đều có **đúng 1.057.571 dòng**.
+2. Mỗi truy vấn chạy **6 lần liên tiếp** trên mỗi giải pháp. Lần 1 tính riêng là **cold**. Lần 2–6 là **warm**: lấy **median** và **p95**.
+3. So kết quả của One Big Table và PostgreSQL với star schema **từng dòng, từng ô**. Nếu khác nhau, phép đo không có giá trị.
+
+### Đọc bảng thế nào
+Mỗi ô là số mili giây (ms), **càng nhỏ càng nhanh**. Hai cột cuối là tỉ lệ so sánh, tính trên median.
+
+**Ví dụ đọc dòng `br01_by_tier_1998`:** trên ClickHouse star schema, truy vấn này thường mất **14,6 ms** (median), chậm nhất khoảng 15,7 ms (p95). Cùng truy vấn trên PostgreSQL mất **323,3 ms**, tức **chậm hơn 22 lần**. One Big Table chỉ mất 7,1 ms, nhanh hơn star schema 2 lần.
+
+### Kết quả (ms)
+
+| Truy vấn | Star / ClickHouse: cold | median | p95 | One Big Table / ClickHouse: cold | median | p95 | Star / PostgreSQL: cold | median | p95 | **B1:** One Big Table so với star | **B2:** PostgreSQL so với ClickHouse star |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|---|
+| br01_kpi_1998 | 24,0 | 12,8 | 21,1 | 9,1 | 8,6 | 13,6 | 62,5 | 41,7 | 51,0 | nhanh hơn 1,5× | chậm hơn 3,3× |
+| br01_by_month | 32,1 | 28,1 | 31,1 | 14,4 | 11,8 | 15,1 | 131,5 | 105,9 | 108,8 | nhanh hơn 2,4× | chậm hơn 3,8× |
+| br01_by_tier_1998 | 17,4 | 14,6 | 15,7 | 7,5 | 7,1 | 7,7 | 378,3 | 323,3 | 339,3 | nhanh hơn 2,1× | **chậm hơn 22,1×** |
+| br01_by_region | 18,3 | 14,9 | 16,3 | 7,5 | 6,8 | 7,5 | 62,0 | 51,4 | 54,0 | nhanh hơn 2,2× | chậm hơn 3,4× |
+| br03_r1_scan | 46,6 | 45,9 | 51,7 | 30,2 | 30,0 | 30,8 | 1.031,2 | 1.029,6 | 1.065,5 | nhanh hơn 1,5× | **chậm hơn 22,4×** |
+| br08_tier_old_new | 45,8 | 37,1 | 37,7 | 23,2 | 22,5 | 25,3 | 622,8 | 623,2 | 651,2 | nhanh hơn 1,6× | **chậm hơn 16,8×** |
+| br02_account_detail | 21,2 | 17,2 | 18,0 | 7,5 | 5,8 | 6,2 | 2,0 | 1,0 | 1,1 | nhanh hơn 3,0× | **nhanh hơn 17×** |
+| br02_account_totals | 7,0 | 6,2 | 6,6 | 3,6 | 3,4 | 3,4 | 0,7 | 0,3 | 0,3 | nhanh hơn 1,8× | **nhanh hơn 21×** |
+| br08_client_versions | 26,1 | 18,3 | 21,5 | 6,9 | 5,4 | 5,6 | 1,5 | 0,4 | 0,5 | nhanh hơn 3,4× | **nhanh hơn 46×** |
+
+**Độ đúng:** cả **18/18** cặp so sánh (2 phương án × 9 truy vấn) cho kết quả giống hệt từng ô ([result_check.csv](results/p2/result_check.csv)). Thời gian từng lần chạy có trong [query_runs.csv](results/p2/query_runs.csv).
+
+### Kết luận
+- **B2 – công nghệ:** kết quả chia làm **hai nhóm rõ rệt**.
+  - **Truy vấn tổng hợp** (6 dòng đầu): đọc rất nhiều giao dịch rồi cộng hoặc đếm. Đây là việc chính của kho (BR01, BR03, BR08). **ClickHouse nhanh hơn 3–22 lần**, vì nó chỉ đọc vài cột cần thiết và đã nén. Truy vấn càng phức tạp (đếm khách, cửa sổ 6 tháng) thì khoảng cách càng lớn.
+  - **Tra cứu một tài khoản hoặc một khách** (3 dòng cuối): **PostgreSQL nhanh hơn 17–46 lần**, nhờ index tìm ngay đúng vài trăm dòng. Tuy vậy ClickHouse vẫn trả lời dưới 20 ms, người dùng không cảm thấy chậm. Thời gian của ClickHouse ở đây chủ yếu là chi phí cố định (đọc các bảng dimension, chuẩn bị join), không phải do đọc nhiều dữ liệu.
+- **B1 – mô hình:** One Big Table nhanh hơn star schema ở mọi truy vấn vì không phải join. Nhưng chênh lệch tuyệt đối chỉ **3–16 ms**, người dùng không nhận ra. Cái giá của One Big Table nằm ở dung lượng và chi phí sửa dữ liệu (mục 6).
 
 ---
 
-## 5. B1 + B2 — Dung lượng, thời gian nạp, chi phí cập nhật, tải đồng thời
+## 6. B1 + B2 — Dung lượng, thời gian nạp, chi phí sửa dữ liệu, nhiều người dùng
 
-### 5.1 Dung lượng (MB trên đĩa)
+### 6.1 Dung lượng trên đĩa
 
-| Giải pháp | Fact | Tổng | So với star / ClickHouse |
+**Câu hỏi:** cùng 1.057.571 giao dịch thì mỗi giải pháp chiếm bao nhiêu chỗ?
+**Cách đo:** đọc kích thước thật trên đĩa từ thống kê của ClickHouse (`system.parts`) và PostgreSQL (`pg_table_size`, `pg_indexes_size`).
+
+| Giải pháp | Bảng giao dịch | Tổng | Gấp mấy lần star / ClickHouse |
 |---|---:|---:|---:|
-| Star / ClickHouse | 18,5 (54,0 chưa nén) | **18,6** | 1× |
-| One Big Table / ClickHouse | 25,5 (111,5 chưa nén) | **25,5** | 1,37× |
-| Star / PostgreSQL | 102,1 bảng + 58,6 index = 160,7 | **162,5** | 8,7× |
+| Star / ClickHouse | 18,5 MB (54,0 MB trước khi nén) | **18,6 MB** | 1× |
+| One Big Table / ClickHouse | 25,5 MB (111,5 MB trước khi nén) | **25,5 MB** | 1,37× |
+| Star / PostgreSQL | 102,1 MB dữ liệu + 58,6 MB index = 160,7 MB | **162,5 MB** | 8,7× |
 
-### 5.2 Thời gian nạp (từ cùng bản CSV, đo trong [load.json](results/p2/load.json))
+**Kết luận:** ClickHouse nén dữ liệu theo cột nên rất gọn. One Big Table lớn hơn vì lặp lại tên khu vực, hạng… ở mọi dòng; trước khi nén nó gấp đôi star schema. PostgreSQL lớn nhất vì không nén và cần thêm index.
 
-| Giải pháp | Thời gian | Chi tiết |
+### 6.2 Thời gian nạp dữ liệu
+
+**Câu hỏi:** nạp toàn bộ dữ liệu vào mỗi giải pháp mất bao lâu?
+**Cách đo:** dùng cùng một file CSV, bấm giờ lúc nạp ([load.json](results/p2/load.json)).
+
+| Giải pháp | Thời gian | Gồm những gì |
 |---|---:|---|
-| Star / ClickHouse | **0,96 s** | INSERT CSV vào 6 bảng (fact 0,93 s) |
-| One Big Table / ClickHouse | 0,96 s + **1,35 s** | Phải nạp star (hoặc join ở Spark) rồi join 6 bảng thành 1 |
-| Star / PostgreSQL | **4,64 s** | COPY 2,18 s + PK, FK, index, `ANALYZE` 2,43 s |
+| Star / ClickHouse | **0,96 s** | Nạp 6 bảng (bảng giao dịch mất 0,93 s) |
+| One Big Table / ClickHouse | 0,96 s + **1,35 s** | Phải có star schema trước, rồi nối 6 bảng thành 1 bảng to |
+| Star / PostgreSQL | **4,64 s** | Nạp dữ liệu 2,18 s + tạo khóa chính, khóa ngoại, index và thống kê 2,43 s |
 
-### 5.3 Chi phí sửa một thuộc tính Type 1 ([update_cost.csv](results/p2/update_cost.csv))
+### 6.3 Chi phí sửa một thông tin sai (Type 1)
+
+**Câu hỏi:** khi phát hiện một thông tin trong dimension bị sai (tên khu vực, ngày sinh…) và cần sửa, mỗi giải pháp phải ghi lại bao nhiêu dữ liệu?
+**Cách đo:** thực hiện 2 lần sửa trên bản sao, mỗi lần sửa rồi sửa ngược lại; ghi số dòng phải ghi lại và thời gian ([update_cost.csv](results/p2/update_cost.csv)):
+- **U1:** sửa tên khu vực số 1 (Praha). Khu vực này xuất hiện ở 2 vai trò: chi nhánh của tài khoản và nơi ở của khách.
+- **U2:** sửa ngày sinh của khách 24 (khách này có 2 phiên bản hạng).
+
+**Đọc bảng:** mỗi ô ghi "số dòng phải ghi lại, thời gian lần sửa / thời gian lần sửa ngược".
 
 | Thao tác | Star / ClickHouse | One Big Table / ClickHouse | Star / PostgreSQL |
 |---|---|---|---|
-| U1 sửa tên khu vực 1 (dùng ở cả 2 vai trò) | ghi **1 dòng**, 6,0 / 6,7 ms | ghi lại **150.058 dòng** (mutation), 99,3 / 59,1 ms | `UPDATE` 1 dòng, 4,1 / 0,5 ms |
-| U2 sửa ngày sinh khách 24 (2 phiên bản) | ghi **2 dòng**, 8,0 / 3,8 ms | ghi lại **330 dòng**, 42,6 / 31,6 ms | `UPDATE` 2 dòng, 1,9 / 0,6 ms |
+| U1 sửa tên khu vực 1 | **1 dòng**; 6,0 / 6,7 ms | **150.058 dòng**; 99,3 / 59,1 ms | 1 dòng; 4,1 / 0,5 ms |
+| U2 sửa ngày sinh khách 24 | **2 dòng**; 8,0 / 3,8 ms | **330 dòng**; 42,6 / 31,6 ms | 2 dòng; 1,9 / 0,6 ms |
 
-Mỗi ô có hai số: lần sửa và lần sửa ngược lại. Sau khi sửa và sửa ngược, cả ba giải pháp vẫn cho cùng kết quả `br01_by_region`.
+Sau khi sửa và sửa ngược, cả 3 giải pháp vẫn cho cùng kết quả báo cáo theo vùng (đã kiểm tra).
 
-Lưu ý: One Big Table đúng với SCD2 *theo thời điểm giao dịch* (hạng được chép vào dòng khi nạp). Nhưng mỗi lần sửa một thuộc tính Type 1 phải ghi lại mọi dòng fact liên quan, và số dòng này tăng theo dữ liệu.
+**Kết luận:** đây là lý do chính để chọn star schema. Với star schema, thông tin khu vực nằm ở **một chỗ** nên sửa 1 dòng là xong. Với One Big Table, tên khu vực bị chép vào **mọi giao dịch** của khu vực đó, nên phải ghi lại 150.058 dòng. Số dòng này **tăng theo lượng dữ liệu**: dữ liệu gấp 10 lần thì phải ghi lại khoảng 1,5 triệu dòng. (One Big Table vẫn giữ đúng hạng tại thời điểm giao dịch cho BR08, vì hạng được chép vào lúc nạp.)
 
-### 5.4 Nhiều người dùng cùng lúc ([concurrency.csv](results/p2/concurrency.csv))
+### 6.4 Nhiều người dùng cùng lúc
 
-| Giải pháp | 1 client: truy vấn/giây | median / p95 (ms) | 4 client: truy vấn/giây | median / p95 | 8 client: truy vấn/giây | median / p95 |
+**Câu hỏi:** khi nhiều người cùng dùng app, hệ thống trả lời được bao nhiêu truy vấn mỗi giây, và mỗi người phải chờ bao lâu?
+**Cách đo:** 1, 4 rồi 8 "người dùng ảo" chạy song song trong **15 giây**. Mỗi người lặp lại 3 truy vấn, mỗi nhóm người dùng một truy vấn: BR01 theo hạng (quản lý), BR02 tra một **tài khoản ngẫu nhiên** (chuyên viên), BR08 theo hạng (kỹ sư). Đếm tổng số truy vấn trả lời được và thời gian chờ của từng truy vấn ([concurrency.csv](results/p2/concurrency.csv)).
+
+**Đọc bảng:** "truy vấn/giây" càng **cao** càng tốt; "median / p95" là thời gian chờ của một truy vấn (ms), càng **thấp** càng tốt. Ví dụ dòng PostgreSQL, 8 người dùng: cả hệ thống chỉ trả lời được 12,4 truy vấn/giây; một truy vấn thường chờ 367 ms, nhưng 5% trường hợp phải chờ gần **2 giây**.
+
+| Giải pháp | 1 người: truy vấn/giây | chờ median / p95 (ms) | 4 người: truy vấn/giây | chờ median / p95 | 8 người: truy vấn/giây | chờ median / p95 |
 |---|---:|---|---:|---|---:|---|
 | Star / ClickHouse | 52,1 | 14,1 / 34,8 | 82,0 | 42,2 / 90,9 | 93,2 | 76,5 / 148,1 |
 | One Big Table / ClickHouse | 91,3 | 6,6 / 24,1 | 215,8 | 14,1 / 38,4 | 251,2 | 25,1 / 66,2 |
 | Star / PostgreSQL | 4,4 | 222,9 / 454,1 | 12,2 | 266,6 / 835,7 | 12,4 | 366,8 / 1.933,5 |
 
+**Kết luận:** với 8 người dùng, ClickHouse star schema phục vụ **93 truy vấn/giây** và mỗi người chờ dưới 0,15 giây (p95); PostgreSQL chỉ phục vụ **12 truy vấn/giây** và có lúc chờ gần 2 giây. PostgreSQL gần như không tăng thêm sau 4 người (12,2 → 12,4), tức đã dùng hết sức, vì hai truy vấn tổng hợp trong bộ trộn rất nặng với nó.
+
 ---
 
-## 6. B3 — Kiến trúc kho vận hành: PostgreSQL riêng vs dồn vào ClickHouse
+## 7. B3 — Kiến trúc kho vận hành: PostgreSQL riêng hay dồn hết vào ClickHouse?
 
-ClickHouse được thử theo hai cách:
-- **versioned:** ghi một dòng phiên bản mới (ReplacingMergeTree) và đọc bằng `FINAL`; luật chuyển trạng thái phải kiểm tra ở phía client;
-- **mutation:** `ALTER TABLE … UPDATE` và chờ mutation xong.
+### Câu hỏi
+Kiến trúc của nhóm có **2 cơ sở dữ liệu**: ClickHouse (kho, khối D) và PostgreSQL (kho vận hành, khối E: cảnh báo, trạng thái xử lý, ghi chú, log pipeline, sao lưu). Có thể bỏ PostgreSQL, để luôn dữ liệu vận hành trong ClickHouse cho đơn giản không?
 
-### 6.1 Thời gian ([ops_latency.csv](results/p2/ops_latency.csv), ms mỗi thao tác)
+### Đặc điểm của dữ liệu vận hành
+Khác hẳn dữ liệu kho: rất **ít dòng**, nhưng bị **sửa liên tục từng dòng một** (đổi trạng thái 1 cảnh báo, đánh dấu 1 bước pipeline đã xong), và cần **luật chặt chẽ** (không được chuyển trạng thái sai, không được trùng cảnh báo).
 
-| Thao tác (như app / pipeline) | n | PostgreSQL median / p95 | ClickHouse median / p95 | PostgreSQL nhanh hơn |
+### Cách đo
+Chép cùng 1.702 cảnh báo vào cả hai nơi (bản sao). Thực hiện đúng các thao tác mà app và pipeline đang làm, **từng lệnh một** như thật:
+- **W1:** chuyên viên đổi trạng thái cảnh báo và hệ thống ghi lịch sử xử lý (BR04). Làm 200 cảnh báo × 2 lần chuyển: NEW → IN_REVIEW, rồi IN_REVIEW → RESOLVED.
+- **W2:** pipeline ghi log 1 bước: lúc bắt đầu ghi "đang chạy", lúc xong ghi "thành công" (BR06). Làm 200 bước.
+- **W3:** chuyên viên mở danh sách 50 cảnh báo mới nhất, và mở 1 cảnh báo kèm lịch sử xử lý (BR03, BR04). Mỗi loại 50 lần.
+
+Vì ClickHouse không sửa tại chỗ được, đo theo hai cách sửa:
+- **versioned:** ghi thêm một dòng phiên bản mới, đọc bằng `FINAL`;
+- **mutation:** dùng `ALTER TABLE … UPDATE` và chờ ClickHouse ghi lại xong.
+
+### Kết quả tốc độ ([ops_latency.csv](results/p2/ops_latency.csv)) — ms cho **mỗi thao tác**, càng nhỏ càng tốt
+
+| Thao tác | Số lần | PostgreSQL median / p95 | ClickHouse median / p95 | PostgreSQL nhanh hơn |
 |---|---:|---|---|---:|
 | W1 đổi trạng thái NEW → IN_REVIEW + ghi lịch sử | 200 | 0,19 / 0,67 | 5,92 / 10,70 (versioned) | 31× |
 | W1 đổi trạng thái IN_REVIEW → RESOLVED + ghi lịch sử | 200 | 0,17 / 0,31 | 11,91 / 18,17 (mutation) | 70× |
 | W2 ghi 1 bước pipeline (bắt đầu + kết thúc) | 200 | 0,32 / 0,54 | 2,46 / 3,59 (versioned) | 7,7× |
-| W3 danh sách 50 cảnh báo mới nhất | 50 | 0,11 / 0,18 | 2,61 / 4,58 | 24× |
-| W3 một cảnh báo + lịch sử xử lý | 50 | 0,06 / 0,10 | 3,26 / 5,47 | 54× |
+| W3 mở danh sách 50 cảnh báo mới nhất | 50 | 0,11 / 0,18 | 2,61 / 4,58 | 24× |
+| W3 mở 1 cảnh báo + lịch sử xử lý | 50 | 0,06 / 0,10 | 3,26 / 5,47 | 54× |
 
-W2 trên ClickHouse tạo ra **400 data part** cho 400 câu INSERT nhỏ (mỗi INSERT một part). Đây chính là kiểu ghi mà ClickHouse khuyên tránh.
+Thêm một quan sát: 200 bước của W2 = 400 lệnh INSERT nhỏ, và chúng tạo ra **400 data part** trong ClickHouse. Đây đúng là kiểu ghi ClickHouse khuyên tránh: nhiều part nhỏ làm nó phải gộp liên tục và chậm dần.
 
-### 6.2 Toàn vẹn dữ liệu — kho tự bảo đảm, không cần app ([ops_integrity.csv](results/p2/ops_integrity.csv))
+### Kết quả toàn vẹn dữ liệu ([ops_integrity.csv](results/p2/ops_integrity.csv))
 
-| Bảo đảm (BR cần) | PostgreSQL | ClickHouse |
-|---|:-:|:-:|
-| I1 chặn trạng thái không hợp lệ (`'DONE'`) — BR04 | ✅ CHECK | ❌ ghi được |
-| I2 chặn chuyển trạng thái sai (RESOLVED → NEW) — BR04 | ✅ hàm `set_alert_status` | ❌ ghi được |
-| I3 chặn cảnh báo trùng (cùng tài khoản, quy tắc, kỳ) — BR03 | ✅ UNIQUE | ❌ ghi được 2 cảnh báo |
-| I4 chặn lịch sử của cảnh báo không tồn tại — BR04 | ✅ khóa ngoại | ❌ ghi được |
-| I5 đổi trạng thái và ghi lịch sử trong một giao dịch: bước 2 lỗi thì bước 1 được hoàn tác — BR04 | ✅ transaction | ❌ trạng thái đã đổi, lịch sử không có |
+**Câu hỏi:** nếu app có lỗi và gửi một lệnh sai, **chính cơ sở dữ liệu** có tự chặn lại không? (✅ = chặn được, ❌ = để lọt dữ liệu sai)
 
-Thêm một giới hạn đo được: mutation **không sửa được cột phiên bản** của ReplacingMergeTree (`CANNOT_UPDATE_COLUMN`), nên phải chọn một trong hai cách: ghi phiên bản mới, hoặc mutation (khi đó không cập nhật được thời điểm đổi trạng thái).
+| Tình huống thử | Vì sao quan trọng | PostgreSQL | ClickHouse |
+|---|---|:-:|:-:|
+| I1 ghi trạng thái không tồn tại (`'DONE'`) | Trạng thái chỉ có 3 giá trị (BR04) | ✅ CHECK chặn | ❌ ghi được |
+| I2 chuyển trạng thái sai (RESOLVED → NEW) | Quy trình xử lý phải đi đúng thứ tự (BR04) | ✅ hàm `set_alert_status` chặn | ❌ ghi được |
+| I3 tạo cảnh báo trùng (cùng tài khoản, quy tắc, kỳ) | Chạy lại lô không được sinh cảnh báo trùng (BR03) | ✅ UNIQUE chặn | ❌ có 2 cảnh báo giống nhau |
+| I4 ghi lịch sử cho cảnh báo không tồn tại | Lịch sử phải gắn với cảnh báo có thật (BR04) | ✅ khóa ngoại chặn | ❌ ghi được |
+| I5 đổi trạng thái xong, ghi lịch sử bị lỗi | Không được có trạng thái đổi mà không có lịch sử (BR04) | ✅ transaction hoàn tác cả hai | ❌ trạng thái đã đổi, lịch sử không có |
+
+Thêm một giới hạn đo được: ClickHouse **không cho mutation sửa cột phiên bản** (`CANNOT_UPDATE_COLUMN`). Vì vậy không thể vừa sửa tại chỗ vừa cập nhật thời điểm đổi trạng thái.
+
+### Kết luận
+Tách PostgreSQL làm kho vận hành là đúng. Nó **nhanh hơn 8–70 lần** cho loại công việc này (sửa từng dòng, đọc vài dòng), và quan trọng hơn là **tự bảo vệ dữ liệu**: chặn được cả 5 loại lỗi, còn ClickHouse không chặn được loại nào. Nếu dồn vào ClickHouse, mọi luật này phải viết trong app và sẽ không an toàn khi app có lỗi.
 
 ---
 
-## 7. B4 — Pipeline Spark: số lõi và cách chia lô ([spark_scaling.csv](results/p2/spark_scaling.csv))
+## 8. B4 — Pipeline Spark: thêm CPU có nhanh hơn không? chia 72 lô tốn bao nhiêu?
 
-Phép đo dùng phép biến đổi của pipeline trên 72 bản chụp lô lịch sử: đọc Parquet → chuẩn hóa mã → tra tài khoản, hồ sơ giao dịch, chủ tài khoản và **phiên bản SCD2 hiệu lực tại ngày giao dịch** → ghi Parquet. Phép đo không ghi vào ClickHouse hay PostgreSQL. Mọi lần chạy ra **đúng 1.056.320 dòng, 0 dòng thiếu phiên bản**.
+### Câu hỏi
+1. Pipeline dùng Spark, vốn được thiết kế để chạy song song. Cho Spark dùng 1, 2, 4 hay 8 lõi CPU thì nhanh hơn bao nhiêu?
+2. Pipeline nạp lịch sử thành **72 lô tháng** (giống ngân hàng nhận dữ liệu theo kỳ). So với xử lý tất cả trong **1 lô** thì tốn thêm bao nhiêu?
 
-| Lõi | 1 lô (cả lịch sử): khởi động phiên | biến đổi | dòng/giây | 72 lô tháng: khởi động phiên | biến đổi | dòng/giây | 72 lô chậm hơn 1 lô |
+### Cách đo
+Lấy đúng phép biến đổi mà pipeline làm với dữ liệu lịch sử: đọc 72 bản chụp lô trong Data Lake → chuẩn hóa mã → tìm tài khoản, loại giao dịch, chủ tài khoản và **phiên bản hạng đúng tại ngày giao dịch (SCD2)** → ghi kết quả ra file. Phép đo **không ghi vào kho**, nên chạy lại bao nhiêu lần cũng được.
+- Chạy 8 cấu hình: {1, 2, 4, 8 lõi} × {1 lô, 72 lô}. Mỗi cấu hình khởi động một Spark mới.
+- Đo riêng **thời gian khởi động Spark** và **thời gian biến đổi**.
+- Mỗi lần chạy đều kiểm tra ra đúng **1.056.320 dòng**, không dòng nào thiếu phiên bản hạng. Cả 8 lần đều đúng.
+
+### Đọc bảng
+"Biến đổi" là số giây xử lý, càng nhỏ càng tốt; "dòng/giây" càng lớn càng tốt. Cột cuối: chia thành 72 lô thì chậm hơn 1 lô bao nhiêu lần.
+
+| Lõi | 1 lô: khởi động | biến đổi | dòng/giây | 72 lô: khởi động | biến đổi | dòng/giây | 72 lô chậm hơn 1 lô |
 |---:|---:|---:|---:|---:|---:|---:|---:|
 | 1 | 1,9 s | 7,7 s | 137.164 | 1,9 s | 30,6 s | 34.526 | 4,0× |
 | 2 | 1,7 s | 6,0 s | 174.770 | 2,1 s | 32,5 s | 32.478 | 5,4× |
 | 4 | 2,0 s | 5,4 s | 194.009 | 1,6 s | 31,8 s | 33.237 | 5,9× |
 | 8 | 1,6 s | 5,4 s | 196.139 | 1,9 s | 29,6 s | 35.718 | 5,5× |
 
-**Thời gian pipeline thật** (đọc từ `ops.pipeline_step`, gồm cả ghi ClickHouse, ghi log và đối chiếu): 72 lô tháng có median **3,4 s/lô**, p95 5,3 s, tổng 273,5 s, median 4.334 dòng/s. Median theo bước: ingest 0,55 · validate 0,85 · standardize 0,15 · load_dimensions 0,14 · **load_fact 1,42** · reconcile 0,15 (s) ([pipeline_steps.csv](results/p2/pipeline_steps.csv)).
+([spark_scaling.csv](results/p2/spark_scaling.csv))
+
+### Kết luận
+- **Thêm lõi gần như không giúp:** từ 1 lên 2 lõi nhanh hơn một chút (7,7 → 6,0 s), từ 4 lên 8 lõi không nhanh thêm. Lý do: ở mức ×1, dữ liệu chỉ khoảng 1 triệu dòng (khoảng 24 MB Parquet), nên phần lớn thời gian là **chi phí cố định** (lên kế hoạch, chia việc, mở file), không phải tính toán. Muốn thấy Spark tận dụng nhiều lõi phải có **dữ liệu lớn hơn**, tức cần đo ở mức ×10.
+- **Chia 72 lô chậm hơn 4–6 lần**, cũng vì mỗi lô phải trả lại chi phí cố định đó (khoảng 0,3 s/lô). Đổi lại, xử lý theo lô cho phép ghi log từng lô, tách lỗi từng lô và chạy lại đúng một lô (BR05, BR06). Đây là đánh đổi có chủ đích.
+
+**Thời gian pipeline thật** (lấy từ log `ops.pipeline_step`, gồm cả ghi kho, ghi log, đối chiếu): mỗi lô tháng mất median **3,4 giây** (p95 5,3 s); 72 lô mất tổng **273,5 giây** (khoảng 4,5 phút); median 4.334 dòng/giây. Bước tốn nhất là `load_fact` (ghi giao dịch vào kho) 1,42 s, sau đó là `validate` (kiểm tra 7 quy tắc) 0,85 s ([pipeline_steps.csv](results/p2/pipeline_steps.csv)).
 
 ---
 
-## 8. Sự cố trong lúc đo và cách xử lý
+## 9. Sự cố trong lúc đo và cách xử lý
 
-| # | Sự cố | Nguyên nhân | Xử lý | Ảnh hưởng tới số liệu |
+| # | Chuyện gì xảy ra | Vì sao | Đã làm gì | Có ảnh hưởng số liệu không |
 |---|---|---|---|---|
-| 1 | Lần đo đầu (P2-8, cùng ngày) dùng PostgreSQL mặc định (`shared_buffers` 128 MB, `work_mem` 4 MB, 2 worker) | Chưa áp cấu hình Phase 1 | Đặt `shared_buffers` 256 MB trong [docker-compose.yml](../docker-compose.yml); đặt `work_mem`, worker, `jit` trong phiên benchmark | Số liệu lần đầu bị thay; kho `ops` vẫn giữ `work_mem` mặc định |
-| 2 | Nạp PostgreSQL mất **42,0 s** | Có PK và FK ngay khi COPY: kiểm tra trên từng dòng | Tạo PK, FK, index **sau** COPY (giống Phase 1) | Còn 4,64 s |
-| 3 | ClickHouse báo `MEMORY_LIMIT_EXCEEDED` ở `br02_account_detail` (bộ đếm tổng 2,20 GiB, RSS thật 1,30 GiB) | Các log hệ thống chạy ngầm (`trace_log` 4 triệu dòng, `text_log`, `metric_log`…) giữ bộ đệm và luồng ghi | [warehouse/clickhouse/config.d/system_logs.xml](../warehouse/clickhouse/config.d/system_logs.xml) tắt chúng (giữ `query_log`, `part_log`, `backup_log`, `error_log`); xoá các bảng log cũ | RSS nền 1,2 GB → 0,74 GB; chạy lại toàn bộ |
-| 4 | `br01_by_month` lệch giữa hai hệ | Tháng không có tiền vào: PostgreSQL `sum` trả `NULL`, ClickHouse `sumIf` trả 0 | Thêm `coalesce` vào truy vấn PostgreSQL | Lỗi của truy vấn, không phải dữ liệu |
-| 5 | Mutation ClickHouse lỗi `CANNOT_UPDATE_COLUMN` | Không được sửa cột phiên bản của ReplacingMergeTree | Chỉ sửa `status`; ghi lại thành phát hiện của B3 | — |
-| 6 | **Máy ngủ khoảng 2 giờ** trong lúc `make bench-all` đang đo tải đồng thời: PostgreSQL bị timeout | macOS ngủ khi không dùng | Giữ máy thức; **đo lại** tải đồng thời (22:38) và B3 (22:40) | Bỏ số liệu tải đồng thời của lần bị ngắt (log của lần đo lại đã ghi đè log cũ) |
-| 7 | B3 đếm 800 part thay vì 400 | `system.part_log` còn giữ part của lần chạy trước | Chỉ đếm từ lúc bắt đầu lần chạy | Đã chạy lại |
+| 1 | Lần đo đầu (sáng 22/10) dùng PostgreSQL với cấu hình mặc định (bộ nhớ nhỏ hơn) | Chưa áp cấu hình giống Phase 1 | Đặt `shared_buffers` 256 MB trong [docker-compose.yml](../docker-compose.yml); `work_mem`, số worker, JIT đặt riêng trong phiên đo | Số liệu lần đầu đã được thay bằng lần này. Kho `ops` thật vẫn giữ cấu hình mặc định cho `work_mem` |
+| 2 | Nạp vào PostgreSQL mất **42 giây** | Khóa chính, khóa ngoại có sẵn từ đầu nên PostgreSQL kiểm tra từng dòng khi nạp | Nạp trước, tạo khóa và index sau (cách làm chuẩn khi nạp lô lớn, giống Phase 1) | Còn 4,64 s |
+| 3 | ClickHouse báo **hết bộ nhớ** khi chạy truy vấn BR02 | Các bảng log hệ thống của ClickHouse (ghi liên tục ở chế độ nền, có bảng tới 4 triệu dòng) chiếm bộ nhớ | Tắt các log nền không cần ([system_logs.xml](../warehouse/clickhouse/config.d/system_logs.xml)), xoá bảng log cũ | Bộ nhớ nền giảm từ 1,2 GB xuống 0,74 GB; đã chạy lại toàn bộ |
+| 4 | Truy vấn biểu đồ theo tháng cho kết quả khác nhau giữa hai hệ | Tháng không có tiền vào: PostgreSQL trả "rỗng" (NULL), ClickHouse trả 0 | Thêm `coalesce` để PostgreSQL cũng trả 0 | Lỗi của câu truy vấn, dữ liệu vẫn đúng |
+| 5 | ClickHouse báo lỗi khi sửa trạng thái bằng mutation | ClickHouse không cho sửa cột phiên bản | Chỉ sửa cột trạng thái; ghi lại thành một phát hiện của B3 | — |
+| 6 | **Máy ngủ khoảng 2 giờ** giữa lúc đang đo nhiều người dùng; PostgreSQL bị quá thời gian chờ | macOS tự ngủ | Giữ máy thức; **đo lại** phần nhiều người dùng (22:38) và B3 (22:40) | Bỏ số liệu của lần bị ngắt (log của lần đo lại đã ghi đè log cũ) |
+| 7 | B3 đếm ra 800 data part thay vì 400 | Bảng thống kê `part_log` còn giữ số của lần chạy trước | Chỉ đếm từ lúc bắt đầu lần chạy | Đã chạy lại |
 
 ---
 
-## 9. Đối chiếu giả thuyết
+## 10. Tổng kết: các giả thuyết có đúng không?
 
-| Giả thuyết | Kết quả ×1 |
-|---|---|
-| **H1** ClickHouse nhanh hơn PostgreSQL ở truy vấn tổng hợp, và tốn ít chỗ hơn | **Đúng.** Nhanh hơn 3,3–22,4× ở 6 truy vấn tổng hợp; tốn ít chỗ hơn 8,7×. Khi nhiều người dùng: 93 so với 12 truy vấn/giây ở 8 client |
-| **H2** Với tra cứu 1 tài khoản hoặc 1 khách, index B-tree của PostgreSQL thu hẹp hoặc đảo khoảng cách | **Đúng, đảo hẳn.** PostgreSQL nhanh hơn 17–46×, nhưng ClickHouse vẫn dưới 20 ms |
-| **H3** Thời gian một lô chủ yếu là chi phí cố định, không phụ thuộc số dòng | **Đúng.** 72 lô tháng chậm hơn 1 lô 4–6×; thêm lõi gần như không giúp (1 → 8 lõi: 7,7 → 5,4 s) vì dữ liệu ×1 chỉ khoảng 1 triệu dòng |
-| **H4** (B1) One Big Table nhanh hơn star một chút; star tốn ít chỗ hơn và sửa rẻ hơn | **Đúng.** One Big Table nhanh hơn 1,5–3,4× (chênh tuyệt đối 3–16 ms), nhưng tốn chỗ hơn 1,37× (gấp 2× khi chưa nén). Sửa tên 1 khu vực phải ghi lại 150.058 dòng thay vì 1 dòng |
-| **H5** (B3) Kho vận hành nên tách sang PostgreSQL | **Đúng.** PostgreSQL nhanh hơn 8–70× ở mọi thao tác của app và pipeline, và tự bảo đảm 5/5 ràng buộc mà ClickHouse không bảo đảm được |
+| Giả thuyết đặt ra trước khi đo | Kết quả ở mức ×1 | Ý nghĩa với thiết kế |
+|---|---|---|
+| **H1** ClickHouse nhanh hơn PostgreSQL ở truy vấn tổng hợp và tốn ít chỗ hơn | **Đúng.** Nhanh hơn 3,3–22,4×, ít chỗ hơn 8,7×; 8 người dùng: 93 so với 12 truy vấn/giây | Chọn ClickHouse làm kho là đúng |
+| **H2** Khi tra cứu 1 tài khoản hoặc 1 khách, index của PostgreSQL thu hẹp khoảng cách | **Đúng, còn đảo ngược hẳn.** PostgreSQL nhanh hơn 17–46×, nhưng ClickHouse vẫn dưới 20 ms | Không ảnh hưởng trải nghiệm; nếu sau này tra cứu là việc chính thì có thể thêm projection theo tài khoản trên ClickHouse |
+| **H3** Thời gian một lô chủ yếu là chi phí cố định, không phụ thuộc số dòng | **Đúng.** 72 lô chậm hơn 1 lô 4–6×; thêm lõi gần như không giúp | Chia lô là đánh đổi có chủ đích để kiểm soát từng lô |
+| **H4** One Big Table nhanh hơn một chút, nhưng tốn chỗ hơn và sửa đắt hơn | **Đúng.** Nhanh hơn 1,5–3,4× (chỉ 3–16 ms), tốn chỗ hơn 1,37×, sửa 1 khu vực phải ghi lại 150.058 dòng thay vì 1 | Chọn star schema là đúng |
+| **H5** Kho vận hành nên tách sang PostgreSQL | **Đúng.** Nhanh hơn 8–70×, tự chặn 5/5 loại lỗi; ClickHouse 0/5 | Kiến trúc 2 cơ sở dữ liệu là đúng |
 
 ---
 
-## 10. Chưa đo / giới hạn
+## 11. Chưa đo / giới hạn
 
-| Hạng mục | Trạng thái |
-|---|---|
-| Mức ×10, ×50 | **Chưa đo** (theo yêu cầu: chạy ×1 trước, xem kết quả rồi mới quyết định). Ở ×1, Spark không hưởng lợi từ thêm lõi; cần dữ liệu lớn hơn mới thấy được xu hướng mở rộng |
-| Cold thực sự (đọc từ đĩa) | Không làm được trong container (không xoá được page cache) |
-| PostgreSQL được tinh chỉnh sâu hơn (partition theo năm, BRIN index, materialized view) | Không làm; dùng cùng cấu hình như Phase 1 để so sánh được |
-| Phép chiếu (projection) theo tài khoản trên ClickHouse cho BR02 | Không làm; ghi là hướng cải thiện |
-| Môi trường | 1 máy, 1 máy ảo dùng chung cho cả hai hệ; client chạy trên cùng máy |
+| Hạng mục | Tình trạng | Ảnh hưởng tới kết luận |
+|---|---|---|
+| Mức ×10, ×50 (nhân bản dữ liệu) | **Chưa đo.** Đã thống nhất chạy ×1 trước, xem kết quả rồi quyết định | Chưa biết khoảng cách ClickHouse/PostgreSQL tăng thế nào khi dữ liệu lớn, và Spark có tận dụng nhiều lõi không |
+| "Cold" thật sự (đọc từ đĩa) | Không làm được trong container (không xoá được bộ nhớ đệm của hệ điều hành) | Số cold thực chất là "lần chạy đầu" |
+| Tối ưu PostgreSQL sâu hơn (chia bảng theo năm, BRIN index, materialized view) | Không làm, để giữ cấu hình giống Phase 1 | PostgreSQL có thể thu hẹp khoảng cách ở truy vấn tổng hợp nếu được tối ưu riêng |
+| Projection theo tài khoản trên ClickHouse cho BR02 | Không làm | Hướng cải thiện nếu cần |
+| Môi trường | Một máy, một máy ảo dùng chung cho mọi hệ; người gọi chạy cùng máy | Số tuyệt đối có thể khác trên máy chủ thật; tỉ lệ so sánh đáng tin hơn số tuyệt đối |

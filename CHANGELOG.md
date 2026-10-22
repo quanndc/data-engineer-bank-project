@@ -14,6 +14,14 @@ Ghi lại các phát hiện, quyết định thiết kế và thay đổi của 
 
 
 
+
+---
+
+## [2026-10-22] Phase 2 — P2-8: viết lại BENCHMARK_P2.md cho dễ hiểu 📝
+
+- [docs/BENCHMARK_P2.md](docs/BENCHMARK_P2.md) viết lại theo yêu cầu "đọc không hiểu": thêm mục **Benchmark trả lời câu hỏi gì**, **bảng giải nghĩa thuật ngữ** (cold/warm, median, p95, star schema, One Big Table, lưu theo cột/dòng, index, mutation, data part, transaction…), và cho **mỗi phép đo** một khung cố định: câu hỏi → cách đo → đọc bảng thế nào (kèm một dòng ví dụ) → kết quả → kết luận. Thêm cột "ý nghĩa với thiết kế" ở bảng giả thuyết.
+- Không thay đổi số liệu nào; chỉ sửa ước lượng chi phí cố định mỗi lô thành khoảng 0,3 s và ghi rõ dữ liệu B4 khoảng 24 MB Parquet.
+
 ---
 
 ## [2026-10-22] Phase 2 — P2-8 (mở rộng): benchmark B1–B4 ở mức ×1 + P2-9 (bắt đầu): bản nháp report 🚧
