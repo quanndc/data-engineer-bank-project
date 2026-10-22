@@ -1,15 +1,28 @@
-query,title,engine,rows,cold_ms,warm_median_ms,warm_p95_ms
-br01_kpi_1998,"BR01 KPI một kỳ (năm 1998): số giao dịch, tiền vào, tiền ra",clickhouse,1,14.4,13.5,14.8
-br01_kpi_1998,"BR01 KPI một kỳ (năm 1998): số giao dịch, tiền vào, tiền ra",postgres,1,65.5,32.2,34.0
-br01_by_month,"BR01 biểu đồ theo tháng, toàn bộ lịch sử",clickhouse,75,28.0,25.9,27.6
-br01_by_month,"BR01 biểu đồ theo tháng, toàn bộ lịch sử",postgres,75,156.6,127.7,134.0
-br01_by_tier_1998,"BR01 theo hạng thành viên (năm 1998): giao dịch, vào, ra, số khách",clickhouse,4,22.6,18.3,19.2
-br01_by_tier_1998,"BR01 theo hạng thành viên (năm 1998): giao dịch, vào, ra, số khách",postgres,4,344.2,343.3,364.6
-br02_account_detail,BR02 tra cứu tài khoản 2378: toàn bộ giao dịch chi tiết,clickhouse,437,31.9,24.3,25.4
-br02_account_detail,BR02 tra cứu tài khoản 2378: toàn bộ giao dịch chi tiết,postgres,437,2.7,1.8,2.2
-br02_account_totals,BR02 tổng của tài khoản 2378 trong năm 1998,clickhouse,1,10.4,8.8,9.2
-br02_account_totals,BR02 tổng của tài khoản 2378 trong năm 1998,postgres,1,0.7,0.3,0.4
-br08_tier_old_new,BR08 báo cáo theo hạng kỳ cũ (1993-1998) và kỳ mới (01/1999),clickhouse,8,43.9,42.0,49.7
-br08_tier_old_new,BR08 báo cáo theo hạng kỳ cũ (1993-1998) và kỳ mới (01/1999),postgres,8,807.7,802.1,842.1
-br08_client_versions,BR08 các phiên bản hạng của 1 khách (client 24) và giao dịch theo phiên bản,clickhouse,2,31.9,19.9,24.2
-br08_client_versions,BR08 các phiên bản hạng của 1 khách (client 24) và giao dịch theo phiên bản,postgres,2,1.3,0.5,0.6
+query,title,solution,rows,cold_ms,warm_median_ms,warm_p95_ms
+br01_kpi_1998,BR01 KPI một kỳ (năm 1998),ch_star,1,24.0,12.8,21.1
+br01_kpi_1998,BR01 KPI một kỳ (năm 1998),ch_obt,1,9.1,8.6,13.6
+br01_kpi_1998,BR01 KPI một kỳ (năm 1998),pg_star,1,62.5,41.7,51.0
+br01_by_month,"BR01 biểu đồ theo tháng, toàn bộ lịch sử",ch_star,75,32.1,28.1,31.1
+br01_by_month,"BR01 biểu đồ theo tháng, toàn bộ lịch sử",ch_obt,75,14.4,11.8,15.1
+br01_by_month,"BR01 biểu đồ theo tháng, toàn bộ lịch sử",pg_star,75,131.5,105.9,108.8
+br01_by_tier_1998,"BR01 theo hạng thành viên (1998), có đếm khách",ch_star,4,17.4,14.6,15.7
+br01_by_tier_1998,"BR01 theo hạng thành viên (1998), có đếm khách",ch_obt,4,7.5,7.1,7.7
+br01_by_tier_1998,"BR01 theo hạng thành viên (1998), có đếm khách",pg_star,4,378.3,323.3,339.3
+br01_by_region,"BR01 theo vùng của chi nhánh (1998), qua dim_district vai trò chi nhánh",ch_star,8,18.3,14.9,16.3
+br01_by_region,"BR01 theo vùng của chi nhánh (1998), qua dim_district vai trò chi nhánh",ch_obt,8,7.5,6.8,7.5
+br01_by_region,"BR01 theo vùng của chi nhánh (1998), qua dim_district vai trò chi nhánh",pg_star,8,62.0,51.4,54.0
+br02_account_detail,BR02 tra cứu tài khoản 2378: toàn bộ giao dịch,ch_star,437,21.2,17.2,18.0
+br02_account_detail,BR02 tra cứu tài khoản 2378: toàn bộ giao dịch,ch_obt,437,7.5,5.8,6.2
+br02_account_detail,BR02 tra cứu tài khoản 2378: toàn bộ giao dịch,pg_star,437,2.0,1.0,1.1
+br02_account_totals,"BR02 tổng của tài khoản 2378, năm 1998",ch_star,1,7.0,6.2,6.6
+br02_account_totals,"BR02 tổng của tài khoản 2378, năm 1998",ch_obt,1,3.6,3.4,3.4
+br02_account_totals,"BR02 tổng của tài khoản 2378, năm 1998",pg_star,1,0.7,0.3,0.3
+br03_r1_scan,BR03 quy tắc R1 trên toàn bộ lịch sử (cửa sổ 6 tháng theo tài khoản),ch_star,1,46.6,45.9,51.7
+br03_r1_scan,BR03 quy tắc R1 trên toàn bộ lịch sử (cửa sổ 6 tháng theo tài khoản),ch_obt,1,30.2,30.0,30.8
+br03_r1_scan,BR03 quy tắc R1 trên toàn bộ lịch sử (cửa sổ 6 tháng theo tài khoản),pg_star,1,1031.2,1029.6,1065.5
+br08_tier_old_new,"BR08 theo hạng, kỳ cũ (1993-1998) và kỳ mới (01/1999)",ch_star,8,45.8,37.1,37.7
+br08_tier_old_new,"BR08 theo hạng, kỳ cũ (1993-1998) và kỳ mới (01/1999)",ch_obt,8,23.2,22.5,25.3
+br08_tier_old_new,"BR08 theo hạng, kỳ cũ (1993-1998) và kỳ mới (01/1999)",pg_star,8,622.8,623.2,651.2
+br08_client_versions,BR08 phiên bản hạng của khách 24 và giao dịch theo phiên bản,ch_star,2,26.1,18.3,21.5
+br08_client_versions,BR08 phiên bản hạng của khách 24 và giao dịch theo phiên bản,ch_obt,2,6.9,5.4,5.6
+br08_client_versions,BR08 phiên bản hạng của khách 24 và giao dịch theo phiên bản,pg_star,2,1.5,0.4,0.5

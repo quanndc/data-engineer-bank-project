@@ -1,0 +1,9 @@
+ch_star  1 clients:   783 queries    52.10 q/s  median    14.1  p95    34.8 ms
+ch_star  4 clients:  1233 queries    81.99 q/s  median    42.2  p95    90.9 ms
+ch_star  8 clients:  1406 queries    93.17 q/s  median    76.5  p95   148.1 ms
+ch_obt   1 clients:  1370 queries    91.26 q/s  median     6.6  p95    24.1 ms
+ch_obt   4 clients:  3241 queries   215.78 q/s  median    14.1  p95    38.4 ms
+ch_obt   8 clients:  3777 queries   251.16 q/s  median    25.1  p95    66.2 ms
+pg_star  1 clients:    67 queries     4.41 q/s  median   222.9  p95   454.1 ms
+pg_star  4 clients:   190 queries    12.21 q/s  median   266.6  p95   835.7 ms
+pg_star  8 clients:   204 queries    12.44 q/s  median   366.8  p95  1933.5 ms

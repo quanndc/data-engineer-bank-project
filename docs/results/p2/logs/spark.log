@@ -1,0 +1,8 @@
+full     1 cores: session   1.9 s  transform    7.7 s   137,164 rows/s  total process   11.4 s  rows 1,056,320 OK
+full     2 cores: session   1.7 s  transform    6.0 s   174,770 rows/s  total process    9.8 s  rows 1,056,320 OK
+full     4 cores: session   2.0 s  transform    5.4 s   194,009 rows/s  total process    8.8 s  rows 1,056,320 OK
+full     8 cores: session   1.6 s  transform    5.4 s   196,139 rows/s  total process    8.3 s  rows 1,056,320 OK
+monthly  1 cores: session   1.9 s  transform   30.6 s    34,526 rows/s  total process   34.2 s  rows 1,056,320 OK
+monthly  2 cores: session   2.1 s  transform   32.5 s    32,478 rows/s  total process   36.3 s  rows 1,056,320 OK
+monthly  4 cores: session   1.6 s  transform   31.8 s    33,237 rows/s  total process   35.1 s  rows 1,056,320 OK
+monthly  8 cores: session   1.9 s  transform   29.6 s    35,718 rows/s  total process   33.2 s  rows 1,056,320 OK

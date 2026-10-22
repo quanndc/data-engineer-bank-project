@@ -1,0 +1,6 @@
+guarantee,postgres_enforced,clickhouse_enforced
+I1 trạng thái không hợp lệ ('DONE'),True,False
+I2 chuyển trạng thái sai (RESOLVED → NEW),True,False
+"I3 cảnh báo trùng (cùng tài khoản, quy tắc, kỳ)",True,False
+I4 lịch sử cho cảnh báo không tồn tại (khóa ngoại),True,False
+I5 đổi trạng thái + ghi lịch sử là một giao dịch (lỗi ở bước 2 → hoàn tác bước 1),True,False

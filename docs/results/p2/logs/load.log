@@ -1,0 +1,30 @@
+exported dw: {'dim_date': '0.2 MB', 'dim_district': '0.0 MB', 'dim_account': '0.4 MB', 'dim_customer': '0.5 MB', 'dim_transaction_profile': '0.0 MB', 'fact_transaction': '91.1 MB'}
+{
+ "ch_star": {
+  "dim_date": 0.01,
+  "dim_district": 0.0,
+  "dim_account": 0.01,
+  "dim_customer": 0.01,
+  "dim_transaction_profile": 0.0,
+  "fact_transaction": 0.93,
+  "total_s": 0.96
+ },
+ "ch_obt": {
+  "build_from_star_s": 1.35
+ },
+ "pg_star": {
+  "dim_date": 0.01,
+  "dim_district": 0.0,
+  "dim_account": 0.01,
+  "dim_customer": 0.01,
+  "dim_transaction_profile": 0.0,
+  "fact_transaction": 2.18,
+  "keys_indexes_analyze_s": 2.43,
+  "total_s": 4.64
+ },
+ "fact_rows": {
+  "ch_star": 1057571,
+  "ch_obt": 1057571,
+  "pg_star": 1057571
+ }
+}

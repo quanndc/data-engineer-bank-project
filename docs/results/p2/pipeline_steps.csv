@@ -4,432 +4,432 @@ REF_INITIAL,validate,2,1.529,19815,RUN
 REF_INITIAL,load_dimensions,3,0.623,19815,RUN
 REF_INITIAL,build_customer,4,2.039,19815,RUN
 REF_INITIAL,load_customer_scd2,5,0.581,19815,RUN
-HIST (lô tháng),ingest,1,0.646,395,RUN
-HIST (lô tháng),validate,2,0.724,395,RUN
-HIST (lô tháng),standardize,3,0.154,395,RUN
-HIST (lô tháng),load_dimensions,4,0.112,395,RUN
-HIST (lô tháng),load_fact,5,3.024,395,RUN
-HIST (lô tháng),reconcile,6,0.43,395,RUN
-HIST (lô tháng),ingest,1,4.461,676,RUN
-HIST (lô tháng),validate,2,4.305,676,RUN
-HIST (lô tháng),standardize,3,0.92,676,RUN
-HIST (lô tháng),load_dimensions,4,0.415,676,RUN
-HIST (lô tháng),load_fact,5,2.264,676,RUN
-HIST (lô tháng),reconcile,6,0.252,676,RUN
-HIST (lô tháng),ingest,1,0.514,913,RUN
-HIST (lô tháng),validate,2,1.556,913,RUN
-HIST (lô tháng),standardize,3,0.27,913,RUN
-HIST (lô tháng),load_dimensions,4,0.216,913,RUN
-HIST (lô tháng),load_fact,5,1.929,913,RUN
-HIST (lô tháng),reconcile,6,0.204,913,RUN
-HIST (lô tháng),ingest,1,1.774,1306,RUN
-HIST (lô tháng),validate,2,1.285,1306,RUN
-HIST (lô tháng),standardize,3,0.252,1306,RUN
-HIST (lô tháng),load_dimensions,4,0.383,1306,RUN
-HIST (lô tháng),load_fact,5,1.445,1306,RUN
-HIST (lô tháng),reconcile,6,0.155,1306,RUN
-HIST (lô tháng),ingest,1,0.678,1880,RUN
-HIST (lô tháng),validate,2,0.798,1880,RUN
-HIST (lô tháng),standardize,3,0.27,1880,RUN
-HIST (lô tháng),load_dimensions,4,0.2,1880,RUN
-HIST (lô tháng),load_fact,5,1.504,1880,RUN
-HIST (lô tháng),reconcile,6,0.17,1880,RUN
-HIST (lô tháng),ingest,1,0.571,2399,RUN
-HIST (lô tháng),validate,2,0.987,2399,RUN
-HIST (lô tháng),standardize,3,0.162,2399,RUN
-HIST (lô tháng),load_dimensions,4,0.166,2399,RUN
-HIST (lô tháng),load_fact,5,1.964,2399,RUN
-HIST (lô tháng),reconcile,6,0.198,2399,RUN
-HIST (lô tháng),ingest,1,0.477,2938,RUN
-HIST (lô tháng),validate,2,0.836,2938,RUN
-HIST (lô tháng),standardize,3,0.15,2938,RUN
-HIST (lô tháng),load_dimensions,4,0.174,2938,RUN
-HIST (lô tháng),load_fact,5,1.288,2938,RUN
-HIST (lô tháng),reconcile,6,0.126,2938,RUN
-HIST (lô tháng),ingest,1,0.603,3441,RUN
-HIST (lô tháng),validate,2,0.862,3441,RUN
-HIST (lô tháng),standardize,3,0.114,3441,RUN
-HIST (lô tháng),load_dimensions,4,0.125,3441,RUN
-HIST (lô tháng),load_fact,5,0.981,3441,RUN
-HIST (lô tháng),reconcile,6,0.094,3441,RUN
-HIST (lô tháng),ingest,1,0.551,3989,RUN
-HIST (lô tháng),validate,2,0.684,3989,RUN
-HIST (lô tháng),standardize,3,0.104,3989,RUN
-HIST (lô tháng),load_dimensions,4,0.22,3989,RUN
-HIST (lô tháng),load_fact,5,1.258,3989,RUN
-HIST (lô tháng),reconcile,6,0.155,3989,RUN
-HIST (lô tháng),ingest,1,0.501,4422,RUN
-HIST (lô tháng),validate,2,0.763,4422,RUN
-HIST (lô tháng),standardize,3,0.094,4422,RUN
-HIST (lô tháng),load_dimensions,4,0.107,4422,RUN
-HIST (lô tháng),load_fact,5,1.198,4422,RUN
-HIST (lô tháng),reconcile,6,0.084,4422,RUN
-HIST (lô tháng),ingest,1,0.619,5669,RUN
-HIST (lô tháng),validate,2,0.878,5669,RUN
-HIST (lô tháng),standardize,3,0.111,5669,RUN
-HIST (lô tháng),load_dimensions,4,0.147,5669,RUN
-HIST (lô tháng),load_fact,5,1.426,5669,RUN
-HIST (lô tháng),reconcile,6,0.237,5669,RUN
-HIST (lô tháng),ingest,1,0.514,9139,RUN
-HIST (lô tháng),validate,2,0.772,9139,RUN
-HIST (lô tháng),standardize,3,0.155,9139,RUN
-HIST (lô tháng),load_dimensions,4,0.179,9139,RUN
-HIST (lô tháng),load_fact,5,1.349,9139,RUN
-HIST (lô tháng),reconcile,6,0.183,9139,RUN
-HIST (lô tháng),ingest,1,0.69,5601,RUN
-HIST (lô tháng),validate,2,0.79,5601,RUN
-HIST (lô tháng),standardize,3,0.169,5601,RUN
-HIST (lô tháng),load_dimensions,4,0.179,5601,RUN
-HIST (lô tháng),load_fact,5,1.09,5601,RUN
-HIST (lô tháng),reconcile,6,0.092,5601,RUN
-HIST (lô tháng),ingest,1,0.459,6255,RUN
-HIST (lô tháng),validate,2,0.78,6255,RUN
-HIST (lô tháng),standardize,3,0.125,6255,RUN
-HIST (lô tháng),load_dimensions,4,0.12,6255,RUN
-HIST (lô tháng),load_fact,5,1.631,6255,RUN
-HIST (lô tháng),reconcile,6,0.178,6255,RUN
-HIST (lô tháng),ingest,1,0.553,6549,RUN
-HIST (lô tháng),validate,2,1.248,6549,RUN
-HIST (lô tháng),standardize,3,0.424,6549,RUN
-HIST (lô tháng),load_dimensions,4,0.205,6549,RUN
-HIST (lô tháng),load_fact,5,1.347,6549,RUN
-HIST (lô tháng),reconcile,6,0.126,6549,RUN
-HIST (lô tháng),ingest,1,0.507,7059,RUN
-HIST (lô tháng),validate,2,0.871,7059,RUN
-HIST (lô tháng),standardize,3,0.149,7059,RUN
-HIST (lô tháng),load_dimensions,4,0.214,7059,RUN
-HIST (lô tháng),load_fact,5,1.078,7059,RUN
-HIST (lô tháng),reconcile,6,0.085,7059,RUN
-HIST (lô tháng),ingest,1,0.505,7916,RUN
-HIST (lô tháng),validate,2,0.842,7916,RUN
-HIST (lô tháng),standardize,3,0.151,7916,RUN
-HIST (lô tháng),load_dimensions,4,0.18,7916,RUN
-HIST (lô tháng),load_fact,5,2.796,7916,RUN
-HIST (lô tháng),reconcile,6,0.147,7916,RUN
-HIST (lô tháng),ingest,1,0.616,7398,RUN
-HIST (lô tháng),validate,2,1.353,7398,RUN
-HIST (lô tháng),standardize,3,0.161,7398,RUN
-HIST (lô tháng),load_dimensions,4,0.224,7398,RUN
-HIST (lô tháng),load_fact,5,1.434,7398,RUN
-HIST (lô tháng),reconcile,6,0.096,7398,RUN
-HIST (lô tháng),ingest,1,0.547,7600,RUN
-HIST (lô tháng),validate,2,0.879,7600,RUN
-HIST (lô tháng),standardize,3,0.169,7600,RUN
-HIST (lô tháng),load_dimensions,4,0.129,7600,RUN
-HIST (lô tháng),load_fact,5,1.067,7600,RUN
-HIST (lô tháng),reconcile,6,0.12,7600,RUN
-HIST (lô tháng),ingest,1,0.416,7844,RUN
-HIST (lô tháng),validate,2,0.771,7844,RUN
-HIST (lô tháng),standardize,3,0.165,7844,RUN
-HIST (lô tháng),load_dimensions,4,0.126,7844,RUN
-HIST (lô tháng),load_fact,5,1.975,7844,RUN
-HIST (lô tháng),reconcile,6,0.166,7844,RUN
-HIST (lô tháng),ingest,1,0.676,8197,RUN
-HIST (lô tháng),validate,2,0.786,8197,RUN
-HIST (lô tháng),standardize,3,0.17,8197,RUN
-HIST (lô tháng),load_dimensions,4,0.29,8197,RUN
-HIST (lô tháng),load_fact,5,1.66,8197,RUN
-HIST (lô tháng),reconcile,6,0.214,8197,RUN
-HIST (lô tháng),ingest,1,1.023,8275,RUN
-HIST (lô tháng),validate,2,1.231,8275,RUN
-HIST (lô tháng),standardize,3,0.132,8275,RUN
-HIST (lô tháng),load_dimensions,4,0.14,8275,RUN
-HIST (lô tháng),load_fact,5,1.781,8275,RUN
-HIST (lô tháng),reconcile,6,0.269,8275,RUN
-HIST (lô tháng),ingest,1,0.759,9795,RUN
-HIST (lô tháng),validate,2,0.801,9795,RUN
-HIST (lô tháng),standardize,3,0.104,9795,RUN
-HIST (lô tháng),load_dimensions,4,0.1,9795,RUN
-HIST (lô tháng),load_fact,5,1.491,9795,RUN
-HIST (lô tháng),reconcile,6,0.143,9795,RUN
-HIST (lô tháng),ingest,1,0.634,15493,RUN
-HIST (lô tháng),validate,2,0.839,15493,RUN
-HIST (lô tháng),standardize,3,0.141,15493,RUN
-HIST (lô tháng),load_dimensions,4,0.072,15493,RUN
-HIST (lô tháng),load_fact,5,1.296,15493,RUN
-HIST (lô tháng),reconcile,6,0.122,15493,RUN
-HIST (lô tháng),ingest,1,0.462,8682,RUN
-HIST (lô tháng),validate,2,0.624,8682,RUN
-HIST (lô tháng),standardize,3,0.111,8682,RUN
-HIST (lô tháng),load_dimensions,4,0.156,8682,RUN
-HIST (lô tháng),load_fact,5,1.713,8682,RUN
-HIST (lô tháng),reconcile,6,0.134,8682,RUN
-HIST (lô tháng),ingest,1,0.675,9519,RUN
-HIST (lô tháng),validate,2,2.406,9519,RUN
-HIST (lô tháng),standardize,3,0.308,9519,RUN
-HIST (lô tháng),load_dimensions,4,0.226,9519,RUN
-HIST (lô tháng),load_fact,5,1.213,9519,RUN
-HIST (lô tháng),reconcile,6,0.094,9519,RUN
-HIST (lô tháng),ingest,1,0.4,9938,RUN
-HIST (lô tháng),validate,2,0.566,9938,RUN
-HIST (lô tháng),standardize,3,0.125,9938,RUN
-HIST (lô tháng),load_dimensions,4,0.075,9938,RUN
-HIST (lô tháng),load_fact,5,1.01,9938,RUN
-HIST (lô tháng),reconcile,6,0.085,9938,RUN
-HIST (lô tháng),ingest,1,0.411,10930,RUN
-HIST (lô tháng),validate,2,0.537,10930,RUN
-HIST (lô tháng),standardize,3,0.109,10930,RUN
-HIST (lô tháng),load_dimensions,4,0.139,10930,RUN
-HIST (lô tháng),load_fact,5,0.901,10930,RUN
-HIST (lô tháng),reconcile,6,0.09,10930,RUN
-HIST (lô tháng),ingest,1,0.403,10431,RUN
-HIST (lô tháng),validate,2,0.537,10431,RUN
-HIST (lô tháng),standardize,3,0.099,10431,RUN
-HIST (lô tháng),load_dimensions,4,0.072,10431,RUN
-HIST (lô tháng),load_fact,5,0.892,10431,RUN
-HIST (lô tháng),reconcile,6,0.078,10431,RUN
-HIST (lô tháng),ingest,1,0.392,10766,RUN
-HIST (lô tháng),validate,2,0.595,10766,RUN
-HIST (lô tháng),standardize,3,0.109,10766,RUN
-HIST (lô tháng),load_dimensions,4,0.145,10766,RUN
-HIST (lô tháng),load_fact,5,0.945,10766,RUN
-HIST (lô tháng),reconcile,6,0.087,10766,RUN
-HIST (lô tháng),ingest,1,0.381,11013,RUN
-HIST (lô tháng),validate,2,0.456,11013,RUN
-HIST (lô tháng),standardize,3,0.079,11013,RUN
-HIST (lô tháng),load_dimensions,4,0.118,11013,RUN
-HIST (lô tháng),load_fact,5,0.932,11013,RUN
-HIST (lô tháng),reconcile,6,0.102,11013,RUN
-HIST (lô tháng),ingest,1,0.435,11431,RUN
-HIST (lô tháng),validate,2,0.589,11431,RUN
-HIST (lô tháng),standardize,3,0.091,11431,RUN
-HIST (lô tháng),load_dimensions,4,0.125,11431,RUN
-HIST (lô tháng),load_fact,5,1.133,11431,RUN
-HIST (lô tháng),reconcile,6,0.133,11431,RUN
-HIST (lô tháng),ingest,1,0.402,11741,RUN
-HIST (lô tháng),validate,2,0.665,11741,RUN
-HIST (lô tháng),standardize,3,0.133,11741,RUN
-HIST (lô tháng),load_dimensions,4,0.139,11741,RUN
-HIST (lô tháng),load_fact,5,1.034,11741,RUN
-HIST (lô tháng),reconcile,6,0.088,11741,RUN
-HIST (lô tháng),ingest,1,0.39,13774,RUN
-HIST (lô tháng),validate,2,0.568,13774,RUN
-HIST (lô tháng),standardize,3,0.133,13774,RUN
-HIST (lô tháng),load_dimensions,4,0.161,13774,RUN
-HIST (lô tháng),load_fact,5,1.048,13774,RUN
-HIST (lô tháng),reconcile,6,0.23,13774,RUN
-HIST (lô tháng),ingest,1,0.452,21405,RUN
-HIST (lô tháng),validate,2,0.645,21405,RUN
-HIST (lô tháng),standardize,3,0.086,21405,RUN
-HIST (lô tháng),load_dimensions,4,0.107,21405,RUN
-HIST (lô tháng),load_fact,5,1.228,21405,RUN
-HIST (lô tháng),reconcile,6,0.095,21405,RUN
-HIST (lô tháng),ingest,1,0.404,12507,RUN
-HIST (lô tháng),validate,2,1.716,12507,RUN
-HIST (lô tháng),standardize,3,0.286,12507,RUN
-HIST (lô tháng),load_dimensions,4,0.141,12507,RUN
-HIST (lô tháng),load_fact,5,1.421,12507,RUN
-HIST (lô tháng),reconcile,6,0.15,12507,RUN
-HIST (lô tháng),ingest,1,0.58,13297,RUN
-HIST (lô tháng),validate,2,0.927,13297,RUN
-HIST (lô tháng),standardize,3,0.196,13297,RUN
-HIST (lô tháng),load_dimensions,4,0.16,13297,RUN
-HIST (lô tháng),load_fact,5,1.418,13297,RUN
-HIST (lô tháng),reconcile,6,0.164,13297,RUN
-HIST (lô tháng),ingest,1,0.488,13754,RUN
-HIST (lô tháng),validate,2,0.802,13754,RUN
-HIST (lô tháng),standardize,3,0.107,13754,RUN
-HIST (lô tháng),load_dimensions,4,0.117,13754,RUN
-HIST (lô tháng),load_fact,5,1.302,13754,RUN
-HIST (lô tháng),reconcile,6,0.108,13754,RUN
-HIST (lô tháng),ingest,1,0.496,14308,RUN
-HIST (lô tháng),validate,2,1.491,14308,RUN
-HIST (lô tháng),standardize,3,0.247,14308,RUN
-HIST (lô tháng),load_dimensions,4,0.304,14308,RUN
-HIST (lô tháng),load_fact,5,4.227,14308,RUN
-HIST (lô tháng),reconcile,6,0.39,14308,RUN
-HIST (lô tháng),ingest,1,0.692,15885,RUN
-HIST (lô tháng),validate,2,0.961,15885,RUN
-HIST (lô tháng),standardize,3,0.148,15885,RUN
-HIST (lô tháng),load_dimensions,4,0.084,15885,RUN
-HIST (lô tháng),load_fact,5,1.274,15885,RUN
-HIST (lô tháng),reconcile,6,0.237,15885,RUN
-HIST (lô tháng),ingest,1,0.733,15500,RUN
-HIST (lô tháng),validate,2,0.97,15500,RUN
-HIST (lô tháng),standardize,3,0.209,15500,RUN
-HIST (lô tháng),load_dimensions,4,0.099,15500,RUN
-HIST (lô tháng),load_fact,5,1.491,15500,RUN
-HIST (lô tháng),reconcile,6,0.135,15500,RUN
-HIST (lô tháng),ingest,1,0.668,16299,RUN
-HIST (lô tháng),validate,2,0.959,16299,RUN
-HIST (lô tháng),standardize,3,0.199,16299,RUN
-HIST (lô tháng),load_dimensions,4,0.192,16299,RUN
-HIST (lô tháng),load_fact,5,1.638,16299,RUN
-HIST (lô tháng),reconcile,6,0.138,16299,RUN
-HIST (lô tháng),ingest,1,0.631,16883,RUN
-HIST (lô tháng),validate,2,0.893,16883,RUN
-HIST (lô tháng),standardize,3,0.147,16883,RUN
-HIST (lô tháng),load_dimensions,4,0.158,16883,RUN
-HIST (lô tháng),load_fact,5,1.299,16883,RUN
-HIST (lô tháng),reconcile,6,0.166,16883,RUN
-HIST (lô tháng),ingest,1,0.577,17538,RUN
-HIST (lô tháng),validate,2,0.955,17538,RUN
-HIST (lô tháng),standardize,3,0.114,17538,RUN
-HIST (lô tháng),load_dimensions,4,0.24,17538,RUN
-HIST (lô tháng),load_fact,5,1.587,17538,RUN
-HIST (lô tháng),reconcile,6,0.275,17538,RUN
-HIST (lô tháng),ingest,1,1.132,17943,RUN
-HIST (lô tháng),validate,2,1.106,17943,RUN
-HIST (lô tháng),standardize,3,0.198,17943,RUN
-HIST (lô tháng),load_dimensions,4,0.176,17943,RUN
-HIST (lô tháng),load_fact,5,2.339,17943,RUN
-HIST (lô tháng),reconcile,6,0.228,17943,RUN
-HIST (lô tháng),ingest,1,0.533,21460,RUN
-HIST (lô tháng),validate,2,0.925,21460,RUN
-HIST (lô tháng),standardize,3,0.124,21460,RUN
-HIST (lô tháng),load_dimensions,4,0.11,21460,RUN
-HIST (lô tháng),load_fact,5,1.543,21460,RUN
-HIST (lô tháng),reconcile,6,0.184,21460,RUN
-HIST (lô tháng),ingest,1,0.543,33060,RUN
-HIST (lô tháng),validate,2,0.747,33060,RUN
-HIST (lô tháng),standardize,3,0.152,33060,RUN
-HIST (lô tháng),load_dimensions,4,0.08,33060,RUN
-HIST (lô tháng),load_fact,5,1.916,33060,RUN
-HIST (lô tháng),reconcile,6,0.229,33060,RUN
-HIST (lô tháng),ingest,1,1.128,19202,RUN
-HIST (lô tháng),validate,2,0.98,19202,RUN
-HIST (lô tháng),standardize,3,0.192,19202,RUN
-HIST (lô tháng),load_dimensions,4,0.161,19202,RUN
-HIST (lô tháng),load_fact,5,2.141,19202,RUN
-HIST (lô tháng),reconcile,6,0.159,19202,RUN
-HIST (lô tháng),ingest,1,0.857,20491,RUN
-HIST (lô tháng),validate,2,1.46,20491,RUN
-HIST (lô tháng),standardize,3,0.227,20491,RUN
-HIST (lô tháng),load_dimensions,4,0.233,20491,RUN
-HIST (lô tháng),load_fact,5,2.15,20491,RUN
-HIST (lô tháng),reconcile,6,0.151,20491,RUN
-HIST (lô tháng),ingest,1,0.664,20922,RUN
-HIST (lô tháng),validate,2,0.961,20922,RUN
-HIST (lô tháng),standardize,3,0.33,20922,RUN
-HIST (lô tháng),load_dimensions,4,0.273,20922,RUN
-HIST (lô tháng),load_fact,5,5.466,20922,RUN
-HIST (lô tháng),reconcile,6,0.327,20922,RUN
-HIST (lô tháng),ingest,1,0.831,21686,RUN
-HIST (lô tháng),validate,2,1.152,21686,RUN
-HIST (lô tháng),standardize,3,0.204,21686,RUN
-HIST (lô tháng),load_dimensions,4,0.103,21686,RUN
-HIST (lô tháng),load_fact,5,2.153,21686,RUN
-HIST (lô tháng),reconcile,6,0.14,21686,RUN
-HIST (lô tháng),ingest,1,0.583,23832,RUN
-HIST (lô tháng),validate,2,0.612,23832,RUN
-HIST (lô tháng),standardize,3,0.216,23832,RUN
-HIST (lô tháng),load_dimensions,4,0.105,23832,RUN
-HIST (lô tháng),load_fact,5,1.478,23832,RUN
-HIST (lô tháng),reconcile,6,0.191,23832,RUN
-HIST (lô tháng),ingest,1,0.499,22481,RUN
-HIST (lô tháng),validate,2,0.701,22481,RUN
-HIST (lô tháng),standardize,3,0.158,22481,RUN
-HIST (lô tháng),load_dimensions,4,0.108,22481,RUN
-HIST (lô tháng),load_fact,5,1.2,22481,RUN
-HIST (lô tháng),reconcile,6,0.12,22481,RUN
-HIST (lô tháng),ingest,1,0.477,22979,RUN
-HIST (lô tháng),validate,2,0.864,22979,RUN
-HIST (lô tháng),standardize,3,0.187,22979,RUN
-HIST (lô tháng),load_dimensions,4,0.171,22979,RUN
-HIST (lô tháng),load_fact,5,2.261,22979,RUN
-HIST (lô tháng),reconcile,6,0.166,22979,RUN
-HIST (lô tháng),ingest,1,0.599,23324,RUN
-HIST (lô tháng),validate,2,1.973,23324,RUN
-HIST (lô tháng),standardize,3,0.25,23324,RUN
-HIST (lô tháng),load_dimensions,4,0.14,23324,RUN
-HIST (lô tháng),load_fact,5,1.253,23324,RUN
-HIST (lô tháng),reconcile,6,0.118,23324,RUN
-HIST (lô tháng),ingest,1,0.538,23995,RUN
-HIST (lô tháng),validate,2,0.748,23995,RUN
-HIST (lô tháng),standardize,3,0.109,23995,RUN
-HIST (lô tháng),load_dimensions,4,0.105,23995,RUN
-HIST (lô tháng),load_fact,5,1.569,23995,RUN
-HIST (lô tháng),reconcile,6,0.153,23995,RUN
-HIST (lô tháng),ingest,1,0.692,24168,RUN
-HIST (lô tháng),validate,2,0.749,24168,RUN
-HIST (lô tháng),standardize,3,0.145,24168,RUN
-HIST (lô tháng),load_dimensions,4,0.09,24168,RUN
-HIST (lô tháng),load_fact,5,1.154,24168,RUN
-HIST (lô tháng),reconcile,6,0.161,24168,RUN
-HIST (lô tháng),ingest,1,0.413,28269,RUN
-HIST (lô tháng),validate,2,0.802,28269,RUN
-HIST (lô tháng),standardize,3,0.108,28269,RUN
-HIST (lô tháng),load_dimensions,4,0.128,28269,RUN
-HIST (lô tháng),load_fact,5,1.811,28269,RUN
-HIST (lô tháng),reconcile,6,0.137,28269,RUN
-HIST (lô tháng),ingest,1,0.547,42940,RUN
-HIST (lô tháng),validate,2,0.778,42940,RUN
-HIST (lô tháng),standardize,3,0.158,42940,RUN
-HIST (lô tháng),load_dimensions,4,0.075,42940,RUN
-HIST (lô tháng),load_fact,5,1.502,42940,RUN
-HIST (lô tháng),reconcile,6,0.128,42940,RUN
-HIST (lô tháng),ingest,1,0.542,23995,RUN
-HIST (lô tháng),validate,2,0.734,23995,RUN
-HIST (lô tháng),standardize,3,0.176,23995,RUN
-HIST (lô tháng),load_dimensions,4,0.124,23995,RUN
-HIST (lô tháng),load_fact,5,1.301,23995,RUN
-HIST (lô tháng),reconcile,6,0.119,23995,RUN
-HIST (lô tháng),ingest,1,0.452,25341,RUN
-HIST (lô tháng),validate,2,0.907,25341,RUN
-HIST (lô tháng),standardize,3,0.123,25341,RUN
-HIST (lô tháng),load_dimensions,4,0.32,25341,RUN
-HIST (lô tháng),load_fact,5,2.027,25341,RUN
-HIST (lô tháng),reconcile,6,0.183,25341,RUN
-HIST (lô tháng),ingest,1,0.546,25297,RUN
-HIST (lô tháng),validate,2,1.021,25297,RUN
-HIST (lô tháng),standardize,3,0.102,25297,RUN
-HIST (lô tháng),load_dimensions,4,0.111,25297,RUN
-HIST (lô tháng),load_fact,5,1.242,25297,RUN
-HIST (lô tháng),reconcile,6,0.144,25297,RUN
-HIST (lô tháng),ingest,1,0.466,25634,RUN
-HIST (lô tháng),validate,2,0.852,25634,RUN
-HIST (lô tháng),standardize,3,0.101,25634,RUN
-HIST (lô tháng),load_dimensions,4,0.128,25634,RUN
-HIST (lô tháng),load_fact,5,1.464,25634,RUN
-HIST (lô tháng),reconcile,6,0.231,25634,RUN
-HIST (lô tháng),ingest,1,0.603,27833,RUN
-HIST (lô tháng),validate,2,0.999,27833,RUN
-HIST (lô tháng),standardize,3,0.164,27833,RUN
-HIST (lô tháng),load_dimensions,4,0.155,27833,RUN
-HIST (lô tháng),load_fact,5,1.308,27833,RUN
-HIST (lô tháng),reconcile,6,0.157,27833,RUN
-HIST (lô tháng),ingest,1,0.709,25582,RUN
-HIST (lô tháng),validate,2,0.822,25582,RUN
-HIST (lô tháng),standardize,3,0.114,25582,RUN
-HIST (lô tháng),load_dimensions,4,0.126,25582,RUN
-HIST (lô tháng),load_fact,5,1.381,25582,RUN
-HIST (lô tháng),reconcile,6,0.15,25582,RUN
-HIST (lô tháng),ingest,1,0.531,25622,RUN
-HIST (lô tháng),validate,2,0.791,25622,RUN
-HIST (lô tháng),standardize,3,0.264,25622,RUN
-HIST (lô tháng),load_dimensions,4,0.216,25622,RUN
-HIST (lô tháng),load_fact,5,1.63,25622,RUN
-HIST (lô tháng),reconcile,6,0.274,25622,RUN
-HIST (lô tháng),ingest,1,0.645,25450,RUN
-HIST (lô tháng),validate,2,1.067,25450,RUN
-HIST (lô tháng),standardize,3,0.176,25450,RUN
-HIST (lô tháng),load_dimensions,4,0.099,25450,RUN
-HIST (lô tháng),load_fact,5,1.257,25450,RUN
-HIST (lô tháng),reconcile,6,0.174,25450,RUN
-HIST (lô tháng),ingest,1,0.449,25689,RUN
-HIST (lô tháng),validate,2,0.623,25689,RUN
-HIST (lô tháng),standardize,3,0.203,25689,RUN
-HIST (lô tháng),load_dimensions,4,0.103,25689,RUN
-HIST (lô tháng),load_fact,5,1.349,25689,RUN
-HIST (lô tháng),reconcile,6,0.109,25689,RUN
-HIST (lô tháng),ingest,1,0.404,25341,RUN
-HIST (lô tháng),validate,2,0.628,25341,RUN
-HIST (lô tháng),standardize,3,0.135,25341,RUN
-HIST (lô tháng),load_dimensions,4,0.086,25341,RUN
-HIST (lô tháng),load_fact,5,1.156,25341,RUN
-HIST (lô tháng),reconcile,6,0.12,25341,RUN
-HIST (lô tháng),ingest,1,0.617,23553,RUN
-HIST (lô tháng),validate,2,0.891,23553,RUN
-HIST (lô tháng),standardize,3,0.287,23553,RUN
-HIST (lô tháng),load_dimensions,4,0.224,23553,RUN
-HIST (lô tháng),load_fact,5,1.365,23553,RUN
-HIST (lô tháng),reconcile,6,0.226,23553,RUN
-HIST (lô tháng),ingest,1,2.338,9304,RERUN
-HIST (lô tháng),validate,2,2.96,9304,RERUN
-HIST (lô tháng),standardize,3,0.371,9304,RERUN
-HIST (lô tháng),load_dimensions,4,0.284,9304,RERUN
-HIST (lô tháng),load_fact,5,1.492,9304,RERUN
-HIST (lô tháng),reconcile,6,0.22,9304,RERUN
+HIST,ingest,1,0.646,395,RUN
+HIST,validate,2,0.724,395,RUN
+HIST,standardize,3,0.154,395,RUN
+HIST,load_dimensions,4,0.112,395,RUN
+HIST,load_fact,5,3.024,395,RUN
+HIST,reconcile,6,0.43,395,RUN
+HIST,ingest,1,4.461,676,RUN
+HIST,validate,2,4.305,676,RUN
+HIST,standardize,3,0.92,676,RUN
+HIST,load_dimensions,4,0.415,676,RUN
+HIST,load_fact,5,2.264,676,RUN
+HIST,reconcile,6,0.252,676,RUN
+HIST,ingest,1,0.514,913,RUN
+HIST,validate,2,1.556,913,RUN
+HIST,standardize,3,0.27,913,RUN
+HIST,load_dimensions,4,0.216,913,RUN
+HIST,load_fact,5,1.929,913,RUN
+HIST,reconcile,6,0.204,913,RUN
+HIST,ingest,1,1.774,1306,RUN
+HIST,validate,2,1.285,1306,RUN
+HIST,standardize,3,0.252,1306,RUN
+HIST,load_dimensions,4,0.383,1306,RUN
+HIST,load_fact,5,1.445,1306,RUN
+HIST,reconcile,6,0.155,1306,RUN
+HIST,ingest,1,0.678,1880,RUN
+HIST,validate,2,0.798,1880,RUN
+HIST,standardize,3,0.27,1880,RUN
+HIST,load_dimensions,4,0.2,1880,RUN
+HIST,load_fact,5,1.504,1880,RUN
+HIST,reconcile,6,0.17,1880,RUN
+HIST,ingest,1,0.571,2399,RUN
+HIST,validate,2,0.987,2399,RUN
+HIST,standardize,3,0.162,2399,RUN
+HIST,load_dimensions,4,0.166,2399,RUN
+HIST,load_fact,5,1.964,2399,RUN
+HIST,reconcile,6,0.198,2399,RUN
+HIST,ingest,1,0.477,2938,RUN
+HIST,validate,2,0.836,2938,RUN
+HIST,standardize,3,0.15,2938,RUN
+HIST,load_dimensions,4,0.174,2938,RUN
+HIST,load_fact,5,1.288,2938,RUN
+HIST,reconcile,6,0.126,2938,RUN
+HIST,ingest,1,0.603,3441,RUN
+HIST,validate,2,0.862,3441,RUN
+HIST,standardize,3,0.114,3441,RUN
+HIST,load_dimensions,4,0.125,3441,RUN
+HIST,load_fact,5,0.981,3441,RUN
+HIST,reconcile,6,0.094,3441,RUN
+HIST,ingest,1,0.551,3989,RUN
+HIST,validate,2,0.684,3989,RUN
+HIST,standardize,3,0.104,3989,RUN
+HIST,load_dimensions,4,0.22,3989,RUN
+HIST,load_fact,5,1.258,3989,RUN
+HIST,reconcile,6,0.155,3989,RUN
+HIST,ingest,1,0.501,4422,RUN
+HIST,validate,2,0.763,4422,RUN
+HIST,standardize,3,0.094,4422,RUN
+HIST,load_dimensions,4,0.107,4422,RUN
+HIST,load_fact,5,1.198,4422,RUN
+HIST,reconcile,6,0.084,4422,RUN
+HIST,ingest,1,0.619,5669,RUN
+HIST,validate,2,0.878,5669,RUN
+HIST,standardize,3,0.111,5669,RUN
+HIST,load_dimensions,4,0.147,5669,RUN
+HIST,load_fact,5,1.426,5669,RUN
+HIST,reconcile,6,0.237,5669,RUN
+HIST,ingest,1,0.514,9139,RUN
+HIST,validate,2,0.772,9139,RUN
+HIST,standardize,3,0.155,9139,RUN
+HIST,load_dimensions,4,0.179,9139,RUN
+HIST,load_fact,5,1.349,9139,RUN
+HIST,reconcile,6,0.183,9139,RUN
+HIST,ingest,1,0.69,5601,RUN
+HIST,validate,2,0.79,5601,RUN
+HIST,standardize,3,0.169,5601,RUN
+HIST,load_dimensions,4,0.179,5601,RUN
+HIST,load_fact,5,1.09,5601,RUN
+HIST,reconcile,6,0.092,5601,RUN
+HIST,ingest,1,0.459,6255,RUN
+HIST,validate,2,0.78,6255,RUN
+HIST,standardize,3,0.125,6255,RUN
+HIST,load_dimensions,4,0.12,6255,RUN
+HIST,load_fact,5,1.631,6255,RUN
+HIST,reconcile,6,0.178,6255,RUN
+HIST,ingest,1,0.553,6549,RUN
+HIST,validate,2,1.248,6549,RUN
+HIST,standardize,3,0.424,6549,RUN
+HIST,load_dimensions,4,0.205,6549,RUN
+HIST,load_fact,5,1.347,6549,RUN
+HIST,reconcile,6,0.126,6549,RUN
+HIST,ingest,1,0.507,7059,RUN
+HIST,validate,2,0.871,7059,RUN
+HIST,standardize,3,0.149,7059,RUN
+HIST,load_dimensions,4,0.214,7059,RUN
+HIST,load_fact,5,1.078,7059,RUN
+HIST,reconcile,6,0.085,7059,RUN
+HIST,ingest,1,0.505,7916,RUN
+HIST,validate,2,0.842,7916,RUN
+HIST,standardize,3,0.151,7916,RUN
+HIST,load_dimensions,4,0.18,7916,RUN
+HIST,load_fact,5,2.796,7916,RUN
+HIST,reconcile,6,0.147,7916,RUN
+HIST,ingest,1,0.616,7398,RUN
+HIST,validate,2,1.353,7398,RUN
+HIST,standardize,3,0.161,7398,RUN
+HIST,load_dimensions,4,0.224,7398,RUN
+HIST,load_fact,5,1.434,7398,RUN
+HIST,reconcile,6,0.096,7398,RUN
+HIST,ingest,1,0.547,7600,RUN
+HIST,validate,2,0.879,7600,RUN
+HIST,standardize,3,0.169,7600,RUN
+HIST,load_dimensions,4,0.129,7600,RUN
+HIST,load_fact,5,1.067,7600,RUN
+HIST,reconcile,6,0.12,7600,RUN
+HIST,ingest,1,0.416,7844,RUN
+HIST,validate,2,0.771,7844,RUN
+HIST,standardize,3,0.165,7844,RUN
+HIST,load_dimensions,4,0.126,7844,RUN
+HIST,load_fact,5,1.975,7844,RUN
+HIST,reconcile,6,0.166,7844,RUN
+HIST,ingest,1,0.676,8197,RUN
+HIST,validate,2,0.786,8197,RUN
+HIST,standardize,3,0.17,8197,RUN
+HIST,load_dimensions,4,0.29,8197,RUN
+HIST,load_fact,5,1.66,8197,RUN
+HIST,reconcile,6,0.214,8197,RUN
+HIST,ingest,1,1.023,8275,RUN
+HIST,validate,2,1.231,8275,RUN
+HIST,standardize,3,0.132,8275,RUN
+HIST,load_dimensions,4,0.14,8275,RUN
+HIST,load_fact,5,1.781,8275,RUN
+HIST,reconcile,6,0.269,8275,RUN
+HIST,ingest,1,0.759,9795,RUN
+HIST,validate,2,0.801,9795,RUN
+HIST,standardize,3,0.104,9795,RUN
+HIST,load_dimensions,4,0.1,9795,RUN
+HIST,load_fact,5,1.491,9795,RUN
+HIST,reconcile,6,0.143,9795,RUN
+HIST,ingest,1,0.634,15493,RUN
+HIST,validate,2,0.839,15493,RUN
+HIST,standardize,3,0.141,15493,RUN
+HIST,load_dimensions,4,0.072,15493,RUN
+HIST,load_fact,5,1.296,15493,RUN
+HIST,reconcile,6,0.122,15493,RUN
+HIST,ingest,1,0.462,8682,RUN
+HIST,validate,2,0.624,8682,RUN
+HIST,standardize,3,0.111,8682,RUN
+HIST,load_dimensions,4,0.156,8682,RUN
+HIST,load_fact,5,1.713,8682,RUN
+HIST,reconcile,6,0.134,8682,RUN
+HIST,ingest,1,0.675,9519,RUN
+HIST,validate,2,2.406,9519,RUN
+HIST,standardize,3,0.308,9519,RUN
+HIST,load_dimensions,4,0.226,9519,RUN
+HIST,load_fact,5,1.213,9519,RUN
+HIST,reconcile,6,0.094,9519,RUN
+HIST,ingest,1,0.4,9938,RUN
+HIST,validate,2,0.566,9938,RUN
+HIST,standardize,3,0.125,9938,RUN
+HIST,load_dimensions,4,0.075,9938,RUN
+HIST,load_fact,5,1.01,9938,RUN
+HIST,reconcile,6,0.085,9938,RUN
+HIST,ingest,1,0.411,10930,RUN
+HIST,validate,2,0.537,10930,RUN
+HIST,standardize,3,0.109,10930,RUN
+HIST,load_dimensions,4,0.139,10930,RUN
+HIST,load_fact,5,0.901,10930,RUN
+HIST,reconcile,6,0.09,10930,RUN
+HIST,ingest,1,0.403,10431,RUN
+HIST,validate,2,0.537,10431,RUN
+HIST,standardize,3,0.099,10431,RUN
+HIST,load_dimensions,4,0.072,10431,RUN
+HIST,load_fact,5,0.892,10431,RUN
+HIST,reconcile,6,0.078,10431,RUN
+HIST,ingest,1,0.392,10766,RUN
+HIST,validate,2,0.595,10766,RUN
+HIST,standardize,3,0.109,10766,RUN
+HIST,load_dimensions,4,0.145,10766,RUN
+HIST,load_fact,5,0.945,10766,RUN
+HIST,reconcile,6,0.087,10766,RUN
+HIST,ingest,1,0.381,11013,RUN
+HIST,validate,2,0.456,11013,RUN
+HIST,standardize,3,0.079,11013,RUN
+HIST,load_dimensions,4,0.118,11013,RUN
+HIST,load_fact,5,0.932,11013,RUN
+HIST,reconcile,6,0.102,11013,RUN
+HIST,ingest,1,0.435,11431,RUN
+HIST,validate,2,0.589,11431,RUN
+HIST,standardize,3,0.091,11431,RUN
+HIST,load_dimensions,4,0.125,11431,RUN
+HIST,load_fact,5,1.133,11431,RUN
+HIST,reconcile,6,0.133,11431,RUN
+HIST,ingest,1,0.402,11741,RUN
+HIST,validate,2,0.665,11741,RUN
+HIST,standardize,3,0.133,11741,RUN
+HIST,load_dimensions,4,0.139,11741,RUN
+HIST,load_fact,5,1.034,11741,RUN
+HIST,reconcile,6,0.088,11741,RUN
+HIST,ingest,1,0.39,13774,RUN
+HIST,validate,2,0.568,13774,RUN
+HIST,standardize,3,0.133,13774,RUN
+HIST,load_dimensions,4,0.161,13774,RUN
+HIST,load_fact,5,1.048,13774,RUN
+HIST,reconcile,6,0.23,13774,RUN
+HIST,ingest,1,0.452,21405,RUN
+HIST,validate,2,0.645,21405,RUN
+HIST,standardize,3,0.086,21405,RUN
+HIST,load_dimensions,4,0.107,21405,RUN
+HIST,load_fact,5,1.228,21405,RUN
+HIST,reconcile,6,0.095,21405,RUN
+HIST,ingest,1,0.404,12507,RUN
+HIST,validate,2,1.716,12507,RUN
+HIST,standardize,3,0.286,12507,RUN
+HIST,load_dimensions,4,0.141,12507,RUN
+HIST,load_fact,5,1.421,12507,RUN
+HIST,reconcile,6,0.15,12507,RUN
+HIST,ingest,1,0.58,13297,RUN
+HIST,validate,2,0.927,13297,RUN
+HIST,standardize,3,0.196,13297,RUN
+HIST,load_dimensions,4,0.16,13297,RUN
+HIST,load_fact,5,1.418,13297,RUN
+HIST,reconcile,6,0.164,13297,RUN
+HIST,ingest,1,0.488,13754,RUN
+HIST,validate,2,0.802,13754,RUN
+HIST,standardize,3,0.107,13754,RUN
+HIST,load_dimensions,4,0.117,13754,RUN
+HIST,load_fact,5,1.302,13754,RUN
+HIST,reconcile,6,0.108,13754,RUN
+HIST,ingest,1,0.496,14308,RUN
+HIST,validate,2,1.491,14308,RUN
+HIST,standardize,3,0.247,14308,RUN
+HIST,load_dimensions,4,0.304,14308,RUN
+HIST,load_fact,5,4.227,14308,RUN
+HIST,reconcile,6,0.39,14308,RUN
+HIST,ingest,1,0.692,15885,RUN
+HIST,validate,2,0.961,15885,RUN
+HIST,standardize,3,0.148,15885,RUN
+HIST,load_dimensions,4,0.084,15885,RUN
+HIST,load_fact,5,1.274,15885,RUN
+HIST,reconcile,6,0.237,15885,RUN
+HIST,ingest,1,0.733,15500,RUN
+HIST,validate,2,0.97,15500,RUN
+HIST,standardize,3,0.209,15500,RUN
+HIST,load_dimensions,4,0.099,15500,RUN
+HIST,load_fact,5,1.491,15500,RUN
+HIST,reconcile,6,0.135,15500,RUN
+HIST,ingest,1,0.668,16299,RUN
+HIST,validate,2,0.959,16299,RUN
+HIST,standardize,3,0.199,16299,RUN
+HIST,load_dimensions,4,0.192,16299,RUN
+HIST,load_fact,5,1.638,16299,RUN
+HIST,reconcile,6,0.138,16299,RUN
+HIST,ingest,1,0.631,16883,RUN
+HIST,validate,2,0.893,16883,RUN
+HIST,standardize,3,0.147,16883,RUN
+HIST,load_dimensions,4,0.158,16883,RUN
+HIST,load_fact,5,1.299,16883,RUN
+HIST,reconcile,6,0.166,16883,RUN
+HIST,ingest,1,0.577,17538,RUN
+HIST,validate,2,0.955,17538,RUN
+HIST,standardize,3,0.114,17538,RUN
+HIST,load_dimensions,4,0.24,17538,RUN
+HIST,load_fact,5,1.587,17538,RUN
+HIST,reconcile,6,0.275,17538,RUN
+HIST,ingest,1,1.132,17943,RUN
+HIST,validate,2,1.106,17943,RUN
+HIST,standardize,3,0.198,17943,RUN
+HIST,load_dimensions,4,0.176,17943,RUN
+HIST,load_fact,5,2.339,17943,RUN
+HIST,reconcile,6,0.228,17943,RUN
+HIST,ingest,1,0.533,21460,RUN
+HIST,validate,2,0.925,21460,RUN
+HIST,standardize,3,0.124,21460,RUN
+HIST,load_dimensions,4,0.11,21460,RUN
+HIST,load_fact,5,1.543,21460,RUN
+HIST,reconcile,6,0.184,21460,RUN
+HIST,ingest,1,0.543,33060,RUN
+HIST,validate,2,0.747,33060,RUN
+HIST,standardize,3,0.152,33060,RUN
+HIST,load_dimensions,4,0.08,33060,RUN
+HIST,load_fact,5,1.916,33060,RUN
+HIST,reconcile,6,0.229,33060,RUN
+HIST,ingest,1,1.128,19202,RUN
+HIST,validate,2,0.98,19202,RUN
+HIST,standardize,3,0.192,19202,RUN
+HIST,load_dimensions,4,0.161,19202,RUN
+HIST,load_fact,5,2.141,19202,RUN
+HIST,reconcile,6,0.159,19202,RUN
+HIST,ingest,1,0.857,20491,RUN
+HIST,validate,2,1.46,20491,RUN
+HIST,standardize,3,0.227,20491,RUN
+HIST,load_dimensions,4,0.233,20491,RUN
+HIST,load_fact,5,2.15,20491,RUN
+HIST,reconcile,6,0.151,20491,RUN
+HIST,ingest,1,0.664,20922,RUN
+HIST,validate,2,0.961,20922,RUN
+HIST,standardize,3,0.33,20922,RUN
+HIST,load_dimensions,4,0.273,20922,RUN
+HIST,load_fact,5,5.466,20922,RUN
+HIST,reconcile,6,0.327,20922,RUN
+HIST,ingest,1,0.831,21686,RUN
+HIST,validate,2,1.152,21686,RUN
+HIST,standardize,3,0.204,21686,RUN
+HIST,load_dimensions,4,0.103,21686,RUN
+HIST,load_fact,5,2.153,21686,RUN
+HIST,reconcile,6,0.14,21686,RUN
+HIST,ingest,1,0.583,23832,RUN
+HIST,validate,2,0.612,23832,RUN
+HIST,standardize,3,0.216,23832,RUN
+HIST,load_dimensions,4,0.105,23832,RUN
+HIST,load_fact,5,1.478,23832,RUN
+HIST,reconcile,6,0.191,23832,RUN
+HIST,ingest,1,0.499,22481,RUN
+HIST,validate,2,0.701,22481,RUN
+HIST,standardize,3,0.158,22481,RUN
+HIST,load_dimensions,4,0.108,22481,RUN
+HIST,load_fact,5,1.2,22481,RUN
+HIST,reconcile,6,0.12,22481,RUN
+HIST,ingest,1,0.477,22979,RUN
+HIST,validate,2,0.864,22979,RUN
+HIST,standardize,3,0.187,22979,RUN
+HIST,load_dimensions,4,0.171,22979,RUN
+HIST,load_fact,5,2.261,22979,RUN
+HIST,reconcile,6,0.166,22979,RUN
+HIST,ingest,1,0.599,23324,RUN
+HIST,validate,2,1.973,23324,RUN
+HIST,standardize,3,0.25,23324,RUN
+HIST,load_dimensions,4,0.14,23324,RUN
+HIST,load_fact,5,1.253,23324,RUN
+HIST,reconcile,6,0.118,23324,RUN
+HIST,ingest,1,0.538,23995,RUN
+HIST,validate,2,0.748,23995,RUN
+HIST,standardize,3,0.109,23995,RUN
+HIST,load_dimensions,4,0.105,23995,RUN
+HIST,load_fact,5,1.569,23995,RUN
+HIST,reconcile,6,0.153,23995,RUN
+HIST,ingest,1,0.692,24168,RUN
+HIST,validate,2,0.749,24168,RUN
+HIST,standardize,3,0.145,24168,RUN
+HIST,load_dimensions,4,0.09,24168,RUN
+HIST,load_fact,5,1.154,24168,RUN
+HIST,reconcile,6,0.161,24168,RUN
+HIST,ingest,1,0.413,28269,RUN
+HIST,validate,2,0.802,28269,RUN
+HIST,standardize,3,0.108,28269,RUN
+HIST,load_dimensions,4,0.128,28269,RUN
+HIST,load_fact,5,1.811,28269,RUN
+HIST,reconcile,6,0.137,28269,RUN
+HIST,ingest,1,0.547,42940,RUN
+HIST,validate,2,0.778,42940,RUN
+HIST,standardize,3,0.158,42940,RUN
+HIST,load_dimensions,4,0.075,42940,RUN
+HIST,load_fact,5,1.502,42940,RUN
+HIST,reconcile,6,0.128,42940,RUN
+HIST,ingest,1,0.542,23995,RUN
+HIST,validate,2,0.734,23995,RUN
+HIST,standardize,3,0.176,23995,RUN
+HIST,load_dimensions,4,0.124,23995,RUN
+HIST,load_fact,5,1.301,23995,RUN
+HIST,reconcile,6,0.119,23995,RUN
+HIST,ingest,1,0.452,25341,RUN
+HIST,validate,2,0.907,25341,RUN
+HIST,standardize,3,0.123,25341,RUN
+HIST,load_dimensions,4,0.32,25341,RUN
+HIST,load_fact,5,2.027,25341,RUN
+HIST,reconcile,6,0.183,25341,RUN
+HIST,ingest,1,0.546,25297,RUN
+HIST,validate,2,1.021,25297,RUN
+HIST,standardize,3,0.102,25297,RUN
+HIST,load_dimensions,4,0.111,25297,RUN
+HIST,load_fact,5,1.242,25297,RUN
+HIST,reconcile,6,0.144,25297,RUN
+HIST,ingest,1,0.466,25634,RUN
+HIST,validate,2,0.852,25634,RUN
+HIST,standardize,3,0.101,25634,RUN
+HIST,load_dimensions,4,0.128,25634,RUN
+HIST,load_fact,5,1.464,25634,RUN
+HIST,reconcile,6,0.231,25634,RUN
+HIST,ingest,1,0.603,27833,RUN
+HIST,validate,2,0.999,27833,RUN
+HIST,standardize,3,0.164,27833,RUN
+HIST,load_dimensions,4,0.155,27833,RUN
+HIST,load_fact,5,1.308,27833,RUN
+HIST,reconcile,6,0.157,27833,RUN
+HIST,ingest,1,0.709,25582,RUN
+HIST,validate,2,0.822,25582,RUN
+HIST,standardize,3,0.114,25582,RUN
+HIST,load_dimensions,4,0.126,25582,RUN
+HIST,load_fact,5,1.381,25582,RUN
+HIST,reconcile,6,0.15,25582,RUN
+HIST,ingest,1,0.531,25622,RUN
+HIST,validate,2,0.791,25622,RUN
+HIST,standardize,3,0.264,25622,RUN
+HIST,load_dimensions,4,0.216,25622,RUN
+HIST,load_fact,5,1.63,25622,RUN
+HIST,reconcile,6,0.274,25622,RUN
+HIST,ingest,1,0.645,25450,RUN
+HIST,validate,2,1.067,25450,RUN
+HIST,standardize,3,0.176,25450,RUN
+HIST,load_dimensions,4,0.099,25450,RUN
+HIST,load_fact,5,1.257,25450,RUN
+HIST,reconcile,6,0.174,25450,RUN
+HIST,ingest,1,0.449,25689,RUN
+HIST,validate,2,0.623,25689,RUN
+HIST,standardize,3,0.203,25689,RUN
+HIST,load_dimensions,4,0.103,25689,RUN
+HIST,load_fact,5,1.349,25689,RUN
+HIST,reconcile,6,0.109,25689,RUN
+HIST,ingest,1,0.404,25341,RUN
+HIST,validate,2,0.628,25341,RUN
+HIST,standardize,3,0.135,25341,RUN
+HIST,load_dimensions,4,0.086,25341,RUN
+HIST,load_fact,5,1.156,25341,RUN
+HIST,reconcile,6,0.12,25341,RUN
+HIST,ingest,1,0.617,23553,RUN
+HIST,validate,2,0.891,23553,RUN
+HIST,standardize,3,0.287,23553,RUN
+HIST,load_dimensions,4,0.224,23553,RUN
+HIST,load_fact,5,1.365,23553,RUN
+HIST,reconcile,6,0.226,23553,RUN
+HIST,ingest,1,2.338,9304,RERUN
+HIST,validate,2,2.96,9304,RERUN
+HIST,standardize,3,0.371,9304,RERUN
+HIST,load_dimensions,4,0.284,9304,RERUN
+HIST,load_fact,5,1.492,9304,RERUN
+HIST,reconcile,6,0.22,9304,RERUN
 KB05_DATA_ERRORS,ingest,1,1.204,20,RUN
 KB05_DATA_ERRORS,validate,2,13.923,20,RUN
 KB05_DATA_ERRORS,standardize,3,0.271,20,RUN
@@ -457,10 +457,10 @@ KB03_FRAUD,load_dimensions,4,0.328,5,RERUN
 KB03_FRAUD,load_fact,5,1.882,5,RERUN
 KB03_FRAUD,reconcile,6,0.347,5,RERUN
 KB03_FRAUD,detect_alerts,7,0.143,5,RERUN
-HIST (lô tháng),ingest,1,2.683,177,RERUN
-HIST (lô tháng),validate,2,2.835,177,RERUN
-HIST (lô tháng),standardize,3,0.374,177,RERUN
-HIST (lô tháng),load_dimensions,4,0.342,177,RERUN
-HIST (lô tháng),load_fact,5,1.577,177,RERUN
-HIST (lô tháng),reconcile,6,0.191,177,RERUN
-HIST (lô tháng),detect_alerts,7,0.08,177,RERUN
+HIST,ingest,1,2.683,177,RERUN
+HIST,validate,2,2.835,177,RERUN
+HIST,standardize,3,0.374,177,RERUN
+HIST,load_dimensions,4,0.342,177,RERUN
+HIST,load_fact,5,1.577,177,RERUN
+HIST,reconcile,6,0.191,177,RERUN
+HIST,detect_alerts,7,0.08,177,RERUN

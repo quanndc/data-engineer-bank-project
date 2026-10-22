@@ -24,6 +24,7 @@ services:
       - ./warehouse/clickhouse/init:/docker-entrypoint-initdb.d:ro
       - ./warehouse/clickhouse/config.d/backups.xml:/etc/clickhouse-server/config.d/backups.xml:ro
       - ./warehouse/clickhouse/config.d/memory.xml:/etc/clickhouse-server/config.d/memory.xml:ro
+      - ./warehouse/clickhouse/config.d/system_logs.xml:/etc/clickhouse-server/config.d/system_logs.xml:ro
       - ./lake:/var/lib/clickhouse/user_files/lake      # B -> D: ClickHouse reads Parquet with file()
       - ./backups:/backups                               # BR07 backup area
     ulimits:
@@ -39,6 +40,8 @@ services:
   postgres:
     image: postgres:16.4-alpine
     container_name: bankdw-postgres
+    # shared_buffers as in the Phase 1 benchmark (default 128MB); the rest is set per benchmark session
+    command: ["postgres", "-c", "shared_buffers=256MB"]
     ports:
       - "5433:5432"            # 5432 is used by another project on this machine
     environment:

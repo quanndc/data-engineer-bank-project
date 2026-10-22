@@ -1,0 +1,9 @@
+cores,mode,batches,session_s,transform_s,rows,rows_without_version,rows_per_s,process_s,correct
+1,full,1,1.88,7.7,1056320,0,137164,11.39,True
+2,full,1,1.73,6.04,1056320,0,174770,9.81,True
+4,full,1,2.04,5.44,1056320,0,194009,8.81,True
+8,full,1,1.57,5.39,1056320,0,196139,8.28,True
+1,monthly,72,1.93,30.59,1056320,0,34526,34.19,True
+2,monthly,72,2.08,32.52,1056320,0,32478,36.27,True
+4,monthly,72,1.65,31.78,1056320,0,33237,35.14,True
+8,monthly,72,1.94,29.57,1056320,0,35718,33.22,True

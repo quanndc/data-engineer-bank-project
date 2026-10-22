@@ -13,6 +13,34 @@ Ghi lại các phát hiện, quyết định thiết kế và thay đổi của 
 
 
 
+
+---
+
+## [2026-10-22] Phase 2 — P2-8 (mở rộng): benchmark B1–B4 ở mức ×1 + P2-9 (bắt đầu): bản nháp report 🚧
+
+### Benchmark — so sánh mô hình, công nghệ, kiến trúc ([docs/BENCHMARK_P2.md](docs/BENCHMARK_P2.md))
+Mỗi phép so sánh chỉ đổi một yếu tố; mọi phép thử ghi chạy trên bản sao (`bench`, `dwpg`, `bench_ops`), không đụng `dw` và `ops`.
+- **B1 Star vs One Big Table (cùng ClickHouse)** — [spark/jobs/benchmark.py](spark/jobs/benchmark.py): One Big Table nhanh hơn 1,5–3,4× (chênh 3–16 ms), tốn chỗ hơn 1,37×; sửa tên 1 khu vực phải ghi lại 150.058 dòng (star: 1 dòng).
+- **B2 ClickHouse vs PostgreSQL (cùng star; PostgreSQL cấu hình như Phase 1)**: 9 truy vấn BR01/BR02/BR03/BR08 × 6 lần; truy vấn tổng hợp ClickHouse nhanh hơn 3,3–22,4×, tra cứu 1 tài khoản PostgreSQL nhanh hơn 17–46×; dung lượng 18,6 so với 162,5 MB; 8 client: 93 so với 12 truy vấn/giây. **18/18** cặp kết quả khớp từng ô.
+- **B3 Kho vận hành PostgreSQL vs ClickHouse** — [spark/jobs/bench_ops.py](spark/jobs/bench_ops.py): PostgreSQL nhanh hơn 8–70× ở mọi thao tác của app và pipeline; tự bảo đảm 5/5 ràng buộc (trạng thái, chuyển trạng thái, chống trùng, khóa ngoại, giao dịch), ClickHouse 0/5.
+- **B4 Spark 1/2/4/8 lõi, 1 lô vs 72 lô** — [spark/jobs/bench_spark.py](spark/jobs/bench_spark.py): ở ×1, thêm lõi gần như không giúp (7,7 → 5,4 s); 72 lô chậm hơn 1 lô 4–6×; mọi lần chạy đúng 1.056.320 dòng.
+- `make bench-all` (và từng bước `bench-load`, `bench`, `bench-concurrency`, `bench-update`, `bench-ops`, `bench-spark`): mỗi bước giữ log console; toàn bộ số liệu và log nằm ở [docs/results/p2/](docs/results/p2/).
+- [docs/EVALUATION_P2.md](docs/EVALUATION_P2.md) mục 2 thay bằng tóm tắt B1–B4.
+
+### Cấu hình thay đổi
+- PostgreSQL: `shared_buffers` 256 MB ([docker-compose.yml](docker-compose.yml)); `work_mem` 64 MB, 4 worker, `jit` off chỉ đặt trong phiên benchmark.
+- ClickHouse: [warehouse/clickhouse/config.d/system_logs.xml](warehouse/clickhouse/config.d/system_logs.xml) tắt log hệ thống chạy ngầm (giữ `query_log`, `part_log`, `backup_log`, `error_log`); xoá các bảng log cũ → RAM nền 1,2 GB → 0,74 GB.
+
+### Sự cố khi đo (ghi đủ ở mục 8 của BENCHMARK_P2.md)
+- ClickHouse hết bộ nhớ ở truy vấn BR02 do log hệ thống → tắt log, chạy lại toàn bộ.
+- Nạp PostgreSQL 42 s vì có khóa ngoại trong lúc COPY → tạo khóa sau COPY: 4,6 s.
+- Máy ngủ khoảng 2 giờ giữa `make bench-all` làm hỏng phép đo tải đồng thời → giữ máy thức, đo lại.
+- Mutation ClickHouse không sửa được cột phiên bản của ReplacingMergeTree (ghi nhận thành phát hiện của B3); `part_log` đếm lẫn lần chạy cũ → chỉ đếm từ lúc bắt đầu.
+
+### Report (P2-9, bản nháp)
+- [report/main.tex](report/main.tex) viết lại cho Phase 2: Berka, 3 nhóm người dùng, 8 BR, kiến trúc A–F, mô hình sao có SCD2, 8 kịch bản, 3 giải pháp kho + phương án kiến trúc kho vận hành, giả thuyết H1–H5, kết quả B1–B4. Biên dịch không lỗi, không tràn lề. Report Phase 1 vẫn ở tag `phase1-kaggle`.
+- Còn TODO: ngày nộp, ảnh chụp 3 tab, phân công Phase 2, số thao tác đo bằng đồng hồ khi quay video.
+
 ---
 
 ## [2026-10-22] Phase 2 — P2-8: đánh giá KB01–KB08 + benchmark ClickHouse vs PostgreSQL ✅

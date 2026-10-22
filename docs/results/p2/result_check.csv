@@ -1,8 +1,19 @@
-query,status,rows
-br01_kpi_1998,PASS,1
-br01_by_month,PASS,75
-br01_by_tier_1998,PASS,4
-br02_account_detail,PASS,437
-br02_account_totals,PASS,1
-br08_tier_old_new,PASS,8
-br08_client_versions,PASS,2
+query,comparison,status,rows
+br01_kpi_1998,ch_star = ch_obt,PASS,1
+br01_kpi_1998,ch_star = pg_star,PASS,1
+br01_by_month,ch_star = ch_obt,PASS,75
+br01_by_month,ch_star = pg_star,PASS,75
+br01_by_tier_1998,ch_star = ch_obt,PASS,4
+br01_by_tier_1998,ch_star = pg_star,PASS,4
+br01_by_region,ch_star = ch_obt,PASS,8
+br01_by_region,ch_star = pg_star,PASS,8
+br02_account_detail,ch_star = ch_obt,PASS,437
+br02_account_detail,ch_star = pg_star,PASS,437
+br02_account_totals,ch_star = ch_obt,PASS,1
+br02_account_totals,ch_star = pg_star,PASS,1
+br03_r1_scan,ch_star = ch_obt,PASS,1
+br03_r1_scan,ch_star = pg_star,PASS,1
+br08_tier_old_new,ch_star = ch_obt,PASS,8
+br08_tier_old_new,ch_star = pg_star,PASS,8
+br08_client_versions,ch_star = ch_obt,PASS,2
+br08_client_versions,ch_star = pg_star,PASS,2

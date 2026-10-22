@@ -1,0 +1,19 @@
+<!-- Background system logs off, except query_log, part_log, backup_log and error_log.
+     Each log keeps buffers and flush threads; on a 2.5 GB container they pushed the server's total
+     memory tracker to its limit and a benchmark query failed with MEMORY_LIMIT_EXCEEDED (P2-8).
+     This follows the ClickHouse guidance for low-memory servers. -->
+<clickhouse>
+  <metric_log remove="1"/>
+  <asynchronous_metric_log remove="1"/>
+  <trace_log remove="1"/>
+  <text_log remove="1"/>
+  <latency_log remove="1"/>
+  <query_metric_log remove="1"/>
+  <query_thread_log remove="1"/>
+  <query_views_log remove="1"/>
+  <processors_profile_log remove="1"/>
+  <opentelemetry_span_log remove="1"/>
+  <asynchronous_insert_log remove="1"/>
+  <blob_storage_log remove="1"/>
+  <s3queue_log remove="1"/>
+</clickhouse>

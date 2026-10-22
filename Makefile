@@ -10,8 +10,9 @@ else
 COMPOSE := docker compose
 endif
 SPARK := $(COMPOSE) exec -T spark
+SHELL := /bin/bash   # PIPESTATUS in the benchmark targets
 
-.PHONY: up down ps logs smoke sql psql clean source-check tiers schema load-ref load-history rerun reconcile scenarios scenario alerts backup restore backups evaluate bench-load bench
+.PHONY: up down ps logs smoke sql psql clean source-check tiers schema load-ref load-history rerun reconcile scenarios scenario alerts backup restore backups evaluate bench-load bench bench-concurrency bench-update bench-ops bench-spark bench-all
 
 up:            ## Start D ClickHouse, E PostgreSQL, C Spark, F app (http://localhost:8501)
 	@echo "ClickHouse: $(CLICKHOUSE_HOST)"
@@ -77,12 +78,32 @@ evaluate:      ## KB01-KB08 + data-quality checks against the source and expecte
 	$(SPARK) bash -c "cd /opt/jobs && python3 evaluate.py"; s=$$?; mkdir -p $(RESULTS); \
 	cp lake/eval/kb_results.json $(RESULTS)/; exit $$s
 
-bench-load:    ## Copy the 6 dw tables into PostgreSQL database dwpg (alternative of decision Q-K)
-	$(SPARK) bash -c "cd /opt/jobs && python3 benchmark.py load"
+# every benchmark step keeps its console log in lake/bench/p2/logs and copies the results to docs
+BENCH = mkdir -p lake/bench/p2/logs $(RESULTS)/logs; \
+	$(SPARK) bash -c "cd /opt/jobs && python3 $(1)" 2>&1 | grep -v -E " (INFO|WARN) |^\[Stage" \
+	| tee lake/bench/p2/logs/$(2).log; s=$${PIPESTATUS[0]}; \
+	cp lake/bench/p2/*.csv lake/bench/p2/*.json $(RESULTS)/ 2>/dev/null; cp lake/bench/p2/logs/*.log $(RESULTS)/logs/; \
+	exit $$s
 
-bench:         ## BR01/BR02/BR08 on ClickHouse vs PostgreSQL (6 runs each) + pipeline timing
-	$(SPARK) bash -c "cd /opt/jobs && python3 benchmark.py run"; s=$$?; mkdir -p $(RESULTS); \
-	cp lake/bench/p2/*.csv lake/bench/p2/*.json $(RESULTS)/; exit $$s
+bench-load:    ## B1/B2: copy dw into bench (ClickHouse star + One Big Table) and dwpg (PostgreSQL)
+	@$(call BENCH,benchmark.py load,load)
+
+bench:         ## B1/B2: 9 BR queries x 3 solutions (6 runs each), result check, storage
+	@$(call BENCH,benchmark.py run,run)
+
+bench-concurrency: ## B2: 1/4/8 concurrent clients on a query mix
+	@$(call BENCH,benchmark.py concurrency,concurrency)
+
+bench-update:  ## B1: cost of Type 1 corrections (star vs One Big Table vs PostgreSQL)
+	@$(call BENCH,benchmark.py update,update)
+
+bench-ops:     ## B3: operational store on PostgreSQL vs ClickHouse (writes, reads, integrity)
+	@$(call BENCH,bench_ops.py,ops)
+
+bench-spark:   ## B4: Spark transformation with 1/2/4/8 cores, one batch vs 72 monthly batches
+	@$(call BENCH,bench_spark.py,spark)
+
+bench-all: bench-load bench bench-concurrency bench-update bench-ops bench-spark ## All benchmarks, in order
 
 sql:           ## One statement on ClickHouse: make sql Q="SELECT count() FROM dw.fact_transaction"
 	$(SPARK) python3 /opt/jobs/ch_sql.py "$(Q)"

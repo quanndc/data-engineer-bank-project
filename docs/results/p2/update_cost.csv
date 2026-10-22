@@ -1,0 +1,13 @@
+update,solution,rows_written,ms
+U1 sửa tên khu vực 1 (rename),ch_star,1,6.0
+U1 sửa tên khu vực 1 (rename),ch_obt,150058,99.3
+U1 sửa tên khu vực 1 (rename),pg_star,1,4.1
+U1 sửa tên khu vực 1 (rename back),ch_star,1,6.7
+U1 sửa tên khu vực 1 (rename back),ch_obt,150058,59.1
+U1 sửa tên khu vực 1 (rename back),pg_star,1,0.5
+U2 sửa ngày sinh khách 24 (correct),ch_star,2,8.0
+U2 sửa ngày sinh khách 24 (correct),ch_obt,330,42.6
+U2 sửa ngày sinh khách 24 (correct),pg_star,2,1.9
+U2 sửa ngày sinh khách 24 (revert),ch_star,2,3.8
+U2 sửa ngày sinh khách 24 (revert),ch_obt,330,31.6
+U2 sửa ngày sinh khách 24 (revert),pg_star,2,0.6

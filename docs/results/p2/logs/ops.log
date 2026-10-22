@@ -1,0 +1,17 @@
+copied 1702 alerts to both stores
+W1 NEW → IN_REVIEW + ghi lịch sử              postgres      n=200  median     0.19  p95     0.67  total      56.5 ms
+W1 NEW → IN_REVIEW + ghi lịch sử              ch_versioned  n=200  median     5.92  p95    10.70  total    1336.5 ms
+W1 IN_REVIEW → RESOLVED + ghi lịch sử         postgres      n=200  median     0.17  p95     0.31  total      40.9 ms
+W1 IN_REVIEW → RESOLVED + ghi lịch sử         ch_mutation   n=200  median    11.91  p95    18.17  total    2477.0 ms
+W2 ghi 1 bước pipeline (bắt đầu + kết thúc)   postgres      n=200  median     0.32  p95     0.54  total      71.8 ms
+W2 ghi 1 bước pipeline (bắt đầu + kết thúc)   ch_versioned  n=200  median     2.46  p95     3.59  total     522.3 ms
+W3 danh sách cảnh báo mới nhất (50)           postgres      n=50   median     0.11  p95     0.18  total       6.5 ms
+W3 danh sách cảnh báo mới nhất (50)           ch_versioned  n=50   median     2.61  p95     4.58  total     139.7 ms
+W3 1 cảnh báo + lịch sử xử lý                 postgres      n=50   median     0.06  p95     0.10  total       3.9 ms
+W3 1 cảnh báo + lịch sử xử lý                 ch_versioned  n=50   median     3.26  p95     5.47  total     173.2 ms
+ClickHouse parts created by W2: 400 (one per INSERT)
+I1 trạng thái không hợp lệ ('DONE')                                              postgres chặn | clickhouse KHÔNG chặn
+I2 chuyển trạng thái sai (RESOLVED → NEW)                                        postgres chặn | clickhouse KHÔNG chặn
+I3 cảnh báo trùng (cùng tài khoản, quy tắc, kỳ)                                  postgres chặn | clickhouse KHÔNG chặn
+I4 lịch sử cho cảnh báo không tồn tại (khóa ngoại)                               postgres chặn | clickhouse KHÔNG chặn
+I5 đổi trạng thái + ghi lịch sử là một giao dịch (lỗi ở bước 2 → hoàn tác bước 1) postgres chặn | clickhouse KHÔNG chặn

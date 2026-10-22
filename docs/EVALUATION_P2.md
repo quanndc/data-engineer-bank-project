@@ -38,38 +38,19 @@ Cả bảng kết quả bên dưới đều do [spark/jobs/evaluate.py](../spark
 
 ---
 
-## 2. Performance — ClickHouse so với phương án thay thế (Q-K)
+## 2. Performance — tóm tắt (chi tiết: [BENCHMARK_P2.md](BENCHMARK_P2.md))
 
-Phương án thay thế là **cùng mô hình sao trên PostgreSQL** (row store): cùng 6 bảng, cùng cột, cùng 1.057.571 dòng fact. Bản PostgreSQL có PK/FK, các index `fact(date_key)`, `fact(account_sk, date_key)`, `fact(customer_sk)`, `dim_customer(client_id)`, và đã chạy `ANALYZE`.
+Mức ×1 (1.057.571 giao dịch). Mỗi phép so sánh chỉ đổi một yếu tố; số dưới đây là warm median.
 
-Mỗi truy vấn chạy 6 lần. Lần 1 là "lạnh" (cache của ClickHouse được xoá trước đó). Median và p95 lấy từ lần 2–6. Thời gian là wall-clock phía client, gồm cả thời gian nhận kết quả. **Cả 7 truy vấn cho kết quả giống hệt nhau trên hai hệ.**
-
-| Truy vấn | Dòng | ClickHouse median (p95) ms | PostgreSQL median (p95) ms | Nhanh hơn |
-|---|---:|---:|---:|---|
-| BR01 KPI một kỳ (1998) | 1 | 13,5 (14,8) | 32,2 (34,0) | CH ×2,4 |
-| BR01 theo tháng, toàn bộ lịch sử | 75 | 25,9 (27,6) | 127,7 (134,0) | CH ×4,9 |
-| BR01 theo hạng (1998) | 4 | 18,3 (19,2) | 343,3 (364,6) | CH ×19 |
-| BR08 theo hạng, kỳ cũ và kỳ mới | 8 | 42,0 (49,7) | 802,1 (842,1) | CH ×19 |
-| BR02 chi tiết tài khoản 2378 | 437 | 24,3 (25,4) | 1,8 (2,2) | **PG ×13** |
-| BR02 tổng tài khoản 2378, năm 1998 | 1 | 8,8 (9,2) | 0,3 (0,4) | **PG ×29** |
-| BR08 các phiên bản hạng của 1 khách | 2 | 19,9 (24,2) | 0,5 (0,6) | **PG ×40** |
-
-**Đọc kết quả:**
-- **Truy vấn tổng hợp trên nhiều dòng** (BR01, báo cáo theo hạng của BR08): ClickHouse nhanh hơn 2–19 lần, và chênh lệch càng lớn khi phải join và đếm khách phân biệt. Đây là loại truy vấn chính của U01 và U03, và là lý do chọn kho cột.
-- **Tra cứu một tài khoản hoặc một khách** (BR02, BR08 theo khách): PostgreSQL nhanh hơn nhờ index B-tree. Với ClickHouse, phần lớn thời gian là chi phí cố định: đọc chiều với `FINAL` và dựng bảng băm để join. Dù vậy cả hai hệ đều dưới 25 ms, người dùng không thấy khác biệt.
-- **Dung lượng:** fact trên ClickHouse chiếm 19,0 MB (nén từ 54,1 MB). Trên PostgreSQL là 102,1 MB dữ liệu cộng 66,5 MB index, tức **lớn gấp khoảng 8,9 lần**.
-- **Giới hạn của phép đo:** cả hai hệ chạy chung một máy ảo. PostgreSQL dùng cấu hình mặc định (`shared_buffers` 128 MB, `work_mem` 4 MB, 2 worker song song); ClickHouse dùng `max_threads` 11. Cache trang của hệ điều hành không xoá được từ trong container, nên lần "lạnh" chỉ là lạnh một phần. Dữ liệu cũng chỉ khoảng 1 triệu dòng; ở quy mô lớn hơn, khoảng cách ở nhóm truy vấn tổng hợp sẽ còn tăng.
-
-### Thời gian pipeline (từ `ops.pipeline_step`)
-
-| Đo | Giá trị |
+| Phép so sánh | Kết quả chính |
 |---|---|
-| 72 lô lịch sử theo tháng (lần chạy đầu) | median **3,4 s**/lô, p95 5,3 s, tổng 273,5 s; median 4.334 dòng/s |
-| Median từng bước của lô tháng | ingest 0,55 · validate 0,85 · standardize 0,15 · load_dimensions 0,14 · **load_fact 1,42** · reconcile 0,15 (s) |
-| Lô kịch bản (chạy lại) | khoảng 7–20 s mỗi lô; với KB05, bước validate mất 13,9 s vì có 6 quy tắc và ghi bản ghi lỗi |
-| Chép sang PostgreSQL (phương án thay thế) | fact 43,4 s; tạo index và ANALYZE 1,0 s |
+| **B1** Star vs One Big Table (cùng ClickHouse) | One Big Table nhanh hơn 1,5–3,4× (chênh 3–16 ms) nhưng tốn chỗ hơn 1,37×. Sửa tên 1 khu vực: star ghi 1 dòng, One Big Table ghi lại 150.058 dòng |
+| **B2** ClickHouse vs PostgreSQL (cùng star) | Truy vấn tổng hợp BR01/BR03/BR08: ClickHouse nhanh hơn **3,3–22,4×**; tra cứu 1 tài khoản / 1 khách: PostgreSQL nhanh hơn 17–46× (ClickHouse vẫn < 20 ms). Dung lượng: 18,6 so với 162,5 MB. 8 client: 93 so với 12 truy vấn/giây |
+| **B3** Kho vận hành PostgreSQL vs ClickHouse | PostgreSQL nhanh hơn 8–70× ở mọi thao tác của app và pipeline; tự bảo đảm **5/5** ràng buộc (trạng thái, chuyển trạng thái, chống trùng, khóa ngoại, giao dịch), ClickHouse **0/5** |
+| **B4** Spark 1–8 lõi; 1 lô vs 72 lô | Ở ×1, thêm lõi gần như không giúp (7,7 → 5,4 s); 72 lô tháng chậm hơn 1 lô 4–6× do chi phí cố định mỗi lô |
+| Pipeline thật | Median 3,4 s/lô tháng (p95 5,3 s), 72 lô 273,5 s; bước nặng nhất là `load_fact` (1,42 s) |
 
-Thời gian mỗi lô chủ yếu là chi phí khởi động Spark local và các lượt đọc và ghi qua lại với ClickHouse, không tăng theo số dòng (mỗi lô tháng chỉ khoảng 15.000 dòng).
+Số liệu lần đo đầu của P2-8 (PostgreSQL cấu hình mặc định, chỉ 7 truy vấn) đã được thay bằng lần đo này. Các sự cố khi đo được ghi ở mục 8 của BENCHMARK_P2.md.
 
 ---
 
