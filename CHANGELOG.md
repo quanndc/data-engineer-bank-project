@@ -10,6 +10,17 @@ Nhật ký Phase 1 (Kaggle, Kafka, Superset; đến ngày 07/10/2026) đã chuy�
 
 
 
+
+---
+
+## [2026-10-29] Đã publish kho lên Aiven ClickHouse; tài khoản chỉ đọc cho bản chỉ xem ✅
+
+- Dịch vụ Aiven ClickHouse mới (26.3) → `make publish`: 6 bảng, **1.057.571** giao dịch, tổng tiền **6.285.624.820,30**, 5.118 phiên bản khách, 4.500 tài khoản — **khớp hoàn toàn** với kho trên máy; 24 giây.
+- Tài khoản chỉ đọc `bankdw_viewer` trên Aiven (`GRANT SELECT, SHOW TABLES, SHOW COLUMNS ON dw.*`): đọc được; `INSERT`, `DROP`, đọc `system.users` bị từ chối.
+- Thử bản chỉ xem kết nối thẳng Aiven bằng tài khoản này: Tổng quan (1998: tiền vào 960.964.282), tra cứu tài khoản 11, SQL (0,22 s) — chạy đúng, không lỗi.
+- `streamlit_secrets.toml` (không lên git) chứa sẵn secrets để dán vào Streamlit Cloud; cập nhật [docs/DEPLOY.md](docs/DEPLOY.md).
+- Nên đổi mật khẩu `avnadmin` (đã xuất hiện trong ảnh chụp gửi qua chat) rồi cập nhật `AIVEN_CLICKHOUSE_PASSWORD` trong `.env`; app không dùng tài khoản này.
+
 ---
 
 ## [2026-10-29] Bản chỉ xem cho thành viên: chế độ viewer, tab SQL, `make publish` lên Aiven 🌐

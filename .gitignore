@@ -43,3 +43,6 @@ report/LaTeX_Template_for_Technical_Report/
 backups/*
 !backups/.gitkeep
 *_overleaf.zip
+
+# secrets for the viewer app on Streamlit Cloud (docs/DEPLOY.md)
+streamlit_secrets.toml

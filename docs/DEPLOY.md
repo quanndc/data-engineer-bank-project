@@ -26,12 +26,12 @@ Dữ liệu trên Aiven là **bản chụp** tại lúc publish; chạy thêm g�
    AIVEN_CLICKHOUSE_SECURE=true
    AIVEN_CLICKHOUSE_DATABASE_ENGINE=Replicated
    ```
-3. Tạo **tài khoản chỉ đọc** cho app (Aiven console → *Query editor*, hoặc tab *Users*). Đặt mật khẩu riêng:
+3. **Tài khoản chỉ đọc** cho app: `bankdw_viewer` (đã tạo ngày 29/10/2026, mật khẩu ở `AIVEN_VIEWER_PASSWORD` trong `.env`). Tạo lại nếu cần:
    ```sql
-   CREATE USER bankdw_viewer IDENTIFIED BY '<mật khẩu riêng>';
+   CREATE USER IF NOT EXISTS bankdw_viewer IDENTIFIED BY '<mật khẩu riêng>';
    GRANT SELECT, SHOW TABLES, SHOW COLUMNS ON dw.* TO bankdw_viewer;
    ```
-   App dùng tài khoản này, nên dù lộ thông tin thì cũng chỉ đọc được database `dw`.
+   Đã kiểm tra: đọc được `dw`; `INSERT`, `DROP`, đọc `system.users` đều bị từ chối.
 
 ## 2. Đẩy dữ liệu lên Aiven
 
@@ -53,7 +53,7 @@ make viewer        # http://localhost:8502
 2. *Create app* → *Deploy a public app from GitHub*:
    - Repository: `quanndc/data-engineer-bank-project`, branch `main`
    - Main file path: `apps/app/app.py` (Streamlit Cloud tự cài `apps/app/requirements.txt`)
-   - *Advanced settings* → Python **3.11**, và **Secrets**:
+   - *Advanced settings* → Python **3.11**, và **Secrets**: dán nguyên nội dung file `streamlit_secrets.toml` ở thư mục gốc repo trên máy (đã điền sẵn từ `.env`, không lên git). Dạng:
      ```toml
      APP_MODE = "viewer"
      CLICKHOUSE_HOST = "<host Aiven>"
