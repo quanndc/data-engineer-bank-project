@@ -1,0 +1,65 @@
+[
+ {
+  "br": "BR01",
+  "flow": "chọn kỳ 1997",
+  "interactions": 1,
+  "seconds": 0.19,
+  "result": "960.964.282"
+ },
+ {
+  "br": "BR02",
+  "flow": "tab Phân tích → nhập tài khoản 2378",
+  "interactions": 2,
+  "seconds": 0.21,
+  "result": "Tài khoản 2378"
+ },
+ {
+  "br": "BR03",
+  "flow": "tab Phân tích → Cảnh báo → chọn cảnh báo",
+  "interactions": 3,
+  "seconds": 0.43,
+  "result": "Cảnh báo #1702 · tài khoản 15 · R2 · Tài khoản ngủ đông hoạt động lại"
+ },
+ {
+  "br": "BR04",
+  "flow": "chọn trạng thái → ghi chú → Ghi nhận (sau BR03)",
+  "interactions": 3,
+  "seconds": 0.2,
+  "result": "đã ghi nhận"
+ },
+ {
+  "br": "BR06",
+  "flow": "tab Vận hành",
+  "interactions": 1,
+  "seconds": 0.0,
+  "result": "danh sách lần chạy"
+ },
+ {
+  "br": "BR05",
+  "flow": "tab Vận hành → BR05",
+  "interactions": 2,
+  "seconds": 0.0,
+  "result": "bản ghi bị tách theo lô và quy tắc"
+ },
+ {
+  "br": "BR07",
+  "flow": "tab Vận hành → BR07",
+  "interactions": 2,
+  "seconds": 0.0,
+  "result": "danh mục bản sao lưu, lịch sử thao tác"
+ },
+ {
+  "br": "BR08",
+  "flow": "tab Vận hành → BR08",
+  "interactions": 2,
+  "seconds": 0.0,
+  "result": "báo cáo theo hạng kỳ cũ / kỳ mới, phiên bản khách 24"
+ },
+ {
+  "br": "KB03",
+  "flow": "tab Vận hành → Chạy kịch bản → (KB03 mặc định) → Chạy",
+  "interactions": 3,
+  "seconds": 10.54,
+  "result": "chạy lại lô KB03_FRAUD"
+ }
+]

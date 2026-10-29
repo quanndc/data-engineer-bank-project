@@ -15,6 +15,14 @@ report/*.fls
 report/*.fdb_latexmk
 report/*.bbl
 report/*.blg
+slides/*.pdf
+slides/*.aux
+slides/*.log
+slides/*.nav
+slides/*.out
+slides/*.snm
+slides/*.toc
+slides/*.vrb
 
 .DS_Store
 __pycache__/

@@ -207,14 +207,16 @@ with analysis:
             st.markdown(f"**Tài khoản {i.account_id}** · mở ngày {i.account_open_date:%d/%m/%Y} · sao kê "
                         f"{i.statement_frequency_name.lower()} · chi nhánh {i.district_name} ({i.region_name})")
             lo, hi = (int(d.strftime("%Y%m%d")) for d in rng)
+            # Filter the fact by its own key (account_sk leads its sort key): filtering on dim_account.account_id
+            # after a join made ClickHouse read the whole fact table (P2-8 benchmark, section 12.4).
             tx = q_ch(f"""SELECT t.d AS ngay, t.transaction_id AS ma_giao_dich, t.dir AS chieu, t.type_name AS loai,
                                  t.operation_name AS phuong_thuc, t.purpose_name AS muc_dich, t.amount AS so_tien,
                                  t.balance_after AS so_du_sau, c.client_id AS chu_tai_khoan, c.membership_tier AS hang,
                                  t.load_batch_id AS lo_nap
                           FROM {FACT} AS t
-                          JOIN (SELECT account_sk, account_id FROM dw.dim_account FINAL) AS a USING (account_sk)
                           JOIN (SELECT customer_sk, client_id, membership_tier FROM dw.dim_customer FINAL) AS c USING (customer_sk)
-                          WHERE a.account_id = %(a)s AND t.date_key BETWEEN %(lo)s AND %(hi)s
+                          WHERE t.account_sk IN (SELECT account_sk FROM dw.dim_account FINAL WHERE account_id = %(a)s)
+                            AND t.date_key BETWEEN %(lo)s AND %(hi)s
                           ORDER BY t.date_key, t.transaction_id""", a=int(acc), lo=lo, hi=hi)
             m_in = tx.loc[tx.chieu == "IN", "so_tien"].astype(float).sum()
             m_out = tx.loc[tx.chieu == "OUT", "so_tien"].astype(float).sum()
@@ -416,6 +418,8 @@ with operations:
                                          count() AS so_giao_dich, sumIf(amount, dir='IN') AS tien_vao,
                                          sumIf(amount, dir='OUT') AS tien_ra
                                   FROM {FACT} AS t
-                                  JOIN (SELECT customer_sk, client_id, membership_tier FROM dw.dim_customer FINAL) AS c USING (customer_sk)
-                                  WHERE c.client_id = %(c)s GROUP BY hang, t.customer_sk ORDER BY tu_ngay""", c=int(demo)),
+                                  JOIN (SELECT customer_sk, membership_tier FROM dw.dim_customer FINAL
+                                        WHERE client_id = %(c)s) AS c USING (customer_sk)
+                                  WHERE t.customer_sk IN (SELECT customer_sk FROM dw.dim_customer FINAL WHERE client_id = %(c)s)
+                                  GROUP BY hang, t.customer_sk ORDER BY tu_ngay""", c=int(demo)),
                          hide_index=True, use_container_width=True)

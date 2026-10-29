@@ -79,5 +79,6 @@ Danh sách lệnh đầy đủ: [Makefile](Makefile) (mỗi lệnh có chú thí
 | `warehouse/` | DDL ClickHouse (`dw`) và PostgreSQL (`ops`), cấu hình ClickHouse |
 | `tools/` | Khảo sát Berka, sinh hạng mô phỏng, sinh dữ liệu kịch bản |
 | `docs/` | Kế hoạch, mô hình dữ liệu, đánh giá, benchmark; số liệu gốc trong `docs/results/p2/` |
-| `report/` | Technical report (IEEE) |
+| `report/` | Technical report (IEEE): `main.tex` (tiếng Anh), `main_vi.tex` (tiếng Việt), ảnh chụp ứng dụng trong `figures/` |
+| `slides/` | Slide thuyết trình (Beamer, tiếng Việt): `slides.tex`, biên dịch bằng XeLaTeX / `tectonic slides.tex` |
 | `archive/phase1/` | **Phase 1** (dữ liệu Kaggle, Kafka, Superset): code, tài liệu, changelog, README cũ. Chỉ để tham khảo; cũng có ở tag `phase1-kaggle` |

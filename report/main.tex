@@ -1,13 +1,12 @@
 %% =====================================================================
 %% Technical Report -- Data Engineering (CO5173), HCMUT -- Group 27
-%% Kimball Dimensional Data Warehouse for Banking Cash-Flow Analytics (Phase 2, Berka)
+%% Kimball Dimensional Data Warehouse for Banking Cash-Flow Analytics (Berka)
 %%
 %% Format and structure follow the IEEE technical report template in
 %% LaTeX_Template_for_Technical_Report/ (IEEEtran v1.8, peerreview).
 %% IEEEtran.cls must sit next to this file.
 %% Build: tectonic main.tex   (or pdfLaTeX on Overleaf, run twice)
 %% Items in red [TODO] are pending decisions of the group.
-%% The Phase 1 report (Kaggle dataset) is kept in the git tag phase1-kaggle.
 %% =====================================================================
 
 \documentclass[peerreview]{IEEEtran}
@@ -19,6 +18,7 @@
 \fi
 \usepackage{booktabs}  % \toprule, \midrule and \bottomrule in tables
 \usepackage{graphicx}
+\graphicspath{{figures/}}
 
 % ---------- Additional packages ----------
 \usepackage{amsmath,amssymb}
@@ -390,6 +390,33 @@ has no access control (all three tabs are open), and PostgreSQL is outside the b
 of BR07. Finally, the solution must run on a single machine so that it can be demonstrated
 and reproduced.
 
+\subsection{Directions Considered but Not Implemented}
+\label{sec:other-directions}
+Before fixing the scope on cash flow and account activity, the team considered other uses of
+the same data (Table~\ref{tab:directions}). They are recorded here because the warehouse was
+designed so that they can be added later as further business processes or marts, without
+changing the existing star schema.
+
+\begin{table}[!t]
+\centering
+\caption{Directions Considered but Not Implemented}
+\label{tab:directions}
+\footnotesize
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{L{2.0cm} L{2.6cm} L{3.1cm}}
+\toprule
+\textbf{Direction} & \textbf{Data in Berka} & \textbf{Why not in scope} \\
+\midrule
+Loan default risk & \tbl{loan} (682 loans with status) & A different business process and user group; too few loans for a model \\
+Card usage analysis & \tbl{card} (892 cards: type and issue date) & No card transactions, only the cards issued \\
+Recurring payments & \tbl{order} (6,471 standing orders) & Overlaps BR02; adds no new requirement for the three user groups \\
+Customer segmentation (RFM) & \tbl{trans}, \tbl{client} & Marketing use case; no marketing user group in scope \\
+Regional economics & \tbl{district} (A4--A16: population, salary, unemployment) & Socio-economic attributes outside the cash-flow view; kept out of \tbl{dim\_district} \\
+Streaming fraud detection & --- & Berka is a historical extract; the batch rules of BR03 meet the requirement \\
+\bottomrule
+\end{tabular}
+\end{table}
+
 
 %% =====================================================================
 \section{Proposed Solutions}
@@ -751,7 +778,7 @@ warehouse in PostgreSQL, a row-oriented relational database (decision Q-K of the
 offers full support for the Kimball design---enforced primary and foreign keys,
 transactions, and in-place updates---and B-tree indexes for point lookups, but reads whole
 rows even when a query needs only a few columns. To make the comparison fair, it is set up
-as in the Phase~1 benchmark: primary and foreign keys and indexes on the fact's filter and
+with primary and foreign keys and indexes on the fact's filter and
 join columns (\tbl{date\_key}; \tbl{account\_sk}, \tbl{date\_key}; \tbl{customer\_sk}) and
 on \tbl{dim\_customer.client\_id}, created after the bulk load; up-to-date statistics; and
 256~MB of shared buffers, 64~MB of work memory, and up to four parallel workers.
@@ -952,9 +979,14 @@ B4 & Spark with 1/2/4/8 cores; one batch vs.\ 72 monthly batches & Transformatio
 \end{table*}
 
 \subsection{Effectiveness Evaluation}
-Each BR was demonstrated through its application view in the browser, including a
-scenario run started from the application. The number of interactions per BR was counted
-along the user flow.
+Each BR was demonstrated through its application view. To measure the effort of a user, a
+script (\texttt{tools/ui\_walkthrough.py}) drove the application in a headless Chrome
+browser (1440$\times$900 pixels) along one flow per BR, as a user would: open a tab, type an
+account, select an alert, submit a form, or run a scenario. For each flow it counted the
+interactions and measured the time to answer, from the last interaction until the
+application had finished re-running and the result was on screen. Switching tabs does not
+re-run the application, because every tab is already rendered, so such answers appear at
+once. The status change written by BR04 was removed afterwards.
 
 
 %% =====================================================================
@@ -1135,9 +1167,10 @@ a window function per account (BR03). ClickHouse stored the data in 8.7 times le
 against 12 for PostgreSQL, whose p95 latency rose to almost 2~s
 (Table~\ref{tab:concurrency}). H2 is supported more strongly than expected: for the three
 lookups of one account or one client, PostgreSQL was 17 to 46 times faster, answering in
-about 1~ms through its indexes. In ClickHouse these queries cost 6--18~ms, which seems to
-be mostly fixed cost---reading the small dimensions with \texttt{FINAL} and building the
-hash tables of the joins---since the sort key already restricts the fact to one account.
+about 1~ms through its indexes. In ClickHouse these queries cost 6--18~ms. As the
+measurement at scale $\times$10 shows below, the reason is how they are written: with the
+filter on a dimension column, ClickHouse cannot use the sort key of the fact and reads the
+whole table before the join.
 
 \textbf{Data model (B1).} H4 appears to hold. The One Big Table was 1.5 to 3.4 times
 faster than the star schema, but the absolute difference was only 3--16~ms, and it needed
@@ -1175,6 +1208,14 @@ the One Big Table rewrote 1,500,580 rows instead of one. At $\times$10, Spark fi
 from more cores (one batch: 28.8~s on one core, 14.0~s on eight), whereas the 72 monthly
 batches, of about 147,000 rows each, still did not.
 
+\textbf{Applying the finding to the application.} The account lookup of the application
+(BR02) was rewritten to filter the fact by \tbl{account\_sk} first. On the warehouse
+itself, for account 11 over July 1998--December 1999, the query now reads 19,694 rows
+instead of 162,739 and answers in 4.3~ms instead of 9.6~ms, with an identical result. The
+same change to the per-version view of one client (BR08) lowered it from 14.6 to 7.9~ms; it
+still scans the \tbl{customer\_sk} column of the whole fact table, because that column is
+not part of the sort key.
+
 \begin{table}[!t]
 \centering
 \caption{Scale $\times$1 vs.\ $\times$10: Warm Median (ms) and Growth}
@@ -1200,35 +1241,66 @@ Storage (MB) & 18.6 & 185.5 & 10.0 & 162.5 & 1,612.7 & 9.9 \\
 \end{table}
 
 \subsection{Effectiveness of Data Exploitation}
-All eight BRs were demonstrated end to end in the application (Table~\ref{tab:br-results}).
-A scenario started from the application (a re-run of KB03) completed in about 10~s,
-was recorded as \texttt{triggered\_by = app}, and added no rows and no alerts, as a re-run
-should. The counts of interactions are taken along the user flow; the times reported for
-reading views are the query latencies of Table~\ref{tab:results}.
+All eight BRs were demonstrated end to end in the application (Table~\ref{tab:br-results},
+Figs.~\ref{fig:app-overview}--\ref{fig:app-scenario}). Every answer needs one to three
+interactions. Answers that re-run the application (BR01--BR04) appeared within 0.2--0.4~s,
+and the views of the Operations tab appeared at once. Running a scenario from the
+application---a re-run of KB03---took 10.5~s from the click to the reported result; it was
+recorded as \texttt{triggered\_by = app} and added no rows and no alerts, as a re-run should.
+A backup or a restore of the six tables takes under 0.5~s in ClickHouse, plus the
+reconciliation queries of BR07.
 
 \begin{table*}[!t]
 \centering
-\caption{Demonstration of the Business Requirements and Example Results}
+\caption{Demonstration of the Business Requirements: Interactions, Time to Answer, and Example Results}
 \label{tab:br-results}
 \small
-\begin{tabular}{l l c c L{9.6cm}}
+\begin{tabular}{l l L{3.7cm} c r L{6.4cm}}
 \toprule
-\textbf{BR} & \textbf{Tab} & \textbf{Demo} & \textbf{Interactions} & \textbf{Example result} \\
+\textbf{BR} & \textbf{Tab} & \textbf{User flow} & \textbf{Interactions} & \textbf{Time (s)} & \textbf{Example result} \\
 \midrule
-BR01 & Overview & \checkmark & 1--2 & 1998: inflow 960,964,282~CZK, outflow 933,819,075~CZK, net 27,145,207~CZK, 322,277 transactions; split by tier \\
-BR02 & Analysis & \checkmark & 3 & Account 11: transactions July 1998 -- December 1999, including the 60,000~CZK withdrawal of KB03 \\
-BR03 & Analysis & \checkmark & 6 & Account 11, February 1999: outflow 60,000~CZK, 19.5 times its 6-month average of 3,075~CZK \\
-BR04 & Analysis & \checkmark & 4 & An alert moved from \emph{new} to \emph{in review} with a note; the history shows who, when, and why \\
-BR05 & Operations & \checkmark & 5 & KB05: 10 records isolated, listed by rule with reason and original content \\
-BR06 & Operations & \checkmark & 1--2 & A run that failed in step \texttt{detect\_alerts}, with the database error as cause \\
-BR07 & Operations & \checkmark & $\approx$7 & Restore of \texttt{before\_kb07}: 5 of 5 groups of figures equal the backup \\
-BR08 & Operations & \checkmark & 5 & Client 24: Standard until 1998-12-31, Silver from 1999-01-01; old-period report unchanged \\
+BR01 & Overview & Choose the period & 1 & 0.19 & 1998: inflow 960,964,282~CZK, outflow 933,819,075~CZK, net 27,145,207~CZK, 322,277 transactions; split by tier \\
+BR02 & Analysis & Open the tab; type the account & 2 & 0.21 & Account 11, July 1998--December 1999: 30 transactions, including the 60,000~CZK withdrawal of KB03 \\
+BR03 & Analysis & Open the tab and the alert list; select an alert & 3 & 0.43 & Account 11, February 1999: outflow 60,000~CZK, 19.5 times its 6-month average of 3,075~CZK \\
+BR04 & Analysis & Choose the status; write a note; submit & 3 & 0.20 & The alert moved from \emph{new} to \emph{in review}; the history shows who, when, and why \\
+BR05 & Operations & Open the tab and the BR05 view & 2 & at once & KB05: 10 records isolated, listed by rule with reason and original content \\
+BR06 & Operations & Open the tab & 1 & at once & Runs with steps and counts; a run that failed in \texttt{detect\_alerts}, with the database error \\
+BR07 & Operations & Open the tab and the BR07 view & 2 & at once & Restore of \texttt{before\_kb07}: 5 of 5 groups of figures equal the backup \\
+BR08 & Operations & Open the tab and the BR08 view & 2 & at once & Client 24: Standard until 1998-12-31, Silver from 1999-01-01; old-period report unchanged \\
+KB & Operations & Open the scenario runner; run KB03 & 3 & 10.5 & Preview, run, and expected vs.\ actual result \\
 \bottomrule
 \end{tabular}
 \end{table*}
 
-\todo{Add one screenshot per tab (Overview, Analysis, Operations) and replace the
-interaction counts with stopwatch measurements taken while recording the demo video.}
+\begin{figure}[!t]
+\centering
+\includegraphics[width=\columnwidth]{app_overview}
+\caption{Overview tab (U01, BR01): cash-flow KPIs and the monthly chart for 1998.}
+\label{fig:app-overview}
+\end{figure}
+
+\begin{figure}[!t]
+\centering
+\includegraphics[width=\columnwidth]{app_alert}
+\caption{Analysis tab (U02, BR03): alert list with rule, account, period, status, and reason.}
+\label{fig:app-alert}
+\end{figure}
+
+\begin{figure}[!t]
+\centering
+\includegraphics[width=\columnwidth]{app_scd2}
+\caption{Operations tab (U03, BR08): report by tier for the old and the new period, and the
+two tier versions of client 24.}
+\label{fig:app-scd2}
+\end{figure}
+
+\begin{figure}[!t]
+\centering
+\includegraphics[width=\columnwidth]{app_scenario_run}
+\caption{Operations tab, scenario runner (flow N01--N05): input preview, expected result, and
+a completed re-run of KB03.}
+\label{fig:app-scenario}
+\end{figure}
 
 \subsection{Interpretation}
 The results suggest that the proposed solution meets the three criteria. On correctness,
@@ -1246,14 +1318,14 @@ in-place updates, and constraints, is kept in PostgreSQL.
 
 \subsection{Threats to Validity}
 The results should be interpreted with caution. All systems ran on the same virtual
-machine as the client, and PostgreSQL used the moderate settings of the Phase~1
-benchmark; partitioning, BRIN indexes, or materialized views could narrow its gap on
+machine as the client, and PostgreSQL used moderate memory settings; partitioning, BRIN indexes, or materialized views could narrow its gap on
 aggregations. The operating system's page cache could not be dropped from a container, so
 ``cold'' runs are only partly cold. The $\times$10 data is a replica of the original, so it
 repeats its distributions and may compress better than real data; $\times$50 and a
 distributed deployment were not measured. The membership tier and the scenario data are simulated, so the tier figures
 and alert counts describe the method rather than real customer behavior. Finally, the
-interaction counts were taken along the user flow and not from user sessions.
+interactions and times were measured by a script that follows one flow per BR, not
+in sessions with real users.
 
 
 %% =====================================================================
@@ -1276,13 +1348,14 @@ single-account lookups that ClickHouse still answers in under 20~ms. The One Big
 saved a few milliseconds per query but made corrections rewrite up to 150,058 rows, and
 the operational store was 8--70 times faster and enforced five integrity guarantees in
 PostgreSQL that ClickHouse did not. On effectiveness, every BR was demonstrated through the
-application in one to about seven interactions.
+application in one to three interactions, with answers on screen within 0.5~s.
 
 \textbf{Recommendations.} For a bank with this workload, we recommend the proposed
 combination: a column store for the warehouse, because its users mainly aggregate, and a
 relational database for the operational data, because it is updated in place and must
-enforce constraints. Account lookups should filter the fact on its own key first, which
-keeps them at about 7~ms in ClickHouse regardless of volume.
+enforce constraints. Lookups should filter the fact on its own key first, as the
+application now does for accounts, which keeps them at a few milliseconds regardless of
+volume.
 
 \textbf{Limitations.} The data ends in 1998 and has about one million transactions; the
 membership tier and the scenarios are simulated; end-of-period balances and internal
@@ -1313,13 +1386,15 @@ The full source code, Docker Compose configuration, and evaluation scripts are a
   \item \texttt{make backup}, \texttt{make restore NAME=\ldots} --- back up and restore the
         warehouse;
   \item \texttt{make evaluate} and \texttt{make bench-all} --- run the evaluation and the
-        four benchmarks; results and logs are written to \texttt{docs/results/p2/}.
+        four benchmarks; results and logs are written to \texttt{docs/results/p2/};
+  \item \texttt{python tools/ui\_walkthrough.py} --- drive the application, count the
+        interactions, time the answers, and take the screenshots of this report.
 \end{itemize}
 
 \section{Work Allocation}
 \label{App:Work}
 
-\todo{Confirm the Phase 2 allocation with the group.}
+\todo{Confirm the allocation with the group.}
 
 \begin{table}[!h]
 \centering

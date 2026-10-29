@@ -5,6 +5,30 @@ Ghi lại các phát hiện, quyết định thiết kế và thay đổi của 
 Nhật ký Phase 1 (Kaggle, Kafka, Superset; đến ngày 07/10/2026) đã chuyển sang [archive/phase1/CHANGELOG.md](archive/phase1/CHANGELOG.md); code Phase 1 ở tag `phase1-kaggle` và [archive/phase1/](archive/phase1/).
 
 
+
+---
+
+## [2026-10-29] Phase 2 — Sửa truy vấn BR02, hoàn thiện report tiếng Anh, slide thuyết trình 📄
+
+### Ứng dụng
+- [apps/app/app.py](apps/app/app.py): **BR02** lọc bảng fact theo `account_sk` trước (khóa đầu của thứ tự sắp xếp) thay vì join `dim_account` rồi lọc `account_id`. Trên kho thật, tài khoản 11 (07/1998–12/1999): **9,6 → 4,3 ms**, đọc **162.739 → 19.694 dòng**, kết quả giống hệt. **BR08** (giao dịch theo phiên bản của 1 khách) sửa tương tự: 14,6 → 7,9 ms; vẫn quét cột `customer_sk` vì cột này không nằm trong thứ tự sắp xếp (không thêm index để khỏi đổi cấu trúc kho).
+
+### Đo hiệu quả khai thác và ảnh chụp
+- [tools/ui_walkthrough.py](tools/ui_walkthrough.py): script Playwright điều khiển app trong Chrome không giao diện (1440×900, nét gấp đôi), đi đúng luồng của từng BR, đếm thao tác, đo thời gian từ thao tác cuối đến khi app chạy xong, và chụp ảnh. Kết quả: BR01–BR04 **1–3 thao tác, 0,19–0,43 s**; BR05–BR08 hiện ngay (chuyển tab không chạy lại script); chạy lại KB03 từ app **10,5 s**. Ghi nhận BR04 thử đã xoá ngay sau khi đo.
+- 9 ảnh chụp ứng dụng (đã cắt bỏ sidebar) trong [report/figures/](report/figures/), số đo trong `report/figures/ui_walkthrough.json`.
+
+### Report tiếng Anh ([report/main.tex](report/main.tex))
+- Bỏ mọi nhắc tới Phase 1 (report chỉ nói Phase 2).
+- Thêm mục **Directions Considered but Not Implemented** (theo ghi chú Q03 của sheet): khoản vay, thẻ, lệnh định kỳ, RFM, kinh tế vùng, phát hiện gian lận theo luồng — kèm lý do ngoài phạm vi.
+- Phương pháp và kết quả **hiệu quả khai thác** thay bằng số đo thật (bảng thao tác + thời gian), thêm **4 ảnh chụp** (Tổng quan, cảnh báo, BR08, chạy kịch bản).
+- Ghi lại việc áp dụng phát hiện vào app (BR02, BR08); sửa một giải thích sai ở B2 (cũ: "khóa sắp xếp đã giới hạn về 1 tài khoản" — thực tế ClickHouse đọc cả bảng khi lọc qua dimension).
+- Còn TODO cho nhóm: ngày nộp, bảng phân công. Biên dịch: 17 trang, không lỗi, không tràn lề.
+
+### Slide ([slides/slides.tex](slides/slides.tex))
+- Beamer 16:9, **tiếng Việt**, XeLaTeX (font TeX Gyre Heros), **6 phần** (yêu cầu môn học: 4–7): Bài toán · Giải pháp đề xuất · Phương án thay thế và cách đánh giá · Kết quả · Demo ứng dụng · Kết luận; 40 trang cho video 20–30 phút.
+- Có ví dụ minh họa (khách 24 đổi hạng, cảnh báo tài khoản 11), biểu đồ so sánh ClickHouse–PostgreSQL, bảng ×1/×10, B1–B4, phát hiện BR02, số đo thao tác, ảnh chụp app, và trình tự demo KB01→KB08 cho video.
+- Đã rà từng trang: không lỗi biên dịch, không tràn lề, không thiếu ký tự.
+
 ---
 
 ## [2026-10-22] Dọn repo: tách hẳn Phase 1 ra khỏi Phase 2 🧹
