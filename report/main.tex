@@ -5,7 +5,7 @@
 %% Format and structure follow the IEEE technical report template in
 %% LaTeX_Template_for_Technical_Report/ (IEEEtran v1.8, peerreview).
 %% IEEEtran.cls must sit next to this file.
-%% Build: tectonic main.tex   (or pdfLaTeX on Overleaf, run twice)
+%% Build: tectonic main.tex, or pdfLaTeX / XeLaTeX on Overleaf (run twice)
 %% Items in red [TODO] are pending decisions of the group.
 %% =====================================================================
 
@@ -30,8 +30,6 @@
 \usepackage[hidelinks]{hyperref}
 
 % ---------- Float placement ----------
-% Allow a few more floats per page; create a float-only page only when
-% it would be nearly full.
 \setcounter{topnumber}{3}
 \setcounter{bottomnumber}{2}
 \setcounter{totalnumber}{5}
@@ -90,78 +88,51 @@ Instructor: Assoc. Prof. Dr. Chau Thi Ngoc Vo\\
 \IEEEpeerreviewmaketitle
 
 \begin{abstract}
-A bank needs trusted answers to three kinds of questions: how money flows in and out over
-time, what happened on a given account, and whether the data and the pipeline behind those
-answers can be trusted. This report builds and evaluates a data engineering solution for
-these questions on the public Berka (PKDD'99) dataset of a Czech bank: 1,056,320
-transactions on 4,500 accounts from 1993 to 1998, extended with a simulated membership tier
-whose history must be preserved. We propose a Kimball dimensional data warehouse with one
-transaction fact and five dimensions, including a Type~2 slowly changing customer dimension.
-Data is ingested in batches through a Parquet data lake, processed with Apache Spark,
-stored in ClickHouse, and controlled through an operational store in PostgreSQL that keeps
-pipeline runs, rejected records, fraud alerts, their handling, and backups. One application
-with three tabs serves three user groups and eight business requirements. The solution is
-assessed on data correctness, performance, and effectiveness of data exploitation through
-eight scripted evaluation scenarios, each reconciled with the source, and four benchmarks
-that each change one factor: data model, warehouse technology, architecture of the
-operational store, and pipeline parallelism. All eight scenarios pass (38 of 38 checks);
-cash-flow totals match the source to the cent. Against the same star schema in PostgreSQL,
-ClickHouse answers aggregation queries 3.3--22 times faster in 8.7 times less space, and
-7--28 times faster on a ten-fold replicated copy, while PostgreSQL is faster for
-single-account lookups that ClickHouse still answers in under 20~ms. A One Big Table is 1.5--3.4 times faster than the star schema but must rewrite
-150,058 rows to correct one district name. Keeping the operational data in PostgreSQL is
-8--70 times faster than in ClickHouse and enforces five integrity guarantees that
-ClickHouse does not.
+A bank needs trusted answers on how money flows, what happened on an account, and whether
+the data behind those answers can be trusted. We build and evaluate a data engineering
+solution for these needs on the Berka dataset of a Czech bank (1,056,320 transactions,
+1993--1998), extended with a simulated membership tier whose history must be preserved. The
+solution is a Kimball data warehouse---one transaction fact and five dimensions, including a
+Type~2 customer dimension---loaded in batches by Apache Spark through a Parquet data lake into
+ClickHouse, with a PostgreSQL operational store for runs, rejected records, fraud alerts, and
+backups, and one Streamlit application serving three user groups and eight business
+requirements. Eight evaluation scenarios, each reconciled with the source, pass all 38
+checks, and cash-flow totals match the source to the cent. Four benchmarks, each changing one
+factor, show that ClickHouse answers aggregation queries 3.3--22 times faster than the same
+star schema in PostgreSQL (7--28 times on a ten-fold copy) in 8.7 times less space; that a
+One Big Table saves only milliseconds but must rewrite 150,058 rows to correct one district;
+and that the operational store is 8--70 times faster in PostgreSQL, which also enforces
+integrity rules that ClickHouse does not. Every requirement is answered in one to three
+interactions.
 \end{abstract}
-
 
 
 %% =====================================================================
 \section{Introduction}
 \label{sec:intro}
 
-Retail banking is one of the most data-intensive industries. Every deposit, payment,
-withdrawal, and transfer produces a record which, once aggregated, shows how money flows
-through the bank, how each account behaves, and where risk emerges. Business managers,
-analysts, and data engineers all depend on these records, but they ask different questions
-of them and need different guarantees.
+Every deposit, payment, and withdrawal of a bank leaves a record. Aggregated, these records
+show how money flows through the bank and how each account behaves---but raw transaction logs
+cannot answer such questions directly: their codes are terse and partly missing, customer
+attributes change without keeping their history, and nothing in them tells a user whether the
+latest load succeeded or whether an earlier report still holds.
 
-Operational transaction logs do not answer these questions on their own. They are
-optimized for recording events, not for analysis; their codes are terse and partly
-missing; customer attributes change over time without keeping their history; and nothing
-in a raw log tells a user whether the latest load succeeded, which records were rejected,
-or whether an earlier report still holds after a change. Data engineering closes this gap
-by building a pipeline that ingests, validates, integrates, and models the data, and by
-making the pipeline itself observable and recoverable.
-
-This report is the technical report of the project \emph{Build a system where your data
-engineering solution is proved successful (in a specific application domain)} for the Data
-Engineering course (CO5173). The application domain is \textbf{banking} and the data
-engineering solution is a \textbf{Kimball dimensional data warehouse} \cite{kimball2013}.
-The objective is to show, with measurable evidence, that the solution turns raw bank
-transactions into data that is correct, fast to query, and useful to the bank's users.
-
-The main contributions are:
+This report presents the project of Group~27 for the Data Engineering course (CO5173). The
+application domain is \textbf{banking} and the solution is a \textbf{Kimball dimensional data
+warehouse} \cite{kimball2013}. The objective is to show, with measurable evidence, that the
+solution turns raw bank transactions into data that is correct, fast to query, and useful to
+the bank's users. The main contributions are:
 \begin{itemize}
-  \item a star schema for bank transactions with a junk transaction-profile dimension, a
-        role-playing district dimension, and a Type~2 slowly changing customer dimension
-        that keeps the history of a simulated membership tier;
-  \item a batch pipeline (data lake $\rightarrow$ Spark $\rightarrow$ ClickHouse) that
-        validates every batch, isolates defective records instead of failing the batch,
-        can re-run any batch without duplicates, and records every run in an operational
-        store;
-  \item an application with three tabs for three user groups that not only reads the
-        warehouse but also handles alerts, runs scenario batches, and backs up and restores
-        the warehouse;
-  \item an evaluation through eight scenarios, one per business requirement, each
-        reconciled with the source, and a benchmark against the same model in a row store.
+  \item a star schema with a Type~2 customer dimension that keeps the history of a
+        membership tier;
+  \item a batch pipeline that isolates defective records, re-runs without duplicates, and
+        records every run in an operational store, controlled from one application;
+  \item an evaluation through eight scenarios reconciled with the source and four
+        benchmarks against alternative solutions.
 \end{itemize}
-
-The rest of the report is organized as follows. Section~\ref{sec:problem} defines the
-problem: users, business requirements, and the data source. Section~\ref{sec:solutions}
-presents the proposed solution and the alternatives. Section~\ref{sec:criteria} defines the
-assessment criteria, Section~\ref{sec:method} the research methodology, and
-Section~\ref{sec:analysis} analyzes the results. Section~\ref{sec:conclusion} concludes.
+Section~\ref{sec:problem} defines the problem, Section~\ref{sec:solutions} the solutions,
+Section~\ref{sec:criteria} the assessment criteria, Section~\ref{sec:method} the methodology,
+Section~\ref{sec:analysis} the results, and Section~\ref{sec:conclusion} concludes.
 
 
 %% =====================================================================
@@ -169,124 +140,70 @@ Section~\ref{sec:analysis} analyzes the results. Section~\ref{sec:conclusion} co
 \label{sec:problem}
 
 \subsection{Problem Statement}
-The project uses the Berka dataset \cite{berka1999}, published for the PKDD'99 Discovery
-Challenge: the anonymized records of a Czech bank. The data is real-world in origin but has
-three properties that prevent its direct use. Its transaction classification is coded in
-Czech and partly missing (Section~\ref{sec:data-quality}); it has no notion of a customer
-attribute that changes over time; and as a set of static files it says nothing about how
-new data arrives, fails, or is corrected. The problem addressed in this report is therefore:
-
 \begin{quote}
 \emph{How can a bank's transaction data be engineered into a correct, performant, and
-exploitable analytical data warehouse whose loads are controlled, whose history is
-preserved, and which demonstrably supports the business requirements of several user
-groups?}
+exploitable data warehouse whose loads are controlled, whose history is preserved, and which
+demonstrably supports the business requirements of several user groups?}
 \end{quote}
 
-\subsection{Stakeholders and User Groups}
-The primary stakeholder is a retail bank that needs a single, trusted source of analytical
-data. Three user groups were defined by the team (Table~\ref{tab:usergroups}); each maps to
-one tab of the application.
+\subsection{User Groups and Business Requirements}
+Three user groups were defined, each served by one tab of the application
+(Table~\ref{tab:usergroups}). With four members, the course requires at least eight business
+requirements (BRs); each comes with an evaluation scenario (KB01--KB08) whose expected result
+is written before the data is loaded (Table~\ref{tab:brs}). Together they serve four
+objectives: monitoring cash flow (BR01, BR08), serving account inquiries (BR02), reducing
+fraud losses (BR03, BR04), and keeping data and operations trustworthy (BR05--BR07).
 
 \begin{table}[!t]
 \centering
-\caption{User Groups and Their Characteristics}
+\caption{User Groups}
 \label{tab:usergroups}
 \footnotesize
 \setlength{\tabcolsep}{4pt}
-\begin{tabular}{L{1.9cm} L{3.0cm} L{2.8cm}}
+\begin{tabular}{L{1.9cm} L{3.4cm} L{2.4cm}}
 \toprule
-\textbf{User group} & \textbf{Data usage need} & \textbf{Characteristics} \\
+\textbf{User group} & \textbf{Need} & \textbf{Tab / BRs} \\
 \midrule
-U01 Business manager & Cash-flow overview, history reports, results by membership tier & Non-technical; reads summaries and trends; tab \emph{Overview} \\
-U02 Analyst & Look up one account; review fraud alerts with their evidence; record the outcome & Works case by case; writes notes; tab \emph{Analysis} \\
-U03 Data engineer & Data quality, pipeline monitoring, backup and restore, history reconciliation & Technical; needs run-level detail and control; tab \emph{Operations} \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-\subsection{Business Requirements}
-The course requires at least $2n$ business requirements (BRs), where $n$ is the number of
-group members; with $n=4$, eight BRs are defined (Table~\ref{tab:brs}). Each BR comes with
-an evaluation scenario (KB01--KB08) and an expected demonstration result, so that it can be
-verified rather than only shown. Table~\ref{tab:objectives} links the BRs to the business
-objectives they serve.
-
-\begin{table}[!t]
-\centering
-\caption{Business Objectives Supported by the Business Requirements}
-\label{tab:objectives}
-\footnotesize
-\setlength{\tabcolsep}{4pt}
-\begin{tabular}{L{2.7cm} L{1.0cm} L{3.9cm}}
-\toprule
-\textbf{Business objective} & \textbf{BRs} & \textbf{Example decision informed} \\
-\midrule
-O1. Monitor cash flow and its history & BR01, BR08 & Whether inflow covers outflow in a period; how each tier contributes \\
-O2. Serve account inquiries & BR02 & Answer a customer or auditor about one account and period \\
-O3. Reduce fraud losses & BR03, BR04 & Which accounts to review first; when an alert is closed \\
-O4. Ensure trustworthy data and operations & BR05--BR07 & Whether today's figures can be published; whether to restore \\
+U01 Business manager & Cash-flow overview and history by tier & Overview / BR01 \\
+U02 Analyst & Look up accounts; review and handle alerts & Analysis / BR02--BR04 \\
+U03 Data engineer & Data quality, pipeline, backup, history & Operations / BR05--BR08 \\
 \bottomrule
 \end{tabular}
 \end{table}
 
 \begin{table*}[!t]
 \centering
-\caption{Business Requirements, Users, Supporting Data, and Expected Demonstration}
+\caption{Business Requirements and Evaluation Scenarios}
 \label{tab:brs}
 \small
-\begin{tabular}{l l L{5.3cm} L{3.6cm} L{4.6cm}}
+\begin{tabular}{l l L{6.6cm} L{6.4cm}}
 \toprule
-\textbf{ID} & \textbf{User} & \textbf{Business requirement} & \textbf{Data used} & \textbf{Expected demonstration (scenario)} \\
+\textbf{ID} & \textbf{User} & \textbf{Business requirement} & \textbf{Evaluation scenario (expected result)} \\
 \midrule
-BR01 & U01 & Cash-flow overview: inflow, outflow, net flow, and transaction count for a chosen period, by membership tier, as daily and monthly charts & \tbl{fact\_transaction}, \tbl{dim\_date}, \tbl{dim\_transaction\_profile}, \tbl{dim\_customer} & KB01: figures equal a query on the source \\
-BR02 & U02 & Account activity: for an account and period, its transactions, total inflow and outflow, and count & \tbl{fact\_transaction}, \tbl{dim\_account} & KB02: transactions equal the source, one by one \\
-BR03 & U02 & Fraud detection: after each load, check rules and raise alerts with a reason and evidence & Warehouse $\rightarrow$ \tbl{ops.alert} & KB03: a prepared fraud batch raises the expected alerts \\
-BR04 & U02 & Alert handling: status \emph{new / in review / resolved} with notes and history & \tbl{ops.alert}, \tbl{ops.alert\_action} & KB04: status changes visible in the UI \\
-BR05 & U03 & Data control: validate each batch, isolate failing records, show counts and reasons & \tbl{ops.rejected\_record} & KB05: a batch with deliberate errors is split correctly \\
-BR06 & U03 & Pipeline monitoring: per run, steps, status, start and end, records received, passed, rejected, cause of failure & \tbl{ops.pipeline\_run}, \tbl{ops.pipeline\_step} & KB06: a failed step and its cause are identified \\
-BR07 & U03 & Backup and restore of the six warehouse tables, including SCD history & ClickHouse \texttt{BACKUP}, \tbl{ops.backup\_*} & KB07: after a restore, counts, money, tier report, and versions equal the backup \\
-BR08 & U03 & History report (SCD2): a tier change must not alter reports of earlier periods & \tbl{dim\_customer} (SCD2), fact & KB08: old-period report unchanged; new period uses the new tier \\
+BR01 & U01 & Cash-flow overview: inflow, outflow, net flow, and count for a period, by tier, as daily or monthly charts & KB01: figures equal a query on the source \\
+BR02 & U02 & Account activity: transactions and totals of an account over a period & KB02: transactions equal the source, one by one \\
+BR03 & U02 & Fraud detection: after each load, alerts with a reason and evidence & KB03: a prepared fraud batch raises the expected alerts \\
+BR04 & U02 & Alert handling: \emph{new / in review / resolved}, with notes and history & KB04: status changes recorded and visible in the UI \\
+BR05 & U03 & Data control: validate each batch, isolate failing records with reasons & KB05: a batch with deliberate errors is split correctly \\
+BR06 & U03 & Pipeline monitoring: steps, status, times, counts, cause of failure & KB06: a failed step and its cause are identified \\
+BR07 & U03 & Backup and restore of the six warehouse tables, SCD history included & KB07: after a restore, the figures equal the backup \\
+BR08 & U03 & History report: a tier change must not alter reports of earlier periods (SCD2) & KB08: old period unchanged, new period by the new tier \\
 \bottomrule
 \end{tabular}
 \end{table*}
 
-\subsection{Expected Data Sources}
-In production, the warehouse would be fed by several operational systems of the bank.
-Table~\ref{tab:expected-sources} lists them and how each is represented in this project.
-Each Berka file stands in for one system. The membership tier, which Berka lacks, stands in
-for a loyalty or CRM system and is simulated (Section~\ref{sec:tier}); it is the only
-attribute whose history matters for the BRs. Scenario files in the same format stand in
-for new data arriving after the historical load.
-
-\begin{table}[!t]
-\centering
-\caption{Expected Data Sources in a Bank and Their Representation in This Project}
-\label{tab:expected-sources}
-\footnotesize
-\setlength{\tabcolsep}{4pt}
-\begin{tabular}{L{2.2cm} L{2.6cm} L{2.8cm}}
-\toprule
-\textbf{Expected source} & \textbf{Characteristics} & \textbf{Represented by} \\
-\midrule
-Core banking system & High volume; append-only; daily batches & \tbl{trans} \\
-Account registry & Small; rarely changes & \tbl{account} \\
-Customer master (KYC) & Slowly changing; one owner per account & \tbl{client}, \tbl{disp} \\
-Reference data & Static; 77 districts in 8 regions & \tbl{district} \\
-Loyalty / CRM system & Tier per customer with an effective date; changes over time & \tbl{customer\_profile\_\allowbreak simulated}, tier change file \\
-New daily loads & Same format as the core system; may contain errors or fraud & Scenario files KB03, KB05, KB07, KB08 \\
-\bottomrule
-\end{tabular}
-\end{table}
-
 \subsection{Data Source}
 \label{sec:data-source}
-The Berka dataset contains eight semicolon-separated files (Table~\ref{tab:sources}). The
-project uses the five that describe accounts, their owners, and their transactions; loans,
-standing orders, and cards are outside the scope of the BRs. Amounts are in Czech koruna
-(CZK), and transactions span 1993-01-01 to 1998-12-31.
+The Berka dataset \cite{berka1999} holds the anonymized records of a Czech bank. Each Berka
+file stands in for a bank system (Table~\ref{tab:sources}); loans, standing orders, and cards
+are outside the BRs. The 1,056,320 transactions grow from 28,205 in 1993 to 322,277 in 1998,
+and each account has 9 to 675 transactions (median 208). Every account has exactly one owner,
+and 409 accounts belong to a branch district other than the owner's residence, so the district
+plays two roles. The \tbl{type} code gives the direction of money (Table~\ref{tab:types});
+amounts are never negative. Profiling reproduced 14 of the 15 figures of the team's earlier
+survey of the dataset.
 
-\begin{table}[!htb]
+\begin{table}[!t]
 \centering
 \caption{Source Files}
 \label{tab:sources}
@@ -294,36 +211,18 @@ standing orders, and cards are outside the scope of the BRs. Amounts are in Czec
 \setlength{\tabcolsep}{4pt}
 \begin{tabular}{L{2.5cm} L{3.2cm} r}
 \toprule
-\textbf{File} & \textbf{Content} & \textbf{Rows} \\
+\textbf{File} & \textbf{Stands in for} & \textbf{Rows} \\
 \midrule
-\tbl{trans} & Transactions & 1,056,320 \\
-\tbl{account} & Accounts, branch district, statement frequency & 4,500 \\
-\tbl{client} & Clients, birth number, residence district & 5,369 \\
-\tbl{disp} & Client--account roles (OWNER, DISPONENT) & 5,369 \\
-\tbl{district} & Districts and regions & 77 \\
-\tbl{customer\_profile\_\allowbreak simulated} & Membership tier per owner (simulated) & 4,500 \\
-\midrule
-\tbl{loan}, \tbl{order}, \tbl{card} & Not used & 682 / 6,471 / 892 \\
+\tbl{trans} & Core banking system & 1,056,320 \\
+\tbl{account} & Account registry & 4,500 \\
+\tbl{client}, \tbl{disp} & Customer master (owners) & 5,369 \\
+\tbl{district} & Reference data (77 districts) & 77 \\
+\tbl{customer\_profile\_\allowbreak simulated} & Loyalty system (simulated tier) & 4,500 \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-\subsection{Data Characteristics}
-\label{sec:data-characteristics}
-
-\textbf{Volume and growth.} The 1,056,320 transactions grow every year, from 28,205 in
-1993 to 322,277 in 1998, as the bank opened accounts. Each account has between 9 and 675
-transactions (median 208), giving a long history per account, which BR02, BR03, and BR08
-need.
-
-\textbf{Cash-flow direction.} The \tbl{type} code gives the direction of money
-(Table~\ref{tab:types}): \texttt{PRIJEM} (credit) is inflow, and \texttt{VYDAJ} (debit) and
-\texttt{VYBER} (withdrawal) are outflow. Inflow totals 3,227,472,424.50~CZK and outflow
-3,030,321,135.80~CZK. Amounts are never negative: 14 are zero, the mean is 5,924~CZK, the
-median 2,100~CZK, the 99th percentile 45,455~CZK, and the maximum 87,400~CZK. The balance
-after the transaction is negative in 2,999 records.
-
-\begin{table}[!htb]
+\begin{table}[!t]
 \centering
 \caption{Transaction Types and Cash-Flow Direction (Amounts in CZK)}
 \label{tab:types}
@@ -340,20 +239,10 @@ VYBER (withdrawal) & OUT & 16,666 & 1.58\% & 12,103 & 208.6 \\
 \end{tabular}
 \end{table}
 
-\textbf{Ownership.} Every account has exactly one owner (\texttt{disp.type = OWNER}), and
-each of the 4,500 owners owns exactly one account; the 869 other clients are only
-authorized users (DISPONENT). The owner's residence district differs from the account's
-branch district for 409 accounts, so the district plays two roles. These figures reproduce
-14 of the 15 figures of the team's earlier survey of the dataset.
-
 \subsection{Data Quality Defects}
 \label{sec:data-quality}
-Table~\ref{tab:dq} summarizes the defects found during profiling, organized by the ISO/IEC
-25012 data quality characteristics \cite{iso25012}. They concern the classification of
-transactions rather than the amounts, which are complete and non-negative. The
-classification fields \tbl{operation} and \tbl{k\_symbol} use two different encodings of
-``missing'' (NULL and a blank string), so the 17 raw combinations of (type, operation,
-purpose) reduce to 15 after standardization.
+The defects concern the classification of transactions, not the amounts
+(Table~\ref{tab:dq}, by ISO/IEC 25012 \cite{iso25012}).
 
 \begin{table*}[!t]
 \centering
@@ -362,97 +251,54 @@ purpose) reduce to 15 after standardization.
 \small
 \begin{tabular}{L{2.3cm} L{7.0cm} L{5.4cm}}
 \toprule
-\textbf{Characteristic} & \textbf{Finding} & \textbf{Required handling} \\
+\textbf{Characteristic} & \textbf{Finding} & \textbf{Handling} \\
 \midrule
-Completeness & \tbl{operation} empty in 183,114 transactions (all with purpose \texttt{UROK}, interest credited); \tbl{k\_symbol} NULL in 481,881 and blank in 53,433 & Explicit member \texttt{NOT\_RECORDED}; no row dropped \\
-Consistency & Two encodings of ``missing''; codes padded with spaces; 17 combinations that mean 15 & Trim and map both encodings to one member; junk dimension of 15 profiles \\
-Understand\-ability & Czech codes (e.g., \texttt{PRIJEM}, \texttt{SIPO}) & Readable names and a cash-flow direction in the profile dimension \\
-Accuracy & Birth date and gender packed into one ``birth number'' (month + 50 for women); 2-digit years & Decoded into \tbl{gender} and \tbl{birth\_date} (stored as \texttt{Date32}, before 1970) \\
-Currentness & No attribute with a change history & Simulated membership tier with effective dates (Section~\ref{sec:tier}) \\
+Completeness & \tbl{operation} empty in 183,114 transactions; \tbl{k\_symbol} NULL in 481,881 and blank in 53,433 & Explicit member \texttt{NOT\_RECORDED}; no row dropped \\
+Consistency & Two encodings of ``missing''; padded codes; 17 combinations that mean 15 & Standardized into a junk dimension of 15 profiles \\
+Understand\-ability & Czech codes (e.g., \texttt{PRIJEM}, \texttt{SIPO}) & Readable names and a cash-flow direction \\
+Accuracy & Birth date and gender packed into one ``birth number'' & Decoded into \tbl{gender} and \tbl{birth\_date} \\
+Currentness & No attribute with a change history & Simulated membership tier with effective dates \\
 \bottomrule
 \end{tabular}
 \end{table*}
 
 \subsection{Simulated Membership Tier}
 \label{sec:tier}
-BR01 and BR08 need an attribute that changes over time. A deterministic script assigns each
-of the 4,500 owners an initial tier by the inflow of the first year after the account was
-opened: Standard (below 150,000~CZK, 2,075 owners), Silver (to 300,000, 1,438), Gold (to
-550,000, 698), and Platinum (289), effective from the account opening date. A year-end
-re-evaluation with the same thresholds on the 1998 inflow, effective 1999-01-01, changes
-the tier of 618 owners (13.7\%); together with their January 1999 transactions it forms
-the KB08 scenario.
+BR01 and BR08 need an attribute that changes over time. A deterministic script assigns each of
+the 4,500 owners a tier by the inflow of the first year of the account: Standard (below
+150,000~CZK, 2,075 owners), Silver (to 300,000, 1,438), Gold (to 550,000, 698), and Platinum
+(289). A year-end re-evaluation of 1998, effective 1999-01-01, changes the tier of 618 owners;
+together with their January 1999 transactions it forms scenario KB08.
 
-\subsection{Scope and Constraints}
-The solution processes data in daily or monthly batches, not as a stream. End-of-period
-balances and internal transfers between accounts of the bank are out of scope:
-\tbl{balance\_after} is semi-additive and is shown only in account lookups. The application
-has no access control (all three tabs are open), and PostgreSQL is outside the backup scope
-of BR07. Finally, the solution must run on a single machine so that it can be demonstrated
-and reproduced.
-
-\subsection{Directions Considered but Not Implemented}
+\subsection{Scope}
 \label{sec:other-directions}
-Before fixing the scope on cash flow and account activity, the team considered other uses of
-the same data (Table~\ref{tab:directions}). They are recorded here because the warehouse was
-designed so that they can be added later as further business processes or marts, without
-changing the existing star schema.
-
-\begin{table}[!t]
-\centering
-\caption{Directions Considered but Not Implemented}
-\label{tab:directions}
-\footnotesize
-\setlength{\tabcolsep}{3pt}
-\begin{tabular}{L{2.0cm} L{2.6cm} L{3.1cm}}
-\toprule
-\textbf{Direction} & \textbf{Data in Berka} & \textbf{Why not in scope} \\
-\midrule
-Loan default risk & \tbl{loan} (682 loans with status) & A different business process and user group; too few loans for a model \\
-Card usage analysis & \tbl{card} (892 cards: type and issue date) & No card transactions, only the cards issued \\
-Recurring payments & \tbl{order} (6,471 standing orders) & Overlaps BR02; adds no new requirement for the three user groups \\
-Customer segmentation (RFM) & \tbl{trans}, \tbl{client} & Marketing use case; no marketing user group in scope \\
-Regional economics & \tbl{district} (A4--A16: population, salary, unemployment) & Socio-economic attributes outside the cash-flow view; kept out of \tbl{dim\_district} \\
-Streaming fraud detection & --- & Berka is a historical extract; the batch rules of BR03 meet the requirement \\
-\bottomrule
-\end{tabular}
-\end{table}
+Processing is in batches, not streaming. End-of-period balances, internal transfers, access
+control, and the backup of the operational store are out of scope, and the solution runs on
+one machine. Other uses of the data were considered and left out because they belong to other
+business processes or user groups: loan default risk (\tbl{loan}), card analysis
+(\tbl{card}, issuance only), recurring payments (\tbl{order}), customer segmentation, regional
+economics (\tbl{district} attributes), and streaming fraud detection. The warehouse can be
+extended with them later without changing the star schema.
 
 
 %% =====================================================================
 \section{Proposed Solutions}
 \label{sec:solutions}
 
-This section presents the proposed solution---a Kimball star schema on ClickHouse with an
-operational store in PostgreSQL, fed by batches through a data lake and Spark---and the
-alternatives against which it is assessed: another data model (One Big Table), another
-warehouse technology (PostgreSQL), and another architecture for the operational store.
-
 \subsection{First Solution: Kimball Star Schema on ClickHouse (Proposed)}
 \label{sec:sol-kimball}
 
 \subsubsection{Architecture}
-Fig.~\ref{fig:arch} shows the container-level architecture, drawn following the C4 model
-\cite{c4model}. It has six blocks, all running in Docker Compose on one machine:
-\begin{enumerate}
-  \item[A.] \textbf{Source.} The Berka files, the tier file, and scenario files in the same
-        format.
-  \item[B.] \textbf{Data lake.} Each batch is first copied, unchanged, as Parquet under
-        \texttt{lake/batches/<batch\_id>/}. A batch can therefore be traced and re-run from
-        exactly the input it had, even after the source changes.
-  \item[C.] \textbf{Pipeline.} PySpark jobs read one batch, validate it, standardize codes,
-        maintain the dimensions (including SCD2), load the fact, reconcile the batch with
-        its input, and evaluate the alert rules on the warehouse. Every run and step is
-        written to block E.
-  \item[D.] \textbf{Data warehouse.} ClickHouse holds the star schema (database
-        \texttt{dw}) and a separate backup disk.
-  \item[E.] \textbf{Operational store.} PostgreSQL holds what the bank must be able to
-        update and audit: batches, runs, steps, rejected records, alert rules, alerts and
-        their handling, and the backup catalog.
-  \item[F.] \textbf{Application.} One Streamlit application with three tabs reads D and E,
-        writes alert handling to E, and sends allow-listed commands to C (run a scenario,
-        re-run a batch, back up, restore) through a small runner service.
-\end{enumerate}
+The architecture has six blocks (Fig.~\ref{fig:arch}), drawn after the C4 model
+\cite{c4model} and run with Docker Compose on one machine. \textbf{A} is the source.
+\textbf{B}, the data lake, keeps an unchanged Parquet copy of every batch, so that any batch can
+be traced and re-run. \textbf{C}, the PySpark pipeline, validates and standardizes a batch,
+maintains the dimensions (SCD2 included), loads the fact, reconciles the batch with its input,
+and evaluates the alert rules; every run and step is written to E. \textbf{D}, ClickHouse,
+holds the star schema and a backup disk. \textbf{E}, PostgreSQL, holds what must be updated in
+place and audited: runs, rejected records, alerts and their handling, and the backup catalog.
+\textbf{F}, a Streamlit application with three tabs, reads D and E, writes alert handling to E,
+and sends allow-listed commands to C.
 
 \begin{figure*}[!t]
 \centering
@@ -478,45 +324,23 @@ Fig.~\ref{fig:arch} shows the container-level architecture, drawn following the 
 \draw[arr, <->] (ops.east) -- node[above, sloped, font=\scriptsize, pos=0.55]{handle} ([yshift=-5mm]app.west);
 \draw[arr] (app.south) -- ++(0,-1.7) -| node[pos=0.25, below, font=\scriptsize]{commands: run, re-run, backup, restore (runner)} (pipe.south);
 \end{tikzpicture}
-\caption{Container-level architecture of the proposed solution (C4 model, level 2). Blocks A--F follow the team's design.}
+\caption{Container-level architecture of the proposed solution (C4 model, level 2).}
 \label{fig:arch}
 \end{figure*}
 
 \subsubsection{Dimensional Model}
-The model follows Kimball's four-step design process \cite{kimball2013}:
-\begin{enumerate}
-  \item \textbf{Business process:} account transactions.
-  \item \textbf{Grain:} one fact row per transaction (atomic grain), so that every BR,
-        including the transaction list of BR02 and the evidence of BR03, is answered from
-        the same table.
-  \item \textbf{Dimensions} (Fig.~\ref{fig:star}):
-  \begin{itemize}
-    \item \tbl{dim\_date}: a calendar with year, quarter, month, \tbl{year\_month}, day of
-          week, and weekend flag.
-    \item \tbl{dim\_account} (Type~1): account, opening date, statement frequency, and its
-          branch district.
-    \item \tbl{dim\_customer} (\textbf{Type~2}): the owner, with gender and birth date
-          decoded from the birth number, residence district, and membership tier. Each
-          tier is a version with its own surrogate key, \tbl{valid\_from} (inclusive),
-          \tbl{valid\_to} (exclusive; 2299-12-31 for the current version), and
-          \tbl{is\_current}.
-    \item \tbl{dim\_transaction\_profile}: a \emph{junk dimension} of the 15 standardized
-          combinations of type, operation, and purpose, with readable names and the
-          cash-flow direction (IN/OUT).
-    \item \tbl{dim\_district}: 77 districts in 8 regions, used in two roles---branch
-          district through \tbl{dim\_account} and residence district through
-          \tbl{dim\_customer} (an outrigger rather than a direct fact key).
-  \end{itemize}
-  \item \textbf{Facts:} \tbl{amount} is unsigned and \emph{additive}; inflow and outflow
-        are obtained by splitting it on the direction of the profile, and net flow is
-        their difference. \tbl{balance\_after} is \emph{semi-additive} and is never summed.
-        \tbl{load\_batch\_id} and \tbl{loaded\_at} tie every row to the batch that loaded
-        it.
-\end{enumerate}
-The key to BR08 is how the fact row chooses its customer version: the pipeline joins each
-transaction to the owner version whose validity interval contains the transaction date.
-A tier change therefore creates a new version for future transactions without touching the
-fact rows of earlier periods.
+Following Kimball's four steps \cite{kimball2013}, the business process is account
+transactions and the grain is one fact row per transaction, so that reports and account
+lookups use the same table (Fig.~\ref{fig:star}). \tbl{amount} is additive and is split into
+inflow and outflow by the direction of the profile; \tbl{balance\_after} is semi-additive and
+never summed. \tbl{dim\_customer} is \textbf{Type~2}: each tier is a version with its own
+surrogate key and a validity interval [\tbl{valid\_from}, \tbl{valid\_to}), the current one
+ending on 2299-12-31. \tbl{dim\_transaction\_profile} is a junk dimension of the 15 code
+combinations, and \tbl{dim\_district} plays two roles through the account and the customer.
+Each transaction is joined to the owner version valid on its date, with the date condition
+inside the join: a tier change creates a version for future transactions without touching the
+fact rows of earlier periods, and a transaction outside every version is rejected instead of
+silently lost.
 
 \begin{figure}[!htb]
 \centering
@@ -545,24 +369,13 @@ balance\_after \emph{(semi-additive)}\\ load\_batch\_id, loaded\_at};
 \label{fig:star}
 \end{figure}
 
-\subsubsection{Batches and Re-Runs}
-The history is loaded as one reference batch (\texttt{REF\_INITIAL}: districts, accounts,
-owners, and initial tiers) followed by 72 monthly batches (\texttt{HIST\_1993\_01} to
-\texttt{HIST\_1998\_12}). Each scenario is a further batch (e.g., \texttt{KB05\_DATA\_ERRORS}).
-Every batch can be re-run from its data lake snapshot. A re-run skips transactions that
-the same batch has already loaded and is recorded as a \texttt{RERUN}; the fact table is
-additionally a \texttt{ReplacingMergeTree} keyed by transaction, so a re-run cannot create
-duplicates.
-
-\subsubsection{Technology for Data Processing}
-\textbf{Apache Spark} \cite{zaharia2016spark} (PySpark, local mode) executes the pipeline.
-Its DataFrame API expresses the validation rules declaratively, and the same jobs would
-run on a cluster without change. Validation applies rules V1--V7
-(Table~\ref{tab:vrules}); a failing record is written with its rule, reason, and original
-content to \tbl{ops.rejected\_record}, and the rest of the batch continues. Listing~\ref{lst:scd}
-shows how a fact row obtains its customer version. The date condition is part of the join:
-if it were applied after the join, a transaction outside every version would silently
-disappear, whereas here it keeps a null key and is rejected under V7.
+\subsubsection{Pipeline}
+The history is loaded as one reference batch and 72 monthly batches; each scenario is a
+further batch. Each batch is validated with rules V1--V7 (Table~\ref{tab:vrules}); a failing
+record is written with its rule, reason, and content to the operational store, and the rest of
+the batch continues. Each batch is reconciled with its input (count and money). A re-run
+skips transactions the batch has already loaded, and the fact table, a
+\texttt{ReplacingMergeTree} keyed by transaction, cannot hold duplicates.
 
 \begin{table}[!t]
 \centering
@@ -574,306 +387,170 @@ disappear, whereas here it keeps a null key and is rejected under V7.
 \toprule
 \textbf{Rule} & \textbf{A record is rejected when} \\
 \midrule
-V1 & a mandatory field (id, account, date, type, amount) is missing \\
+V1 & a mandatory field is missing \\
 V2 & the account does not exist in the warehouse \\
 V3 & the amount is negative or not a number \\
 V4 & the date is invalid or outside the calendar \\
-V5 & the type code is unknown (not \texttt{PRIJEM}, \texttt{VYDAJ}, \texttt{VYBER}) \\
-V6 & the transaction id is duplicated in the batch or loaded by another batch \\
+V5 & the type code is unknown \\
+V6 & the transaction id is duplicated or loaded by another batch \\
 V7 & no owner version is valid on the transaction date \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-\begin{lstlisting}[language=Python, caption={Choosing the owner version valid on the transaction date (from \texttt{pipeline.py}, simplified).}, label={lst:scd}]
-in_version = ((F.col("client_id") == F.col("v_client_id"))
-    & (F.col("txn_date") >= F.col("valid_from"))
-    & (F.col("txn_date") <  F.col("valid_to")))
-f = (new_rows
-     .join(F.broadcast(accounts), "account_id")
-     .join(F.broadcast(profiles),
-           ["type_code", "operation_code", "purpose_code"])
-     .join(F.broadcast(owner), "account_id", "left")
-     .join(F.broadcast(versions), in_version, "left"))
-# no valid version -> customer_sk is NULL -> rejected (V7)
-no_version = f.filter(F.col("customer_sk").isNull())
-\end{lstlisting}
+Fraud alerts (BR03) are computed after each load with two rules whose parameters are stored
+in the operational store: \textbf{R1}, an account's outflow in a month exceeds three times
+its average of the previous six months and 50,000~CZK; \textbf{R2}, an outgoing transaction
+follows at least 180 days without activity. Each alert keeps a reason, the figures used, and
+the related transactions, and is unique per account, rule, and period, so a re-run adds none.
+On the history the rules raise 1,697 alerts.
 
-Fraud alerts (BR03) are computed after each load from the warehouse with two rules whose
-parameters live in \tbl{ops.alert\_rule}, so they can be tuned without changing code:
-\textbf{R1} (``sharp increase in outflow'') fires when an account's outflow in a month
-exceeds three times its average monthly outflow of the previous six months and 50,000~CZK;
-\textbf{R2} (``dormant account reactivated'') fires on an outgoing transaction after at
-least 180 days without any transaction. Each alert stores a readable reason, the figures
-used (\tbl{evidence}), and the related transaction ids. Alerts are unique per account, rule,
-and period, so re-running a batch adds none. On the historical data the rules raise 1,697
-alerts (1,695 R1 and 2 R2).
-
-\subsubsection{Technology for Data Management}
-\textbf{ClickHouse} \cite{schulze2024clickhouse} is a column-oriented analytical database.
-Column storage reads only the columns a query touches and compresses them well, the
-classic advantage of column stores for analytical workloads
-\cite{stonebraker2005cstore,abadi2008column}. ClickHouse has no in-place update and no
-enforced keys, which a Kimball design normally relies on. The solution handles this as
-follows: dimensions are \texttt{ReplacingMergeTree} tables in which a Type~1 correction or
-the closing of an SCD2 version is written as a new row with a later \tbl{updated\_at} and
-read with \texttt{FINAL}; keys are assigned and checked by the pipeline; and the fact is
-ordered by \texttt{(account\_sk, date\_key, transaction\_id)} and partitioned by year,
-which matches the filters of BR01 (period) and BR02 (account and period)
-(Listing~\ref{lst:ddl}). Backups use the native \texttt{BACKUP DATABASE \ldots\ TO Disk}
-and \texttt{RESTORE} statements on a dedicated disk.
-
-\begin{lstlisting}[language=SQL, caption={ClickHouse definition of the transaction fact table (from \texttt{dw.sql}).}, label={lst:ddl}]
-CREATE TABLE IF NOT EXISTS dw.fact_transaction (
-  transaction_id          UInt64,
-  date_key                UInt32,  -- -> dim_date
-  account_sk              UInt32,  -- -> dim_account
-  customer_sk             UInt32,  -- owner version valid on the date
-  transaction_profile_sk  UInt16,  -- -> dim_transaction_profile
-  amount                  Decimal(18, 2),
-  balance_after           Decimal(18, 2),
-  counterparty_bank_code  Nullable(String),
-  counterparty_account_ref Nullable(String),
-  load_batch_id           LowCardinality(String),
-  loaded_at               DateTime64(3)
-) ENGINE = ReplacingMergeTree(loaded_at)
-PARTITION BY intDiv(date_key, 10000)      -- one partition per year
-ORDER BY (account_sk, date_key, transaction_id);
-\end{lstlisting}
-
-\textbf{PostgreSQL} serves as the operational store. Unlike the warehouse, this data is
-small, is updated in place, and must obey real constraints: primary and foreign keys,
-\texttt{CHECK} constraints on every status, and a function that only allows valid alert
-transitions (\emph{new} $\rightarrow$ \emph{in review} $\rightarrow$ \emph{resolved},
-\emph{new} $\rightarrow$ \emph{resolved}, and reopening a resolved alert) and writes every
-change with its note to \tbl{ops.alert\_action}. Keeping this data out of the warehouse
-means that analysts' notes are never mixed with bank figures, and that a warehouse restore
-never loses the record of what happened.
-
-Table~\ref{tab:techsel} compares candidate data management technologies, including those
-suggested by the course.
-
-\begin{table*}[!t]
-\centering
-\caption{Comparison of Candidate Data Management Technologies}
-\label{tab:techsel}
-\small
-\begin{tabular}{L{3.0cm} L{2.2cm} L{2.0cm} L{2.2cm} L{5.0cm}}
-\toprule
-\textbf{Technology} & \textbf{Storage model} & \textbf{Analytical speed} & \textbf{Local deployment} & \textbf{Assessment} \\
-\midrule
-ClickHouse (selected, D) & Column store & Very high & Single container & Fast aggregations; native backup; no in-place update or enforced keys \\
-PostgreSQL (selected, E; alternative for D) & Row store & Moderate & Single container & Constraints, transactions, in-place updates; slower on large scans \\
-Apache Hive & Files + SQL engine & Low--moderate & Several services & In the course list; high latency hurts an interactive application \\
-Spark SQL + Delta Lake & Lakehouse & Moderate--high & Several services & Close to Databricks (course list); more components to operate \\
-BigQuery / Redshift / Synapse & Cloud warehouse & High & Not local & In the course list; needs cloud billing and stable connectivity \\
-\bottomrule
-\end{tabular}
-\end{table*}
-
-\subsubsection{Data-Driven Application}
-The application is organized around the three user groups: one tab per group, containing
-only the views of its BRs (Table~\ref{tab:appmap}). The \emph{Overview} tab shows KPI tiles
-and charts with a single period filter, as suited to a non-technical manager. The
-\emph{Analysis} tab is case-oriented: the analyst selects an account or an alert and sees
-its transactions, the reason and evidence of the alert, and a form to change its status
-with a note. The \emph{Operations} tab gives the data engineer run-level detail and
-control. Its scenario runner follows the team's flow N01--N05: choose a scenario and
-preview its input without writing anything, run it, compare expected and actual results,
-and run it again.
+\subsubsection{Technologies}
+\textbf{Apache Spark} \cite{zaharia2016spark} runs the pipeline; the same jobs would run on a
+cluster. \textbf{ClickHouse} \cite{schulze2024clickhouse}, a column store, reads only the
+columns a query needs and compresses them \cite{stonebraker2005cstore,abadi2008column}. It
+has no in-place update and no enforced keys: dimensions are \texttt{ReplacingMergeTree}
+tables in which a correction or the closing of an SCD2 version is a new row read with
+\texttt{FINAL}, keys are assigned and checked by the pipeline, and the fact is sorted by
+account and date and partitioned by year. Backups use the native \texttt{BACKUP} and
+\texttt{RESTORE}. \textbf{PostgreSQL} holds the operational data, which is small, updated in
+place, and constrained by keys, \texttt{CHECK}s, and a function that allows only valid alert
+transitions and records each change with its note. Table~\ref{tab:techsel} compares the
+candidates for the warehouse.
 
 \begin{table}[!t]
 \centering
-\caption{Mapping of Business Requirements to Application Views}
-\label{tab:appmap}
+\caption{Candidate Technologies for the Warehouse}
+\label{tab:techsel}
 \footnotesize
-\setlength{\tabcolsep}{4pt}
-\begin{tabular}{l L{1.7cm} L{5.0cm}}
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{L{2.2cm} L{1.5cm} L{4.2cm}}
 \toprule
-\textbf{BR} & \textbf{Tab} & \textbf{Main visual and interaction} \\
+\textbf{Technology} & \textbf{Model} & \textbf{Assessment} \\
 \midrule
-BR01 & Overview & Period filter; KPI tiles; daily/monthly in--out chart; table by tier \\
-BR02 & Analysis & Account and period selection; totals; transaction list \\
-BR03 & Analysis & Alert list; reason, evidence, related transactions \\
-BR04 & Analysis & Status form with note; action history \\
-BR05 & Operations & Rejects by batch and rule; rejected records with reasons \\
-BR06 & Operations & Runs with status and counts; steps of a run; failure cause \\
-BR07 & Operations & Back up; choose a backup and restore; reconciliation result \\
-BR08 & Operations & Tier report for an old and a new period; versions of one client \\
---- & Operations & Scenario runner: preview, run, expected vs.\ actual, re-run \\
+ClickHouse (selected) & Column store & Fast aggregations, native backup; no in-place update \\
+PostgreSQL & Row store & Constraints and updates; slower scans (alternative) \\
+Apache Hive & SQL on files & High latency for an interactive application \\
+Spark SQL + Delta & Lakehouse & More components to operate \\
+Cloud warehouses & Managed & Need billing and connectivity \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-\subsubsection{Technology for the Application}
-\textbf{Streamlit} \cite{streamlit} is a Python framework for data applications. It was
-chosen over a dashboard tool because the application must \emph{write}---alert statuses
-and notes---and \emph{control} the pipeline, not only display charts. Commands from the
-application go to a runner service inside the Spark container, which accepts only an
-allow-list of actions with validated arguments, runs one job at a time, and marks the
-resulting run as \texttt{triggered\_by = app}. Read queries are cached for 60 seconds.
-Lookups of one account or one client filter the fact table by its own key
-(\tbl{account\_sk}, \tbl{customer\_sk}) before joining the dimensions, so that ClickHouse
-can use the sort key of the fact instead of reading the whole table.
-
-Table~\ref{tab:techroles} summarizes how every technology is used and which BRs depend on
-it.
+\subsubsection{Application}
+One Streamlit \cite{streamlit} application has one tab per user group
+(Table~\ref{tab:appmap}). It was chosen over a dashboard tool because it must also write
+alert handling and control the pipeline. Commands go to a runner service in the Spark
+container that accepts only an allow-list of actions, runs one job at a time, and marks the
+run as \texttt{triggered\_by = app}. Lookups of one account or one client filter the fact by
+its own key (\tbl{account\_sk}, \tbl{customer\_sk}) before joining the dimensions, so that
+ClickHouse can use the sort key of the fact.
 
 \begin{table}[!t]
 \centering
-\caption{Technologies of the First Solution and the BRs They Serve}
-\label{tab:techroles}
+\caption{Business Requirements in the Application}
+\label{tab:appmap}
 \footnotesize
 \setlength{\tabcolsep}{4pt}
-\begin{tabular}{L{1.9cm} L{4.3cm} L{1.4cm}}
+\begin{tabular}{l L{1.6cm} L{5.0cm}}
 \toprule
-\textbf{Technology} & \textbf{Role} & \textbf{BRs} \\
+\textbf{BR} & \textbf{Tab} & \textbf{View and interaction} \\
 \midrule
-Parquet (data lake) & Unchanged input of every batch; source of re-runs & BR05--BR07 \\
-Apache Spark & Validation, standardization, SCD2, fact load, reconciliation & All \\
-ClickHouse & Star schema; alert rules; backup and restore & BR01--03, BR07--08 \\
-PostgreSQL & Runs, steps, rejects, alerts, handling, backup catalog & BR03--BR07 \\
-Streamlit & Three-tab application; alert handling; control & All \\
-Docker Compose & Reproducible single-machine deployment & All \\
+BR01 & Overview & Period filter; KPIs; in--out chart; table by tier \\
+BR02--04 & Analysis & Account lookup; alerts with evidence; status form \\
+BR05--08 & Operations & Rejects; runs and steps; backup and restore; report by tier \\
+--- & Operations & Scenario runner: preview, run, expected vs.\ actual \\
 \bottomrule
 \end{tabular}
 \end{table}
 
 \subsubsection{Big Data Considerations}
-The course asks for the solution to be assessed in a Big Data context. We discuss it along
-the common ``V'' characteristics.
-
-\textbf{Volume.} Berka holds about one million transactions, which a single machine
-handles easily. The design scales without a change to the model: Spark distributes the
-same jobs over a cluster, and ClickHouse can shard the fact table with its
-\texttt{Distributed} engine. The fact table is 18.5~MB compressed for 1.06 million rows in
-ClickHouse.
-
-\textbf{Velocity.} The bank produced at most 322,277 transactions a year, under 1,000 a
-day, which suits daily batches. A monthly batch of about 15,000 transactions is processed
-in a median of 3.4~s, so the pipeline has ample headroom.
-
-\textbf{Variety.} The data is structured. Spark reads every file with an explicit schema,
-and the data lake stores it with the data.
-
-\textbf{Veracity.} Veracity is addressed by validation on every batch, isolation of failing
-records with their reasons, reconciliation of each batch with its input, and a full
-reconciliation with the source (Section~\ref{sec:analysis}).
-
-\textbf{Value.} Value is delivered through the eight BRs, each tied to a business
-objective (Table~\ref{tab:objectives}) and to an application view
-(Table~\ref{tab:appmap}).
+The volume (about one million transactions) and velocity (under 1,000 a day) suit one
+machine and daily batches; the design scales without changing the model, since Spark
+distributes the same jobs and ClickHouse can shard the fact. The data is structured and read
+with explicit schemas. Veracity is the main concern and is addressed by validation,
+isolation of failing records, and reconciliation of every batch.
 
 \subsection{Second Solution: One Big Table on ClickHouse}
 \label{sec:sol-obt}
-The second solution keeps the same pipeline and technology but replaces the star schema
-with a single denormalized table: every fact row carries all dimension attributes,
-including both district roles and the tier with its validity interval. This design is
-often recommended for column stores because it removes joins at query time, and it keeps
-SCD2 semantics as of the transaction date because the tier is copied when the row is
-loaded. Its costs are redundancy and expensive corrections: changing one Type~1 attribute
-requires rewriting every fact row that carries it, which ClickHouse does with an
-asynchronous mutation.
+The same pipeline and technology, but one denormalized table: every fact row carries all
+dimension attributes, including both district roles and the tier with its validity. Queries
+need no joins, but every Type~1 correction rewrites all the fact rows that carry the
+attribute.
 
 \subsection{Third Solution: Star Schema on PostgreSQL (Row Store)}
 \label{sec:sol-postgres}
-The third solution keeps the same pipeline, star schema, and rows, but stores the
-warehouse in PostgreSQL, a row-oriented relational database (decision Q-K of the team). It
-offers full support for the Kimball design---enforced primary and foreign keys,
-transactions, and in-place updates---and B-tree indexes for point lookups, but reads whole
-rows even when a query needs only a few columns. To make the comparison fair, it is set up
-with primary and foreign keys and indexes on the fact's filter and
-join columns (\tbl{date\_key}; \tbl{account\_sk}, \tbl{date\_key}; \tbl{customer\_sk}) and
-on \tbl{dim\_customer.client\_id}, created after the bulk load; up-to-date statistics; and
-256~MB of shared buffers, 64~MB of work memory, and up to four parallel workers.
+The same pipeline, schema, and rows in PostgreSQL, with enforced keys, in-place updates, and
+B-tree indexes on the fact's filter and join columns. A row store reads whole rows even when
+a query needs a few columns, which is expected to slow the scans of BR01 and BR08.
 
 \subsection{Alternative Architecture: Operational Data in ClickHouse}
 \label{sec:sol-ops}
-The proposed architecture adds a second database (block E). The alternative removes it
-and keeps runs, alerts, and their handling in ClickHouse next to the warehouse. Because
-ClickHouse has no in-place update, a status change is either written as a new row version
-of a \texttt{ReplacingMergeTree} table and read with \texttt{FINAL}, or applied as an
-\texttt{ALTER TABLE \ldots\ UPDATE} mutation; the validity of a transition must be checked
-by the application.
+Block E is removed and runs, alerts, and their handling are kept in ClickHouse. A status
+change becomes a new row version or a mutation, and the validity of a transition must be
+checked by the application.
 
 \subsection{Related Work}
-Kimball's bottom-up dimensional modeling \cite{kimball2013} contrasts with Inmon's top-down
-approach \cite{inmon2005}, in which a normalized enterprise data warehouse feeds
-departmental marts, and with Data Vault \cite{linstedt2015}, which separates business keys,
-relationships, and descriptive attributes to favor auditability and change. For a single
-business process and a small team, Kimball offers the shortest path from data to
-user-facing queries, and its slowly changing dimensions cover the history requirement of
-BR08. The lakehouse paradigm \cite{armbrust2021lakehouse} unifies data lakes and warehouses
-on open formats. The advantages of column stores for analytical workloads are well
-established \cite{stonebraker2005cstore,abadi2008column}, and the Star Schema Benchmark
-\cite{oneil2009ssb} adapts TPC-H to star schemas. The Berka dataset has been widely used
-for loan-default prediction and customer analysis since the PKDD'99 challenge
-\cite{berka1999}; here it is used as the source of a warehouse rather than of a model.
+Kimball's dimensional modeling \cite{kimball2013} contrasts with Inmon's normalized
+enterprise warehouse \cite{inmon2005} and with Data Vault \cite{linstedt2015}; for one
+business process and a small team it gives the shortest path to user-facing queries, and its
+slowly changing dimensions cover BR08. Lakehouses \cite{armbrust2021lakehouse} unify lakes and
+warehouses on open formats. Column stores are known to suit analytical workloads
+\cite{stonebraker2005cstore,abadi2008column}, and the Star Schema Benchmark
+\cite{oneil2009ssb} measures star-join queries, as done here.
 
 
 %% =====================================================================
 \section{Criteria for Assessing Solutions}
 \label{sec:criteria}
 
-The solutions are assessed against the three criteria required by the course. Each
-criterion is broken down into measurable metrics with explicit targets, defined before
-measurement. The eight evaluation scenarios KB01--KB08 (Table~\ref{tab:brs}) are the
-common thread: each is a scripted run with an input, an expected result written before the
-load, and a reconciliation with the source.
-
 \subsection{Criterion 1: Data Correctness}
-Correctness metrics follow the ISO/IEC 25012 characteristics \cite{iso25012}
-(Table~\ref{tab:correctness-criteria}). Every result is checked against something
-independent of the warehouse: the source files, recomputed by a separate program; the
-scenario's expected result; or the operational store.
+Correctness follows ISO/IEC 25012 \cite{iso25012} (Table~\ref{tab:correctness-criteria}).
+Every result is checked against something independent of the warehouse: the source
+recomputed by a separate program, the expected result of a scenario, or the operational
+store.
 
-\begin{table*}[!t]
+\begin{table}[!t]
 \centering
 \caption{Data Correctness Metrics and Targets}
 \label{tab:correctness-criteria}
-\small
-\begin{tabular}{L{2.4cm} L{8.6cm} L{3.6cm}}
+\footnotesize
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{L{1.85cm} L{3.9cm} L{1.5cm}}
 \toprule
-\textbf{Characteristic} & \textbf{Metric} & \textbf{Target} \\
+\textbf{Character\-istic} & \textbf{Metric} & \textbf{Target} \\
 \midrule
-Accuracy & Count, inflow, and outflow per period and per tier: warehouse vs.\ source (KB01) & Equal to the cent \\
-Accuracy & Transactions of an account (id, amount, direction): warehouse vs.\ source (KB02) & Equal, row by row \\
+Accuracy & Count and money per period and tier vs.\ source (KB01); transactions of an account vs.\ source (KB02) & Equal to the cent; row by row \\
 Completeness & Fact rows with a missing key or amount & 0 \\
-Uniqueness & Duplicate transaction ids, including after re-runs & 0 \\
-Consistency & Fact rows or accounts whose foreign key has no dimension row (5 relations) & 0 \\
-Consistency & SCD2: exactly one current version per client; no overlap or gap between versions; every fact row points to the version valid on its date & 0 violations \\
-Consistency & Scenario results (alerts, rejects, restore, tier report) vs.\ expected (KB03--KB08) & All equal \\
-Consistency & BR query results identical on all three warehouse solutions & 18 / 18 comparisons \\
+Uniqueness & Duplicate transactions, also after re-runs & 0 \\
+Consistency & Orphan keys; SCD2 overlaps, gaps, wrong versions & 0 \\
+Consistency & Scenarios KB03--KB08 vs.\ expected & All equal \\
+Consistency & Same query results on all solutions & All equal \\
 \bottomrule
 \end{tabular}
-\end{table*}
+\end{table}
 
 \subsection{Criterion 2: Performance}
-Performance is assessed by: (i) the latency of each BR query, as the median and 95th
-percentile of warm runs plus the cold run; (ii) throughput and latency with 1, 4, and 8
-concurrent users; (iii) storage size and load time; (iv) the cost of correcting a Type~1
-attribute; (v) the latency of the operational workload (alert handling, run logging) and
-the integrity guarantees the store enforces by itself; and (vi) pipeline time per batch
-and per step, and its scaling with CPU cores. A solution is considered better on a metric
-only if it does not violate Criterion~1.
+Query latency (median and 95th percentile of warm runs, plus the cold run), throughput with
+concurrent users, storage, load time, cost of correcting a Type~1 attribute, latency and
+integrity of the operational workload, and pipeline time and scaling. A solution is better on
+a metric only if it does not violate Criterion~1.
 
 \subsection{Criterion 3: Effectiveness of Data Exploitation}
-Effectiveness is assessed per BR by (i) whether the BR is demonstrated end to end through
-the application, (ii) the number of user interactions needed to obtain the answer, and
-(iii) the time to answer.
+Whether each BR is demonstrated end to end in the application, the number of interactions,
+and the time to answer.
 
 \subsection{Hypotheses}
 \begin{itemize}
-  \item \textbf{H1.} ClickHouse answers the aggregation queries of BR01, BR03, and BR08
-        faster than PostgreSQL with the same schema, and stores the data in less space.
-  \item \textbf{H2.} For single-account or single-client lookups (BR02, client versions of
-        BR08), the B-tree indexes of PostgreSQL narrow or reverse the gap.
-  \item \textbf{H3.} The time of a batch is dominated by fixed overhead rather than by the
-        number of transactions in it.
-  \item \textbf{H4.} The One Big Table answers queries slightly faster than the star
-        schema, but needs more space and makes Type~1 corrections much more expensive.
-  \item \textbf{H5.} A separate relational operational store is faster for the
-        operational workload and enforces guarantees that the column store cannot.
+  \item \textbf{H1.} ClickHouse answers aggregation queries faster than PostgreSQL with the
+        same schema, in less space.
+  \item \textbf{H2.} For lookups of one account or client, PostgreSQL's indexes narrow or
+        reverse the gap.
+  \item \textbf{H3.} The time of a batch is dominated by fixed overhead, not by its size.
+  \item \textbf{H4.} The One Big Table is slightly faster but makes corrections much more
+        expensive.
+  \item \textbf{H5.} A separate relational operational store is faster for its workload and
+        enforces guarantees that the column store cannot.
 \end{itemize}
 
 
@@ -882,12 +559,10 @@ the application, (ii) the number of user interactions needed to obtain the answe
 \label{sec:method}
 
 \subsection{Environment}
-All experiments were run on one machine (Apple M3 Pro, 11 CPU cores, 18 GB RAM) with
-Docker Desktop 28.3.3, whose virtual machine was allocated 11 vCPUs and 7.65 GiB of RAM.
-During the benchmark only the four containers of this project were running. Every service
-ran with a fixed memory limit (Table~\ref{tab:env}). To fit the limit, ClickHouse caches
-were capped (mark cache 256~MiB, no uncompressed cache) and its background system logs
-were disabled, which lowered its idle memory from 1.2 to 0.74~GB.
+All experiments ran on one machine (Apple M3 Pro, 11 cores, 18~GB RAM) in Docker Desktop
+28.3.3 with 11 vCPUs and 7.65~GiB; only this project's containers were running, each with a
+memory limit (Table~\ref{tab:env}). ClickHouse caches were capped and its background system
+logs disabled to fit the limit.
 
 \begin{table}[!t]
 \centering
@@ -895,145 +570,87 @@ were disabled, which lowered its idle memory from 1.2 to 0.74~GB.
 \label{tab:env}
 \footnotesize
 \setlength{\tabcolsep}{4pt}
-\begin{tabular}{L{3.6cm} L{2.0cm} L{1.6cm}}
+\begin{tabular}{L{3.8cm} L{1.8cm} L{1.4cm}}
 \toprule
-\textbf{Component} & \textbf{Version} & \textbf{Memory limit} \\
+\textbf{Component} & \textbf{Version} & \textbf{Memory} \\
 \midrule
-Apache Spark (local mode, PySpark, Python 3.8) & 3.5.6 & 3 GB \\
+Apache Spark (local, PySpark) & 3.5.6 & 3 GB \\
 ClickHouse (D) & 25.3.14.14 & 2.5 GB \\
-PostgreSQL (E, and the alternative for D) & 16.4 & 1 GB \\
+PostgreSQL (E; alternative for D) & 16.4 & 1 GB \\
 Streamlit (F) & 1.40.2 & 0.5 GB \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-\subsection{Data Profiling}
-The source files were profiled with DuckDB: row counts, distinct counts, value
-distributions, range checks, and cross-file key checks. The results are reported in
-Section~\ref{sec:problem}, where they are also compared with the team's earlier survey of
-the dataset.
-
-\subsection{Evaluation Scenarios}
-The historical data was loaded first (one reference batch and 72 monthly batches). The
-scenario files were then generated by a deterministic script, together with their
-expected results, before any of them was loaded:
-\begin{itemize}
-  \item \textbf{KB03:} five transactions built to trigger the alert rules: three accounts
-        withdraw 60,000~CZK in February 1999 (R1) and two accounts withdraw after 196 days
-        without activity (R2).
-  \item \textbf{KB05:} 20 transactions, of which 10 are valid and 10 each violate one rule
-        (V1 2, V2 1, V3 2, V4 2, V5 1, V6 2).
-  \item \textbf{KB07:} the warehouse is backed up, 20 deposits are loaded, and the
-        warehouse is restored.
-  \item \textbf{KB08:} 618 tier changes effective 1999-01-01 and 1,236 transactions of
-        January 1999 for those owners.
-\end{itemize}
-KB01, KB02, KB04, and KB06 use the loaded data, the alerts of KB03, and the runs that
-already exist (including one run that genuinely failed during development).
-
-\subsection{Data Correctness Checks}
-An evaluation program recomputes the source independently: it reads the Berka file and
-the scenario files with pandas, assigns each transaction its owner from \tbl{disp} and its
-tier from the tier files by date, and compares the result with the warehouse in integer
-cents. It then compares every scenario with its expected result and the operational store,
-and runs the data quality checks of Table~\ref{tab:correctness-criteria}. KB04 is executed
-inside a database transaction that is rolled back, so the evaluation leaves no trace. The
-program only reads the warehouse.
+\subsection{Evaluation Scenarios and Correctness Checks}
+The source was profiled with DuckDB, and the history (one reference and 72 monthly batches)
+was loaded. Four scenario batches were generated, with their expected results, before any was
+loaded: \textbf{KB03}, five transactions built to trigger R1 (three accounts) and R2 (two);
+\textbf{KB05}, 20 transactions of which 10 each violate one rule; \textbf{KB07}, a backup, a
+load of 20 deposits, and a restore; \textbf{KB08}, 618 tier changes and 1,236 transactions of
+January 1999. An evaluation program recomputes the source independently with pandas---owner
+from \tbl{disp}, tier from the tier files by date---and compares it with the warehouse in
+integer cents; it then compares each scenario with its expected result and the operational
+store, and runs the checks of Table~\ref{tab:correctness-criteria}. KB04 runs in a
+transaction that is rolled back.
 
 \subsection{Benchmark Design}
-The benchmark followed the TPC methodology \cite{tpch,tpcds} with the actual queries of
-the application as workload. Four comparisons were made, each changing one factor
-(Table~\ref{tab:bench}). The three warehouse solutions were loaded from the same CSV export
-of the warehouse and hold the same 1,057,571 fact rows; every write test ran on these
-copies, never on the warehouse or the operational store. Nine queries cover BR01 (four),
-BR02 (two), BR03 (rule R1 over the whole history, whose result, 1,698 account-months,
-equals the number of R1 alerts), and BR08 (two). Each query was run six times per solution:
-the first (cold) run was recorded separately, with the ClickHouse caches dropped before
-it, and the median and 95th percentile of the remaining five (warm) runs were reported.
-Times were measured by the client and include the transfer of the result, and the result
-sets were compared row by row with those of the proposed solution. For concurrency, 1, 4,
-or 8 clients repeated a mix of one query per user group (BR01 by tier, BR02 for a random
-account, BR08 by tier) for 15~s. The operational workload (B3) was executed one call at a
-time, as the application and the pipeline do: 200 status changes, 200 logged steps, and
-50 reads of each kind. For B4, every configuration ran in a new Spark JVM, and the
-session start-up time was reported separately.
+Four comparisons were made, each changing one factor (Table~\ref{tab:bench}). The three
+warehouse solutions were loaded from the same export (1,057,571 fact rows), and every write
+test ran on copies. Nine queries taken from the application cover BR01, BR02, BR03 (rule R1
+over the whole history), and BR08. Each ran six times per solution: the first, cold, run
+after dropping the ClickHouse caches, then the median and 95th percentile of the five warm
+runs. Times include the transfer of the result, and the results of the alternatives were
+compared row by row with the proposed solution. Concurrency used 1, 4, and 8 clients for
+15~s on a mix of one query per user group. PostgreSQL had primary and foreign keys, indexes,
+statistics, 256~MB of shared buffers, and 64~MB of work memory. B1, B2, and B4 were repeated
+on a $\times$10 copy that replicates every account, client, and transaction under new keys
+(10,575,710 fact rows, checked to be exactly ten times $\times$1), as TPC-style benchmarks
+\cite{tpch,tpcds} generate data by scale factor; the operational data of B3 does not grow
+with the warehouse. Two forms of the account lookup---filtering on \tbl{account\_id} after
+the join, or filtering the fact by \tbl{account\_sk} first---were also compared at both
+scales, recording the rows read from the ClickHouse query log, as were the application's
+lookups on the warehouse in their first and final form.
 
-B1, B2, and B4 were repeated at scale $\times$10. Since Berka has no more data, the
-$\times$10 copy replicates every account, client, and transaction ten times under new keys,
-keeping dates, amounts, tiers, and the SCD2 history, as TPC-style benchmarks generate data
-by scale factor. It holds 10,575,710 fact rows, and its row count, total amount, and numbers
-of accounts and clients were checked to be exactly ten times those of $\times$1. It lives in
-separate databases, so the warehouse itself stayed at $\times$1. B3 was not repeated,
-because the operational data does not grow with the warehouse.
-
-Two forms of the account lookup (BR02) were also compared at both scales: joining the
-account dimension and filtering on \tbl{account\_id}, and filtering the fact by
-\tbl{account\_sk} first. For each, the time and the number of rows read, taken from the
-query log of ClickHouse, were recorded. The lookups of the application (BR02 and the
-per-client view of BR08) were measured the same way on the warehouse itself, in their
-first and their final form.
-
-\begin{table*}[!t]
+\begin{table}[!t]
 \centering
 \caption{Benchmark Design}
 \label{tab:bench}
-\small
-\begin{tabular}{l L{4.2cm} L{2.6cm} L{3.6cm} L{4.6cm}}
+\footnotesize
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{l L{2.5cm} L{1.7cm} L{2.9cm}}
 \toprule
-\textbf{ID} & \textbf{Comparison} & \textbf{Fixed} & \textbf{Question} & \textbf{Metrics} \\
+\textbf{ID} & \textbf{Comparison} & \textbf{Fixed} & \textbf{Metrics} \\
 \midrule
-B1 & Star schema vs.\ One Big Table & ClickHouse & Is Kimball modeling worth its joins? & Latency; concurrency; storage; load time; cost of Type~1 corrections \\
-B2 & ClickHouse vs.\ PostgreSQL & Star schema & Does a column store pay off? & Latency; concurrency; storage; load time \\
-B3 & Operational store in PostgreSQL vs.\ in ClickHouse & Alerts and workload & Is a separate operational store needed? & Latency of status changes, run logging, reads; integrity guarantees \\
-B4 & Spark with 1/2/4/8 cores; one batch vs.\ 72 monthly batches & Transformation & Does the pipeline scale, and what does batching cost? & Transformation time; rows per second \\
+B1 & Star vs.\ One Big Table & ClickHouse & Latency, concurrency, storage, correction cost \\
+B2 & ClickHouse vs.\ PostgreSQL & Star schema & Latency, concurrency, storage, load \\
+B3 & Operational store in PostgreSQL vs.\ ClickHouse & Workload & Latency; integrity guarantees \\
+B4 & Spark 1/2/4/8 cores; 1 vs.\ 72 batches & Transfor\-mation & Time; rows per second \\
 \bottomrule
 \end{tabular}
-\end{table*}
+\end{table}
 
 \subsection{Effectiveness Evaluation}
-Each BR was demonstrated through its application view. To measure the effort of a user, a
-script (\texttt{tools/ui\_walkthrough.py}) drove the application in a headless Chrome
-browser (1440$\times$900 pixels) along one flow per BR, as a user would: open a tab, type an
-account, select an alert, submit a form, or run a scenario. For each flow it counted the
-interactions and measured the time to answer, from the last interaction until the
-application had finished re-running and the result was on screen. Switching tabs does not
-re-run the application, because every tab is already rendered, so such answers appear at
-once. The status change written by BR04 was removed afterwards.
+A script (\texttt{tools/ui\_walkthrough.py}) drove the application in headless Chrome
+(1440$\times$900) along one flow per BR, counting the interactions and timing the answer from
+the last interaction until the result was on screen.
 
 
 %% =====================================================================
 \section{Analysis and Interpretation}
 \label{sec:analysis}
-% Template guidance: interpret results against the criteria of Section IV only; do not
-% introduce new methods or solutions here; use hedged language unless the evidence is
-% conclusive (e.g., "it appears that...", "the results suggest that...",
-% "it can be tentatively concluded that...").
 
 \subsection{Data Correctness}
-All eight scenarios passed, with 38 of 38 checks (Table~\ref{tab:correctness-results}).
-For every period, the transaction count, inflow, and outflow in the warehouse equal the
-recomputed source to the cent, also when split by membership tier and when counting
-distinct clients. Over the full history the warehouse holds 1,056,320 Berka transactions
-with an inflow of 3,227,472,424.50~CZK and an outflow of 3,030,321,135.80~CZK, exactly as
-in the source, plus the 1,251 scenario transactions that should remain after the restore
-of KB07. For 23 accounts (three used by scenarios and 20 drawn at random), every
-transaction matches the source in id, amount, and direction.
-
-The scenarios behaved as specified. KB03 raised exactly the five expected alerts, and
-their evidence matches the expected figures; KB03 was run six times and still has five
-alerts. KB05 loaded the 10 valid transactions and isolated the 10 defective ones, each
-under the expected rule, and the batch ended as \texttt{SUCCEEDED\_WITH\_REJECTS} instead
-of failing. KB07's restore returned the warehouse to the backup on all five groups of
-figures (row counts, inflow, outflow, report by tier, SCD versions). KB08 produced 5,118
-customer versions (4,500 current, 618 closed); the January 1999 report by new tier equals
-the expected figures, and the 1993--1998 report by tier still equals the source computed
-with the initial tiers---the tier change did not rewrite history.
-
-The evaluation also found two defects, both outside the warehouse. The expected average
-of KB03 had been computed over July--December 1998, whereas rule R1 for February 1999
-uses the six preceding months, August 1998--January 1999. The warehouse was correct; the
-generator was fixed and re-run, and its transaction files did not change. Second, one
-pipeline step did not record its input count; it now does.
+All eight scenarios passed, with 38 of 38 checks (Table~\ref{tab:correctness-results}). For
+every period, count, inflow, and outflow equal the recomputed source to the cent, also by
+tier; over the full history the inflow of 3,227,472,424.50~CZK and the outflow of
+3,030,321,135.80~CZK match the source exactly. KB03 raised exactly the five expected alerts
+and none after six runs; KB05 loaded the 10 valid transactions and isolated the 10 others
+under the expected rules; the restore of KB07 matched the backup on all five groups of
+figures; and after KB08 the 1993--1998 report by tier still equals the source with the
+initial tiers. The evaluation also exposed two defects outside the warehouse---a wrong
+six-month window in the expected result of KB03 and a missing count in one pipeline step---
+which were fixed.
 
 \begin{table}[!t]
 \centering
@@ -1045,15 +662,15 @@ pipeline step did not record its input count; it now does.
 \toprule
 \textbf{KB} & \textbf{BR} & \textbf{Main check} & \textbf{Passed} \\
 \midrule
-KB01 & BR01 & 4 periods, total and by tier, equal the source to the cent & 8/8 \\
-KB02 & BR02 & 23 accounts equal the source transaction by transaction & 2/2 \\
-KB03 & BR03 & 5 expected alerts with their evidence; no duplicate after re-runs & 4/4 \\
-KB04 & BR04 & Valid transitions recorded with notes; invalid one refused & 3/3 \\
+KB01 & BR01 & 4 periods, total and by tier, equal the source & 8/8 \\
+KB02 & BR02 & 23 accounts equal the source row by row & 2/2 \\
+KB03 & BR03 & 5 expected alerts; none duplicated by re-runs & 4/4 \\
+KB04 & BR04 & Valid transitions recorded; invalid one refused & 3/3 \\
 KB05 & BR05 & 10 loaded, 10 rejected under the expected rules & 3/3 \\
-KB06 & BR06 & Every run has steps; failed step and cause identified & 4/4 \\
-KB07 & BR07 & Restore equals the backup on 5 groups of figures & 3/3 \\
-KB08 & BR08 & SCD2 counts; new period by new tier; old period unchanged & 4/4 \\
-DQ & --- & Uniqueness, completeness, 0 orphans, SCD2 consistency & 7/7 \\
+KB06 & BR06 & Runs have steps; failed step and cause found & 4/4 \\
+KB07 & BR07 & Restore equals the backup on 5 figure groups & 3/3 \\
+KB08 & BR08 & SCD2 counts; old period unchanged & 4/4 \\
+DQ & --- & Uniqueness, completeness, keys, SCD2 & 7/7 \\
 \midrule
 \multicolumn{3}{l}{\textbf{Total}} & \textbf{38/38} \\
 \bottomrule
@@ -1061,8 +678,8 @@ DQ & --- & Uniqueness, completeness, 0 orphans, SCD2 consistency & 7/7 \\
 \end{table}
 
 \subsection{Performance}
-Table~\ref{tab:results} reports the query latencies. All 18 comparisons of result sets
-(two alternatives $\times$ nine queries) matched row by row.
+Table~\ref{tab:results} reports the latencies at $\times$1; all 18 comparisons of results
+matched row by row.
 
 \begin{table*}[!t]
 \centering
@@ -1088,196 +705,103 @@ BR08 & Versions of one client & 2 & 18.3 (21.5) & 5.4 (5.6) & 0.4 (0.5) & 46$\ti
 
 \begin{table}[!t]
 \centering
-\caption{Storage, Load Time, and Cost of Type~1 Corrections}
-\label{tab:storage}
-\footnotesize
-\setlength{\tabcolsep}{3pt}
-\begin{tabular}{L{3.4cm} r r r}
-\toprule
- & \textbf{Star, CH} & \textbf{OBT, CH} & \textbf{Star, PG} \\
-\midrule
-Storage (MB) & 18.6 & 25.5 & 162.5 \\
-Load from CSV (s) & 0.96 & +1.35 & 4.64 \\
-Rename one district: rows written & 1 & 150,058 & 1 \\
-\quad time (ms) & 6.0 & 99.3 & 4.1 \\
-Correct one birth date: rows written & 2 & 330 & 2 \\
-\quad time (ms) & 8.0 & 42.6 & 1.9 \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-\begin{table}[!t]
-\centering
-\caption{Concurrent Users: Queries per Second and p95 Latency (ms)}
-\label{tab:concurrency}
-\footnotesize
-\setlength{\tabcolsep}{3pt}
-\begin{tabular}{l r r r r r r}
-\toprule
- & \multicolumn{2}{c}{\textbf{1 client}} & \multicolumn{2}{c}{\textbf{4 clients}} & \multicolumn{2}{c}{\textbf{8 clients}} \\
-\cmidrule(lr){2-3}\cmidrule(lr){4-5}\cmidrule(lr){6-7}
- & q/s & p95 & q/s & p95 & q/s & p95 \\
-\midrule
-Star, CH & 52.1 & 34.8 & 82.0 & 90.9 & 93.2 & 148.1 \\
-OBT, CH & 91.3 & 24.1 & 215.8 & 38.4 & 251.2 & 66.2 \\
-Star, PG & 4.4 & 454.1 & 12.2 & 835.7 & 12.4 & 1,933.5 \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-\begin{table}[!t]
-\centering
-\caption{Operational Store (B3): Median Latency per Call (ms) and Integrity}
-\label{tab:ops}
-\footnotesize
-\setlength{\tabcolsep}{3pt}
-\begin{tabular}{L{4.1cm} r r}
-\toprule
-\textbf{Workload} & \textbf{PostgreSQL} & \textbf{ClickHouse} \\
-\midrule
-Alert status change + history (version row) & 0.19 & 5.92 \\
-Alert status change + history (mutation) & 0.17 & 11.91 \\
-Log one pipeline step (start + finish) & 0.32 & 2.46 \\
-List the 50 newest alerts & 0.11 & 2.61 \\
-One alert with its history & 0.06 & 3.26 \\
-\midrule
-Refuses an invalid status & yes & no \\
-Refuses an invalid transition & yes & no \\
-Refuses a duplicate alert & yes & no \\
-Refuses history for a missing alert & yes & no \\
-Status and history change atomically & yes & no \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-\begin{table}[!t]
-\centering
-\caption{Pipeline Time: Spark Transformation of the Full History (B4) and the Real Pipeline}
-\label{tab:pipeline}
-\footnotesize
-\setlength{\tabcolsep}{4pt}
-\begin{tabular}{l r r r r}
-\toprule
-\textbf{Cores} & 1 & 2 & 4 & 8 \\
-\midrule
-One batch (s) & 7.7 & 6.0 & 5.4 & 5.4 \\
-72 monthly batches (s) & 30.6 & 32.5 & 31.8 & 29.6 \\
-\midrule
-\multicolumn{5}{l}{Real pipeline, per monthly batch: median 3.4 s, p95 5.3 s} \\
-\multicolumn{5}{l}{\quad 72 batches: 273.5 s} \\
-\multicolumn{5}{l}{\quad largest steps: fact load 1.42 s, validation 0.85 s} \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-\textbf{Warehouse technology (B2).} The results appear to support H1. On the six
-aggregation queries ClickHouse was 3.3 to 22 times faster, and the gap grew with the work
-per query: it was smallest for a single sum over one year and largest when the query also
-joined the customer dimension and counted distinct clients (BR01 by tier, BR08) or applied
-a window function per account (BR03). ClickHouse stored the data in 8.7 times less space
-(Table~\ref{tab:storage}) and, with eight concurrent users, served 93 queries per second
-against 12 for PostgreSQL, whose p95 latency rose to almost 2~s
-(Table~\ref{tab:concurrency}). H2 is supported more strongly than expected: for the three
-lookups of one account or one client, PostgreSQL was 17 to 46 times faster, answering in
-about 1~ms through its indexes. In ClickHouse these queries cost 6--18~ms. As the
-measurement at scale $\times$10 shows below, the reason is how they are written: with the
-filter on a dimension column, ClickHouse cannot use the sort key of the fact and reads the
-whole table before the join.
-
-\textbf{Data model (B1).} H4 appears to hold. The One Big Table was 1.5 to 3.4 times
-faster than the star schema, but the absolute difference was only 3--16~ms, and it needed
-1.37 times more space (twice as much before compression). Its weakness is change: renaming
-one district rewrote 150,058 fact rows in 99~ms instead of one dimension row, and
-correcting one client's birth date rewrote 330 rows instead of two. These numbers grow
-with the data, whereas the star schema's do not.
-
-\textbf{Operational store (B3).} H5 appears to hold (Table~\ref{tab:ops}). PostgreSQL was
-8 to 70 times faster on every call the application and the pipeline make, because each
-call touches one row, the workload a row store with indexes is built for. In ClickHouse,
-400 small inserts created 400 data parts, the write pattern ClickHouse discourages, and a
-mutation cannot change the version column of a \texttt{ReplacingMergeTree}. More
-importantly, PostgreSQL enforced all five guarantees that BR03 and BR04 rely on, while
-ClickHouse accepted every violation: an invalid status, an invalid transition, a duplicate
-alert, history for a missing alert, and a status change whose history record failed.
-
-\textbf{Pipeline (B4).} H3 appears to hold (Table~\ref{tab:pipeline}). Transforming the
-whole history in one batch took 5.4--7.7~s, and adding cores beyond two barely helped,
-because at about one million rows the job is dominated by fixed costs (planning, task
-scheduling, small files). Splitting the same work into 72 monthly batches took 4 to 6
-times longer for the same reason. The real pipeline needs a median of 3.4~s per monthly
-batch, of which the fact load (1.42~s) and validation (0.85~s) are the largest steps.
-
-\textbf{Scale $\times$10.} Table~\ref{tab:scale} compares the two scales. On the
-aggregation queries, ClickHouse became 2--6 times slower when the data grew ten times, but
-PostgreSQL became 4--10 times slower, so the gap widened from 3--22 to 7--28 times; with
-eight concurrent users PostgreSQL served only 0.4 queries per second, with a p95 latency of
-38~s. Lookups of one account stayed under 1~ms on PostgreSQL and on the One Big Table, but
-grew from 17 to 54~ms on the star schema in ClickHouse. The comparison of the two query
-forms suggests why: with the filter on a dimension column (\tbl{account\_id}), ClickHouse
-read the whole fact table (10.6 million rows) before the join, whereas filtering the fact by
-\tbl{account\_sk} first read about 100,000 rows and took 6.8~ms at both scales. Correcting one district on
-the One Big Table rewrote 1,500,580 rows instead of one. At $\times$10, Spark finally gained
-from more cores (one batch: 28.8~s on one core, 14.0~s on eight), whereas the 72 monthly
-batches, of about 147,000 rows each, still did not.
-
-\textbf{Lookups in the application.} On the warehouse itself, the final form of the
-account lookup (account 11, July 1998--December 1999) read 19,694 rows instead of 162,739
-and answered in 4.3~ms instead of 9.6~ms, with an identical result. The per-version view of
-one client (BR08) went from 14.6 to 7.9~ms; it still scans the \tbl{customer\_sk} column of
-the whole fact table, which appears to be because that column is not part of the sort key.
-
-\begin{table}[!t]
-\centering
-\caption{Scale $\times$1 vs.\ $\times$10: Warm Median (ms) and Growth}
+\caption{Scale $\times$1 vs.\ $\times$10: Median (ms), Storage, and Throughput}
 \label{tab:scale}
 \footnotesize
 \setlength{\tabcolsep}{2.5pt}
 \begin{tabular}{L{2.3cm} r r r r r r}
 \toprule
- & \multicolumn{3}{c}{\textbf{Star, CH}} & \multicolumn{3}{c}{\textbf{Star, PG}} \\
-\cmidrule(lr){2-4}\cmidrule(lr){5-7}
-\textbf{Query} & $\times$1 & $\times$10 & growth & $\times$1 & $\times$10 & growth \\
+ & \multicolumn{2}{c}{\textbf{Star, CH}} & \multicolumn{2}{c}{\textbf{OBT, CH}} & \multicolumn{2}{c}{\textbf{Star, PG}} \\
+\cmidrule(lr){2-3}\cmidrule(lr){4-5}\cmidrule(lr){6-7}
+ & $\times$1 & $\times$10 & $\times$1 & $\times$10 & $\times$1 & $\times$10 \\
 \midrule
-BR01 by month & 28.1 & 121.9 & 4.3 & 105.9 & 837.3 & 7.9 \\
-BR01 by tier & 14.6 & 47.6 & 3.3 & 323.3 & 1,323.7 & 4.1 \\
-BR03 rule R1 & 45.9 & 199.3 & 4.3 & 1,029.6 & 4,209.2 & 4.1 \\
-BR08 by tier & 37.1 & 219.4 & 5.9 & 623.2 & 5,378.4 & 8.6 \\
-BR02 one account & 17.2 & 53.8 & 3.1 & 1.0 & 0.8 & 0.8 \\
+BR01 by month & 28.1 & 121.9 & 11.8 & 29.8 & 105.9 & 837.3 \\
+BR01 by tier & 14.6 & 47.6 & 7.1 & 15.7 & 323.3 & 1,323.7 \\
+BR03 rule R1 & 45.9 & 199.3 & 30.0 & 139.2 & 1,029.6 & 4,209.2 \\
+BR08 by tier & 37.1 & 219.4 & 22.5 & 77.8 & 623.2 & 5,378.4 \\
+BR02 one account & 17.2 & 53.8 & 5.8 & 5.5 & 1.0 & 0.8 \\
 \midrule
-Storage (MB) & 18.6 & 185.5 & 10.0 & 162.5 & 1,612.7 & 9.9 \\
-8 users (q/s) & 93.2 & 9.4 & & 12.4 & 0.4 & \\
+Storage (MB) & 18.6 & 185.5 & 25.5 & 249.4 & 162.5 & 1,612.7 \\
+8 users (queries/s) & 93.2 & 9.4 & 251.2 & 30.7 & 12.4 & 0.4 \\
+Rename a district (rows) & 1 & 1 & 150,058 & 1,500,580 & 1 & 1 \\
 \bottomrule
 \end{tabular}
 \end{table}
 
+\begin{table}[!t]
+\centering
+\caption{Operational Store (B3) and Pipeline (B4)}
+\label{tab:ops}
+\footnotesize
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{L{4.3cm} r r}
+\toprule
+\textbf{Operational workload, median (ms)} & \textbf{PG} & \textbf{CH} \\
+\midrule
+Alert status change + history & 0.19 & 5.92 \\
+Log one pipeline step (start + finish) & 0.32 & 2.46 \\
+List the 50 newest alerts & 0.11 & 2.61 \\
+Integrity rules enforced (of 5) & 5 & 0 \\
+\midrule
+\textbf{Spark, full history (s)} & \textbf{1 core} & \textbf{8 cores} \\
+\midrule
+$\times$1, one batch / 72 batches & 7.7 / 30.6 & 5.4 / 29.6 \\
+$\times$10, one batch / 72 batches & 28.8 / 51.0 & 14.0 / 57.1 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{Warehouse technology (B2).} The results appear to support H1. On the aggregation
+queries ClickHouse was 3.3 to 22 times faster than PostgreSQL, the gap growing with the work
+per query (distinct clients, window functions), and it stored the data in 8.7 times less
+space. With eight concurrent users it served 93 queries per second against 12. At $\times$10
+the gap widened to 7--28 times: ClickHouse became 2--6 times slower, PostgreSQL 4--10 times,
+and with eight users PostgreSQL served only 0.4 queries per second (Table~\ref{tab:scale}).
+H2 is supported more strongly than expected: lookups of one account or client took about
+1~ms on PostgreSQL against 6--18~ms on ClickHouse, and 54~ms at $\times$10. The comparison of
+the two query forms suggests why: filtering on \tbl{account\_id} after the join made
+ClickHouse read the whole fact table (10.6 million rows at $\times$10), whereas filtering by
+\tbl{account\_sk} first read about 100,000 rows and took 6.8~ms at both scales. In the
+application, the final form of the account lookup read 19,694 rows instead of 162,739 and
+answered in 4.3 instead of 9.6~ms.
+
+\textbf{Data model (B1).} H4 appears to hold. The One Big Table was 1.5 to 3.4 times faster
+than the star schema, only 3--16~ms in absolute terms, but needed 1.37 times more space, and
+renaming one district rewrote 150,058 fact rows (1,500,580 at $\times$10) instead of one
+dimension row.
+
+\textbf{Operational store (B3).} H5 appears to hold (Table~\ref{tab:ops}). PostgreSQL was 8 to
+70 times faster on every call of the application and the pipeline, and it refused all five
+violations tested---an invalid status, an invalid transition, a duplicate alert, history for a
+missing alert, and a status change whose history failed---which ClickHouse accepted.
+
+\textbf{Pipeline (B4).} H3 appears to hold. At $\times$1 more cores barely helped and 72
+monthly batches took 4--6 times longer than one batch, because fixed costs dominate jobs of
+about one million rows. At $\times$10 one batch ran 2.1 times faster on eight cores than on
+one. The real pipeline needs a median of 3.4~s per monthly batch.
+
 \subsection{Effectiveness of Data Exploitation}
-All eight BRs were demonstrated end to end in the application (Table~\ref{tab:br-results},
-Figs.~\ref{fig:app-overview}--\ref{fig:app-scenario}). Every answer needs one to three
-interactions. Answers that re-run the application (BR01--BR04) appeared within 0.2--0.4~s,
-and the views of the Operations tab appeared at once. Running a scenario from the
-application---a re-run of KB03---took 10.5~s from the click to the reported result; it was
-recorded as \texttt{triggered\_by = app} and added no rows and no alerts, as a re-run should.
-A backup or a restore of the six tables takes under 0.5~s in ClickHouse, plus the
-reconciliation queries of BR07.
+All eight BRs were demonstrated in the application in one to three interactions
+(Table~\ref{tab:br-results}, Figs.~\ref{fig:app-overview}--\ref{fig:app-alert}). Answers that
+re-run the application appeared within 0.2--0.4~s, and the Operations views at once. A
+scenario run from the application (a re-run of KB03) took 10.5~s and added no rows and no
+alerts.
 
 \begin{table*}[!t]
 \centering
-\caption{Demonstration of the Business Requirements: Interactions, Time to Answer, and Example Results}
+\caption{Business Requirements in Use: Interactions, Time to Answer, and Example Results}
 \label{tab:br-results}
 \small
 \begin{tabular}{l l L{3.7cm} c r L{6.4cm}}
 \toprule
 \textbf{BR} & \textbf{Tab} & \textbf{User flow} & \textbf{Interactions} & \textbf{Time (s)} & \textbf{Example result} \\
 \midrule
-BR01 & Overview & Choose the period & 1 & 0.19 & 1998: inflow 960,964,282~CZK, outflow 933,819,075~CZK, net 27,145,207~CZK, 322,277 transactions; split by tier \\
-BR02 & Analysis & Open the tab; type the account & 2 & 0.21 & Account 11, July 1998--December 1999: 30 transactions, including the 60,000~CZK withdrawal of KB03 \\
-BR03 & Analysis & Open the tab and the alert list; select an alert & 3 & 0.43 & Account 11, February 1999: outflow 60,000~CZK, 19.5 times its 6-month average of 3,075~CZK \\
-BR04 & Analysis & Choose the status; write a note; submit & 3 & 0.20 & The alert moved from \emph{new} to \emph{in review}; the history shows who, when, and why \\
-BR05 & Operations & Open the tab and the BR05 view & 2 & at once & KB05: 10 records isolated, listed by rule with reason and original content \\
-BR06 & Operations & Open the tab & 1 & at once & Runs with steps and counts; a run that failed in \texttt{detect\_alerts}, with the database error \\
-BR07 & Operations & Open the tab and the BR07 view & 2 & at once & Restore of \texttt{before\_kb07}: 5 of 5 groups of figures equal the backup \\
-BR08 & Operations & Open the tab and the BR08 view & 2 & at once & Client 24: Standard until 1998-12-31, Silver from 1999-01-01; old-period report unchanged \\
-KB & Operations & Open the scenario runner; run KB03 & 3 & 10.5 & Preview, run, and expected vs.\ actual result \\
+BR01 & Overview & Choose the period & 1 & 0.19 & 1998: inflow 960,964,282~CZK, outflow 933,819,075~CZK, 322,277 transactions \\
+BR02 & Analysis & Open the tab; type the account & 2 & 0.21 & Account 11: 30 transactions, including the 60,000~CZK withdrawal of KB03 \\
+BR03 & Analysis & Open the alert list; select an alert & 3 & 0.43 & Account 11, February 1999: outflow 19.5 times its 6-month average \\
+BR04 & Analysis & Choose the status; write a note; submit & 3 & 0.20 & Alert moved to \emph{in review}; history shows who, when, and why \\
+BR05--08 & Operations & Open the tab and the view & 1--2 & at once & KB05 rejects by rule; a failed run and its cause; restore 5/5; client 24: Standard, then Silver \\
+KB & Operations & Open the runner; run KB03 & 3 & 10.5 & Preview, run, and expected vs.\ actual result \\
 \bottomrule
 \end{tabular}
 \end{table*}
@@ -1296,86 +820,44 @@ KB & Operations & Open the scenario runner; run KB03 & 3 & 10.5 & Preview, run, 
 \label{fig:app-alert}
 \end{figure}
 
-\begin{figure}[!t]
-\centering
-\includegraphics[width=\columnwidth]{app_scd2}
-\caption{Operations tab (U03, BR08): report by tier for the old and the new period, and the
-two tier versions of client 24.}
-\label{fig:app-scd2}
-\end{figure}
-
-\begin{figure}[!t]
-\centering
-\includegraphics[width=\columnwidth]{app_scenario_run}
-\caption{Operations tab, scenario runner (flow N01--N05): input preview, expected result, and
-a completed re-run of KB03.}
-\label{fig:app-scenario}
-\end{figure}
-
 \subsection{Interpretation}
-The results suggest that the proposed solution meets the three criteria. On correctness,
-the warehouse reproduces the source exactly, and the operational features---isolation of
-defective records, idempotent re-runs, alerts without duplicates, restore, and history
-preservation---behaved as specified in every scenario. On performance, the column store
-appears to be the right choice for the workload that defines a warehouse, the aggregations
-of U01 and U03, where it is up to 22 times faster, 8.7 times smaller, and sustains many
-more concurrent users; the advantage grows with the data (up to 28 times at $\times$10). The One Big Table is faster still, but by milliseconds, at the price
-of rewriting large parts of the fact table for every correction. Each of the two
-alternatives is better at one thing---PostgreSQL at point lookups and single-row updates,
-the One Big Table at join-free scans---and the proposed architecture uses the first of
-these where it matters: the operational store, whose workload consists of small lookups,
-in-place updates, and constraints, is kept in PostgreSQL.
+The results suggest that the proposed solution meets the three criteria. The warehouse
+reproduces the source exactly, and isolation of defective records, idempotent re-runs,
+alerts without duplicates, restore, and history preservation behaved as specified. The column
+store appears to be the right choice for the aggregations that define the warehouse
+workload, with an advantage that grows with the data. The two alternatives are each better at
+one thing---PostgreSQL at point lookups and single-row updates, the One Big Table at join-free
+scans---and the architecture uses the first where it matters: the operational store.
 
 \subsection{Threats to Validity}
-The results should be interpreted with caution. All systems ran on the same virtual
-machine as the client, and PostgreSQL used moderate memory settings; partitioning, BRIN indexes, or materialized views could narrow its gap on
-aggregations. The operating system's page cache could not be dropped from a container, so
-``cold'' runs are only partly cold. The $\times$10 data is a replica of the original, so it
-repeats its distributions and may compress better than real data; $\times$50 and a
-distributed deployment were not measured. The membership tier and the scenario data are simulated, so the tier figures
-and alert counts describe the method rather than real customer behavior. Finally, the
-interactions and times were measured by a script that follows one flow per BR, not
-in sessions with real users.
+All systems shared one virtual machine with the client, and PostgreSQL had moderate settings;
+partitioning or materialized views could narrow its gap. ``Cold'' runs are only partly cold,
+since the page cache of the operating system could not be dropped. The $\times$10 data is a
+replica and may compress better than real data. The tier and the scenarios are simulated, and
+the interactions were measured by a script, not with real users.
 
 
 %% =====================================================================
 \section{Conclusions and Recommendations}
 \label{sec:conclusion}
 
-This report presented a Kimball dimensional data warehouse for banking cash-flow analytics,
-built on the Berka dataset with Spark, ClickHouse, and PostgreSQL. The pipeline loads data
-in batches through a data lake, isolates defective records instead of failing, can re-run
-any batch without duplicates, and records every run; a Type~2 customer dimension keeps the
-history of a simulated membership tier; and one application with three tabs serves three
-user groups and eight business requirements, including alert handling and the control of
-the pipeline.
+The Kimball warehouse on ClickHouse, fed by a controlled batch pipeline and paired with a
+PostgreSQL operational store, met all three criteria. On \emph{data correctness}, all eight
+scenarios passed and cash-flow figures equal the source to the cent, with history preserved
+across tier changes. On \emph{performance}, ClickHouse answered aggregations 3.3--22 times
+faster than PostgreSQL (7--28 times at $\times$10) in 8.7 times less space, the star schema
+avoided correction costs of up to 1.5 million rows, and the operational store was 8--70 times
+faster and safer in PostgreSQL. On \emph{effectiveness}, every BR was answered in one to three
+interactions within half a second.
 
-On data correctness, all eight evaluation scenarios passed (38 of 38 checks), and cash-flow
-figures equal the source to the cent. On performance, ClickHouse answered aggregation
-queries 3.3--22 times faster than the same model in PostgreSQL (7--28 times at $\times$10),
-in 8.7 times less space and with eight times the throughput under concurrent use, while PostgreSQL was faster on
-single-account lookups that ClickHouse still answers in under 20~ms. The One Big Table
-saved a few milliseconds per query but made corrections rewrite up to 150,058 rows, and
-the operational store was 8--70 times faster and enforced five integrity guarantees in
-PostgreSQL that ClickHouse did not. On effectiveness, every BR was demonstrated through the
-application in one to three interactions, with answers on screen within 0.5~s.
+\textbf{Recommendations.} Use a column store for the warehouse, whose users mainly aggregate,
+and a relational database for the operational data, which is updated in place and must
+enforce constraints. Filter the fact table on its own key first in lookups.
 
-\textbf{Recommendations.} For a bank with this workload, we recommend the proposed
-combination: a column store for the warehouse, because its users mainly aggregate, and a
-relational database for the operational data, because it is updated in place and must
-enforce constraints. Lookups should filter the fact on its own key first, as the
-application now does for accounts, which keeps them at a few milliseconds regardless of
-volume.
-
-\textbf{Limitations.} The data ends in 1998 and has about one million transactions; the
-membership tier and the scenarios are simulated; end-of-period balances and internal
-transfers are out of scope; the application has no access control; and the operational
-store is not part of the backup.
-
-\textbf{Future work.} Add access control per user group; extend the model with loans and
-standing orders as further business processes sharing conformed dimensions; measure the
-solution at $\times$50 and on a cluster; and replace the rule-based alerts with
-learned anomaly detection evaluated against the same scenarios.
+\textbf{Limitations and future work.} The data ends in 1998 and the tier is simulated;
+end-of-period balances and access control are missing. Future work: access control per user
+group, further business processes such as loans, measurements at larger scale and on a
+cluster, and learned anomaly detection evaluated on the same scenarios.
 
 
 %% =====================================================================
@@ -1383,23 +865,12 @@ learned anomaly detection evaluated against the same scenarios.
 
 \section{Reproducibility}
 \label{App:Reproducibility}
-The full source code, Docker Compose configuration, and evaluation scripts are available at
-\url{https://github.com/quanndc/data-engineer-bank-project}. The main commands are:
-\begin{itemize}
-  \item \texttt{make up} and \texttt{make schema} --- start the stack and create the
-        warehouse and the operational store;
-  \item \texttt{make load-ref} and \texttt{make load-history} --- load the reference batch
-        and the 72 monthly batches;
-  \item \texttt{make alerts} --- evaluate the alert rules on the loaded history;
-  \item \texttt{make scenarios} and \texttt{make scenario KB=KB05} --- generate and run a
-        scenario (also possible from the application);
-  \item \texttt{make backup}, \texttt{make restore NAME=\ldots} --- back up and restore the
-        warehouse;
-  \item \texttt{make evaluate} and \texttt{make bench-all} --- run the evaluation and the
-        four benchmarks; results and logs are written to \texttt{docs/results/p2/};
-  \item \texttt{python tools/ui\_walkthrough.py} --- drive the application, count the
-        interactions, time the answers, and take the screenshots of this report.
-\end{itemize}
+Code and scripts: \url{https://github.com/quanndc/data-engineer-bank-project}.
+\texttt{make up}, \texttt{make schema}, \texttt{make load-ref}, and \texttt{make load-history}
+build the warehouse; \texttt{make scenarios} and \texttt{make scenario KB=\ldots} run the
+scenarios; \texttt{make evaluate} and \texttt{make bench-all} (\texttt{SCALE=10} for
+$\times$10) reproduce the evaluation and the benchmarks, with results in
+\texttt{docs/results/p2/}; \texttt{tools/ui\_walkthrough.py} measures the application.
 
 \section{Work Allocation}
 \label{App:Work}

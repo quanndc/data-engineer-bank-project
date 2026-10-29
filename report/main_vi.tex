@@ -109,81 +109,53 @@ Giảng viên: Assoc. Prof. Dr. Chau Thi Ngoc Vo\\
 \IEEEpeerreviewmaketitle
 
 \begin{abstract}
-Một ngân hàng cần câu trả lời đáng tin cậy cho ba loại câu hỏi: tiền vào và tiền ra biến
-động thế nào theo thời gian, điều gì đã xảy ra trên một tài khoản cụ thể, và liệu dữ liệu
-cùng pipeline đứng sau các câu trả lời đó có đáng tin cậy hay không. Báo cáo này xây dựng
-và đánh giá một giải pháp kỹ thuật dữ liệu cho các câu hỏi trên, dựa trên bộ dữ liệu công
-khai Berka (PKDD'99) của một ngân hàng Séc: 1.056.320 giao dịch trên 4.500 tài khoản từ năm
-1993 đến 1998, được bổ sung một hạng thành viên mô phỏng mà lịch sử của nó phải được lưu
-giữ. Chúng tôi đề xuất một kho dữ liệu (DW) mô hình chiều theo Kimball gồm một bảng fact
-giao dịch và năm dimension (bảng chiều), trong đó có một dimension khách hàng SCD Type~2.
-Dữ liệu được nạp theo lô qua một Data Lake dạng Parquet, xử lý bằng Apache Spark, lưu trong
-ClickHouse, và được kiểm soát thông qua một kho dữ liệu vận hành (kho vận hành) trên
-PostgreSQL, nơi lưu các lần chạy pipeline, các bản ghi bị tách, các cảnh báo gian lận, quá
-trình xử lý chúng và các bản sao lưu. Một ứng dụng với ba tab phục vụ ba nhóm người dùng và
-tám yêu cầu nghiệp vụ. Giải pháp được đánh giá về độ đúng của dữ liệu, hiệu năng và hiệu
-quả khai thác dữ liệu thông qua tám kịch bản đánh giá được viết thành script, mỗi kịch bản
-đều được đối soát với nguồn, cùng bốn benchmark, mỗi benchmark chỉ thay đổi một yếu tố: mô
-hình dữ liệu, công nghệ kho dữ liệu, kiến trúc của kho vận hành và mức song song của
-pipeline. Cả tám kịch bản đều đạt (38/38 phép kiểm tra); tổng dòng tiền khớp với nguồn đến
-từng xu. So với cùng star schema (lược đồ hình sao) trên PostgreSQL, ClickHouse trả lời các
-truy vấn tổng hợp nhanh hơn 3,3--22 lần với dung lượng nhỏ hơn 8,7 lần, và nhanh hơn 7--28
-lần trên một bản sao nhân mười lần, trong khi PostgreSQL nhanh hơn ở các truy vấn tra cứu
-một tài khoản mà ClickHouse vẫn trả lời dưới 20~ms. One Big Table nhanh hơn star schema
-1,5--3,4 lần nhưng phải ghi lại 150.058 dòng để sửa tên một khu vực. Lưu dữ liệu vận hành
-trong PostgreSQL nhanh hơn 8--70 lần so với trong ClickHouse và bảo đảm năm ràng buộc toàn
-vẹn mà ClickHouse không bảo đảm.
+Một ngân hàng cần câu trả lời đáng tin cậy về cách tiền lưu chuyển, về những gì đã xảy ra
+trên một tài khoản, và về việc dữ liệu đứng sau các câu trả lời đó có đáng tin cậy hay
+không. Chúng tôi xây dựng và đánh giá một giải pháp kỹ thuật dữ liệu cho các nhu cầu này
+trên bộ dữ liệu Berka của một ngân hàng Séc (1.056.320 giao dịch, 1993--1998), được bổ sung
+một hạng thành viên mô phỏng mà lịch sử của nó phải được lưu giữ. Giải pháp là một kho dữ
+liệu Kimball---một bảng fact giao dịch và năm dimension, trong đó có một dimension khách hàng
+Type~2---được nạp theo lô bằng Apache Spark qua một Data Lake dạng Parquet vào ClickHouse,
+cùng một kho dữ liệu vận hành trên PostgreSQL cho các lần chạy, bản ghi bị tách, cảnh báo
+gian lận và sao lưu, và một ứng dụng Streamlit duy nhất phục vụ ba nhóm người dùng và tám
+yêu cầu nghiệp vụ. Tám kịch bản đánh giá, mỗi kịch bản đều được đối soát với nguồn, đạt cả
+38 phép kiểm tra, và tổng dòng tiền khớp với nguồn đến từng xu. Bốn benchmark, mỗi benchmark
+chỉ thay đổi một yếu tố, cho thấy ClickHouse trả lời các truy vấn tổng hợp nhanh hơn
+3,3--22 lần so với cùng star schema trên PostgreSQL (7--28 lần trên một bản sao nhân mười
+lần) với dung lượng nhỏ hơn 8,7 lần; One Big Table chỉ tiết kiệm được vài mili giây nhưng
+phải ghi lại 150.058 dòng để sửa một khu vực; và kho vận hành nhanh hơn 8--70 lần trong
+PostgreSQL, vốn còn thực thi các quy tắc toàn vẹn mà ClickHouse không thực thi. Mọi yêu cầu
+đều được trả lời với một đến ba thao tác.
 \end{abstract}
-
 
 
 %% =====================================================================
 \section{Giới thiệu}
 \label{sec:intro}
 
-Ngân hàng bán lẻ là một trong những ngành sử dụng dữ liệu nhiều nhất. Mỗi lần gửi tiền,
-thanh toán, rút tiền hay chuyển khoản đều tạo ra một bản ghi; khi được tổng hợp, các bản
-ghi này cho thấy tiền lưu chuyển qua ngân hàng như thế nào, từng tài khoản hoạt động ra
-sao và rủi ro xuất hiện ở đâu. Quản lý kinh doanh, chuyên viên phân tích và kỹ sư dữ liệu
-đều phụ thuộc vào các bản ghi này, nhưng mỗi nhóm đặt ra những câu hỏi khác nhau và cần
-những bảo đảm khác nhau.
+Mỗi lần gửi tiền, thanh toán hay rút tiền của một ngân hàng đều để lại một bản ghi. Khi được
+tổng hợp, các bản ghi này cho thấy tiền lưu chuyển qua ngân hàng như thế nào và từng tài
+khoản hoạt động ra sao---nhưng nhật ký giao dịch thô không trả lời trực tiếp được các câu hỏi
+đó: mã của chúng ngắn gọn và thiếu một phần, thuộc tính của khách hàng thay đổi mà không lưu
+lại lịch sử, và không có gì trong đó cho người dùng biết lần nạp gần nhất có thành công
+không hay một báo cáo trước đây có còn đúng hay không.
 
-Bản thân nhật ký giao dịch vận hành không trả lời được các câu hỏi đó. Chúng được tối ưu
-cho việc ghi nhận sự kiện chứ không phải cho phân tích; mã của chúng ngắn gọn và thiếu một
-phần; thuộc tính của khách hàng thay đổi theo thời gian mà không lưu lại lịch sử; và không
-có gì trong một nhật ký thô cho người dùng biết lần nạp gần nhất có thành công không, những
-bản ghi nào đã bị loại, hay một báo cáo trước đây có còn đúng sau một thay đổi hay không.
-Kỹ thuật dữ liệu lấp khoảng trống này bằng cách xây dựng một pipeline nạp, kiểm tra, tích
-hợp và mô hình hóa dữ liệu, đồng thời làm cho chính pipeline có thể quan sát được và khôi
-phục được.
-
-Đây là báo cáo kỹ thuật của đề tài \emph{Xây dựng một hệ thống chứng minh giải pháp kỹ
-thuật dữ liệu của nhóm thành công (trong một lĩnh vực ứng dụng cụ thể)} thuộc môn Kỹ thuật
-Dữ liệu (CO5173). Lĩnh vực ứng dụng là \textbf{ngân hàng} và giải pháp kỹ thuật dữ liệu là
-một \textbf{kho dữ liệu mô hình chiều theo Kimball} \cite{kimball2013}. Mục tiêu là chứng
-minh, bằng căn cứ đo lường được, rằng giải pháp biến các giao dịch ngân hàng thô thành dữ
-liệu đúng, truy vấn nhanh và hữu ích cho người dùng của ngân hàng.
-
-Các đóng góp chính gồm:
+Báo cáo này trình bày đề tài của Nhóm~27 thuộc môn Kỹ thuật Dữ liệu (CO5173). Lĩnh vực ứng
+dụng là \textbf{ngân hàng} và giải pháp là một \textbf{kho dữ liệu mô hình chiều theo
+Kimball} \cite{kimball2013}. Mục tiêu là chứng minh, bằng căn cứ đo lường được, rằng giải
+pháp biến các giao dịch ngân hàng thô thành dữ liệu đúng, truy vấn nhanh và hữu ích cho
+người dùng của ngân hàng. Các đóng góp chính gồm:
 \begin{itemize}
-  \item một star schema (lược đồ hình sao) cho giao dịch ngân hàng với một junk dimension
-        hồ sơ giao dịch, một dimension (bảng chiều) khu vực đóng nhiều vai trò, và một
-        dimension khách hàng SCD Type~2 lưu giữ lịch sử của một hạng thành viên mô phỏng;
-  \item một pipeline theo lô (Data Lake $\rightarrow$ Spark $\rightarrow$ ClickHouse) kiểm
-        tra mọi lô, tách riêng các bản ghi lỗi thay vì làm hỏng cả lô, có thể chạy lại bất
-        kỳ lô nào mà không tạo bản trùng, và ghi lại mọi lần chạy vào một kho vận hành;
-  \item một ứng dụng với ba tab cho ba nhóm người dùng, không chỉ đọc kho dữ liệu mà còn xử
-        lý cảnh báo, chạy các lô kịch bản, và sao lưu, khôi phục kho dữ liệu;
-  \item một đánh giá qua tám kịch bản, mỗi kịch bản ứng với một yêu cầu nghiệp vụ và đều
-        được đối soát với nguồn, cùng một benchmark so với cùng mô hình trên một cơ sở dữ
-        liệu lưu theo dòng.
+  \item một star schema (lược đồ hình sao) với một dimension (bảng chiều) khách hàng Type~2
+        lưu giữ lịch sử của một hạng thành viên;
+  \item một pipeline theo lô tách riêng các bản ghi lỗi, chạy lại mà không tạo bản trùng, và
+        ghi lại mọi lần chạy vào một kho vận hành, được điều khiển từ một ứng dụng;
+  \item một đánh giá qua tám kịch bản được đối soát với nguồn và bốn benchmark so với các
+        giải pháp thay thế.
 \end{itemize}
-
-Phần còn lại của báo cáo được tổ chức như sau. Mục~\ref{sec:problem} định nghĩa bài toán:
-người dùng, yêu cầu nghiệp vụ và nguồn dữ liệu. Mục~\ref{sec:solutions} trình bày giải pháp
-đề xuất và các phương án thay thế. Mục~\ref{sec:criteria} định nghĩa các tiêu chí đánh giá,
-Mục~\ref{sec:method} trình bày phương pháp nghiên cứu, và Mục~\ref{sec:analysis} phân tích
-kết quả. Mục~\ref{sec:conclusion} kết luận.
+Mục~\ref{sec:problem} định nghĩa bài toán, Mục~\ref{sec:solutions} trình bày các giải pháp,
+Mục~\ref{sec:criteria} các tiêu chí đánh giá, Mục~\ref{sec:method} phương pháp nghiên cứu,
+Mục~\ref{sec:analysis} các kết quả, và Mục~\ref{sec:conclusion} kết luận.
 
 
 %% =====================================================================
@@ -191,160 +163,90 @@ kết quả. Mục~\ref{sec:conclusion} kết luận.
 \label{sec:problem}
 
 \subsection{Phát biểu bài toán}
-Đề tài sử dụng bộ dữ liệu Berka \cite{berka1999}, được công bố cho PKDD'99 Discovery
-Challenge: các bản ghi đã ẩn danh của một ngân hàng Séc. Dữ liệu có nguồn gốc thực tế nhưng
-có ba đặc điểm khiến nó không thể dùng trực tiếp. Cách phân loại giao dịch được mã hóa bằng
-tiếng Séc và thiếu một phần (Mục~\ref{sec:data-quality}); không có thuộc tính khách hàng nào
-thay đổi theo thời gian; và vì chỉ là một tập tệp tĩnh, nó không cho biết dữ liệu mới đến,
-lỗi hay được sửa như thế nào. Do đó, bài toán mà báo cáo này giải quyết là:
-
 \begin{quote}
-\emph{Làm thế nào để xử lý dữ liệu giao dịch của một ngân hàng thành một kho dữ liệu phân
-tích đúng, hiệu năng cao và khai thác được, với các lần nạp được kiểm soát, lịch sử được
-lưu giữ, và có thể chứng minh là đáp ứng các yêu cầu nghiệp vụ của nhiều nhóm người dùng?}
+\emph{Làm thế nào để xử lý dữ liệu giao dịch của một ngân hàng thành một kho dữ liệu đúng,
+hiệu năng cao và khai thác được, với các lần nạp được kiểm soát, lịch sử được lưu giữ, và có
+thể chứng minh là đáp ứng các yêu cầu nghiệp vụ của nhiều nhóm người dùng?}
 \end{quote}
 
-\subsection{Các bên liên quan và nhóm người dùng}
-Bên liên quan chính là một ngân hàng bán lẻ cần một nguồn dữ liệu phân tích duy nhất và
-đáng tin cậy. Nhóm đã xác định ba nhóm người dùng (Bảng~\ref{tab:usergroups}); mỗi nhóm
-tương ứng với một tab của ứng dụng.
+\subsection{Nhóm người dùng và yêu cầu nghiệp vụ}
+Nhóm đã xác định ba nhóm người dùng, mỗi nhóm được phục vụ bởi một tab của ứng dụng
+(Bảng~\ref{tab:usergroups}). Với bốn thành viên, môn học yêu cầu tối thiểu tám yêu cầu
+nghiệp vụ (BR); mỗi BR đi kèm một kịch bản đánh giá (KB01--KB08) có kết quả mong đợi được
+viết trước khi nạp dữ liệu (Bảng~\ref{tab:brs}). Các BR cùng phục vụ bốn mục tiêu: theo dõi
+dòng tiền (BR01, BR08), phục vụ tra cứu tài khoản (BR02), giảm tổn thất do gian lận (BR03,
+BR04), và bảo đảm dữ liệu và vận hành đáng tin cậy (BR05--BR07).
 
 \begin{table}[!t]
 \centering
-\caption{Các nhóm người dùng và đặc điểm của họ}
+\caption{Các nhóm người dùng}
 \label{tab:usergroups}
 \footnotesize
 \setlength{\tabcolsep}{4pt}
-\begin{tabular}{L{1.9cm} L{3.0cm} L{2.8cm}}
+\begin{tabular}{L{2.0cm} L{3.3cm} L{2.4cm}}
 \toprule
-\textbf{Nhóm người dùng} & \textbf{Nhu cầu sử dụng dữ liệu} & \textbf{Đặc điểm} \\
+\textbf{Nhóm người dùng} & \textbf{Nhu cầu} & \textbf{Tab / BR} \\
 \midrule
-U01 Quản lý kinh doanh & Tổng quan dòng tiền, báo cáo lịch sử, kết quả theo hạng thành viên & Không chuyên kỹ thuật; đọc số liệu tóm tắt và xu hướng; tab \emph{Tổng quan} \\
-U02 Chuyên viên phân tích & Tra cứu một tài khoản; xem xét cảnh báo gian lận cùng căn cứ; ghi nhận kết quả xử lý & Làm việc theo từng trường hợp; viết ghi chú; tab \emph{Phân tích} \\
-U03 Kỹ sư dữ liệu & Chất lượng dữ liệu, giám sát pipeline, sao lưu và khôi phục, đối soát lịch sử & Chuyên kỹ thuật; cần chi tiết và quyền điều khiển ở mức lần chạy; tab \emph{Vận hành} \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-\subsection{Yêu cầu nghiệp vụ}
-Môn học yêu cầu tối thiểu $2n$ yêu cầu nghiệp vụ (BR), với $n$ là số thành viên của nhóm;
-với $n=4$, tám BR được định nghĩa (Bảng~\ref{tab:brs}). Mỗi BR đi kèm một kịch bản đánh giá
-(KB01--KB08) và một kết quả minh họa mong đợi, để BR có thể được kiểm chứng chứ không chỉ
-được trình diễn. Bảng~\ref{tab:objectives} liên kết các BR với các mục tiêu kinh doanh mà
-chúng phục vụ.
-
-\begin{table}[!t]
-\centering
-\caption{Các mục tiêu kinh doanh được hỗ trợ bởi các yêu cầu nghiệp vụ}
-\label{tab:objectives}
-\footnotesize
-\setlength{\tabcolsep}{4pt}
-\begin{tabular}{L{2.7cm} L{1.0cm} L{3.9cm}}
-\toprule
-\textbf{Mục tiêu kinh doanh} & \textbf{BR} & \textbf{Ví dụ quyết định được hỗ trợ} \\
-\midrule
-O1. Theo dõi dòng tiền và lịch sử của nó & BR01, BR08 & Trong một kỳ, tiền vào có bù đủ tiền ra không; mỗi hạng đóng góp ra sao \\
-O2. Phục vụ tra cứu tài khoản & BR02 & Trả lời khách hàng hoặc kiểm toán viên về một tài khoản trong một kỳ \\
-O3. Giảm tổn thất do gian lận & BR03, BR04 & Tài khoản nào cần xem xét trước; khi nào một cảnh báo được đóng \\
-O4. Bảo đảm dữ liệu và vận hành đáng tin cậy & BR05--BR07 & Số liệu hôm nay có được công bố không; có cần khôi phục không \\
+U01 Quản lý kinh doanh & Tổng quan dòng tiền và lịch sử theo hạng & Tổng quan / BR01 \\
+U02 Chuyên viên phân tích & Tra cứu tài khoản; xem xét và xử lý cảnh báo & Phân tích / BR02--BR04 \\
+U03 Kỹ sư dữ liệu & Chất lượng dữ liệu, pipeline, sao lưu, lịch sử & Vận hành / BR05--BR08 \\
 \bottomrule
 \end{tabular}
 \end{table}
 
 \begin{table*}[!t]
 \centering
-\caption{Yêu cầu nghiệp vụ, người dùng, dữ liệu hỗ trợ và kết quả minh họa mong đợi}
+\caption{Yêu cầu nghiệp vụ và kịch bản đánh giá}
 \label{tab:brs}
 \small
-\begin{tabular}{l l L{5.3cm} L{3.6cm} L{4.6cm}}
+\begin{tabular}{l l L{6.6cm} L{6.4cm}}
 \toprule
-\textbf{Mã} & \textbf{Người dùng} & \textbf{Yêu cầu nghiệp vụ} & \textbf{Dữ liệu sử dụng} & \textbf{Kết quả minh họa mong đợi (kịch bản)} \\
+\textbf{Mã} & \textbf{Người dùng} & \textbf{Yêu cầu nghiệp vụ} & \textbf{Kịch bản đánh giá (kết quả mong đợi)} \\
 \midrule
-BR01 & U01 & Tổng quan dòng tiền: tiền vào, tiền ra, dòng tiền thuần và số giao dịch trong một kỳ được chọn, theo hạng thành viên, dưới dạng biểu đồ theo ngày và theo tháng & \tbl{fact\_transaction}, \tbl{dim\_date}, \tbl{dim\_transaction\_\allowbreak profile}, \tbl{dim\_customer} & KB01: số liệu bằng kết quả một truy vấn trên nguồn \\
-BR02 & U02 & Hoạt động tài khoản: với một tài khoản và một kỳ, liệt kê các giao dịch, tổng tiền vào, tổng tiền ra và số giao dịch & \tbl{fact\_transaction}, \tbl{dim\_account} & KB02: các giao dịch bằng nguồn, từng giao dịch một \\
-BR03 & U02 & Phát hiện gian lận: sau mỗi lần nạp, kiểm tra các quy tắc và sinh cảnh báo kèm lý do và căn cứ & Kho dữ liệu $\rightarrow$ \tbl{ops.alert} & KB03: một lô gian lận được chuẩn bị sẵn sinh ra đúng các cảnh báo mong đợi \\
-BR04 & U02 & Xử lý cảnh báo: trạng thái \emph{chưa xem / đang xem xét / đã xử lý} kèm ghi chú và lịch sử & \tbl{ops.alert}, \tbl{ops.alert\_action} & KB04: thay đổi trạng thái hiển thị trên giao diện \\
-BR05 & U03 & Kiểm soát dữ liệu: kiểm tra từng lô, tách riêng bản ghi không đạt, hiển thị số lượng và lý do & \tbl{ops.rejected\_record} & KB05: một lô chứa lỗi cố ý được tách đúng \\
-BR06 & U03 & Giám sát pipeline: với mỗi lần chạy, các bước, trạng thái, thời điểm bắt đầu và kết thúc, số bản ghi nhận, đạt, bị tách, nguyên nhân lỗi & \tbl{ops.pipeline\_run}, \tbl{ops.pipeline\_step} & KB06: xác định được bước lỗi và nguyên nhân \\
-BR07 & U03 & Sao lưu và khôi phục sáu bảng của kho dữ liệu, kể cả lịch sử SCD & ClickHouse \texttt{BACKUP}, \tbl{ops.backup\_*} & KB07: sau khi khôi phục, số dòng, số tiền, báo cáo theo hạng và các phiên bản bằng bản sao lưu \\
-BR08 & U03 & Báo cáo lịch sử (SCD2): việc đổi hạng không được làm thay đổi báo cáo của các kỳ trước & \tbl{dim\_customer} (SCD2), fact & KB08: báo cáo kỳ cũ không đổi; kỳ mới dùng hạng mới \\
+BR01 & U01 & Tổng quan dòng tiền: tiền vào, tiền ra, dòng tiền thuần và số giao dịch trong một kỳ, theo hạng, dưới dạng biểu đồ theo ngày hoặc theo tháng & KB01: số liệu bằng kết quả một truy vấn trên nguồn \\
+BR02 & U02 & Hoạt động tài khoản: các giao dịch và các tổng của một tài khoản trong một kỳ & KB02: các giao dịch bằng nguồn, từng giao dịch một \\
+BR03 & U02 & Phát hiện gian lận: sau mỗi lần nạp, sinh cảnh báo kèm lý do và căn cứ & KB03: một lô gian lận được chuẩn bị sẵn sinh ra đúng các cảnh báo mong đợi \\
+BR04 & U02 & Xử lý cảnh báo: \emph{chưa xem / đang xem xét / đã xử lý}, kèm ghi chú và lịch sử & KB04: thay đổi trạng thái được ghi lại và hiển thị trên giao diện \\
+BR05 & U03 & Kiểm soát dữ liệu: kiểm tra từng lô, tách riêng bản ghi không đạt kèm lý do & KB05: một lô chứa lỗi cố ý được tách đúng \\
+BR06 & U03 & Giám sát pipeline: các bước, trạng thái, thời điểm, số lượng, nguyên nhân lỗi & KB06: xác định được bước lỗi và nguyên nhân \\
+BR07 & U03 & Sao lưu và khôi phục sáu bảng của kho dữ liệu, kể cả lịch sử SCD & KB07: sau khi khôi phục, số liệu bằng bản sao lưu \\
+BR08 & U03 & Báo cáo lịch sử: việc đổi hạng không được làm thay đổi báo cáo của các kỳ trước (SCD2) & KB08: kỳ cũ không đổi, kỳ mới theo hạng mới \\
 \bottomrule
 \end{tabular}
 \end{table*}
 
-\subsection{Nguồn dữ liệu dự kiến}
-Trong môi trường thực tế, kho dữ liệu sẽ được nạp từ nhiều hệ thống vận hành của ngân hàng.
-Bảng~\ref{tab:expected-sources} liệt kê các hệ thống này và cách mỗi hệ thống được thể hiện
-trong đề tài. Mỗi tệp Berka đại diện cho một hệ thống. Hạng thành viên, vốn không có trong
-Berka, đại diện cho một hệ thống khách hàng thân thiết hoặc CRM và được mô phỏng
-(Mục~\ref{sec:tier}); đây là thuộc tính duy nhất mà lịch sử của nó có ý nghĩa đối với các
-BR. Các tệp kịch bản cùng định dạng đại diện cho dữ liệu mới đến sau lần nạp lịch sử.
-
-\begin{table}[!t]
-\centering
-\caption{Các nguồn dữ liệu dự kiến trong một ngân hàng và cách thể hiện trong đề tài}
-\label{tab:expected-sources}
-\footnotesize
-\setlength{\tabcolsep}{4pt}
-\begin{tabular}{L{2.2cm} L{2.6cm} L{2.8cm}}
-\toprule
-\textbf{Nguồn dự kiến} & \textbf{Đặc điểm} & \textbf{Được thể hiện bởi} \\
-\midrule
-Hệ thống ngân hàng lõi & Khối lượng lớn; chỉ ghi thêm; lô hằng ngày & \tbl{trans} \\
-Sổ đăng ký tài khoản & Nhỏ; hiếm khi thay đổi & \tbl{account} \\
-Dữ liệu gốc khách hàng (KYC) & Thay đổi chậm; mỗi tài khoản một chủ sở hữu & \tbl{client}, \tbl{disp} \\
-Dữ liệu tham chiếu & Tĩnh; 77 khu vực trong 8 vùng & \tbl{district} \\
-Hệ thống khách hàng thân thiết / CRM & Hạng của từng khách hàng kèm ngày hiệu lực; thay đổi theo thời gian & \tbl{customer\_profile\_\allowbreak simulated}, tệp đổi hạng \\
-Các lần nạp mới hằng ngày & Cùng định dạng với hệ thống lõi; có thể chứa lỗi hoặc gian lận & Các tệp kịch bản KB03, KB05, KB07, KB08 \\
-\bottomrule
-\end{tabular}
-\end{table}
-
 \subsection{Nguồn dữ liệu}
 \label{sec:data-source}
-Bộ dữ liệu Berka gồm tám tệp phân cách bằng dấu chấm phẩy (Bảng~\ref{tab:sources}). Đề tài
-sử dụng năm tệp mô tả tài khoản, chủ sở hữu của chúng và các giao dịch; khoản vay, lệnh chi
-định kỳ và thẻ nằm ngoài phạm vi của các BR. Số tiền tính bằng koruna Séc (CZK), và các giao
-dịch trải từ 1993-01-01 đến 1998-12-31.
+Bộ dữ liệu Berka \cite{berka1999} chứa các bản ghi đã ẩn danh của một ngân hàng Séc. Mỗi tệp
+Berka đại diện cho một hệ thống của ngân hàng (Bảng~\ref{tab:sources}); khoản vay, lệnh chi
+định kỳ và thẻ nằm ngoài phạm vi của các BR. Số giao dịch trong 1.056.320 giao dịch tăng từ
+28.205 năm 1993 lên 322.277 năm 1998, và mỗi tài khoản có từ 9 đến 675 giao dịch (trung vị
+208). Mỗi tài khoản có đúng một chủ sở hữu, và 409 tài khoản thuộc một khu vực chi nhánh
+khác với khu vực cư trú của chủ sở hữu, vì vậy khu vực đóng hai vai trò. Mã \tbl{type} cho
+biết chiều của dòng tiền (Bảng~\ref{tab:types}); số tiền không bao giờ âm. Việc khảo sát
+dữ liệu (profiling) tái hiện được 14 trên 15 số liệu trong khảo sát trước đó của nhóm về bộ
+dữ liệu.
 
-\begin{table}[!htb]
+\begin{table}[!t]
 \centering
 \caption{Các tệp nguồn}
 \label{tab:sources}
 \footnotesize
 \setlength{\tabcolsep}{4pt}
-\begin{tabular}{L{2.8cm} L{2.9cm} r}
+\begin{tabular}{L{2.75cm} L{3.15cm} r}
 \toprule
-\textbf{Tệp} & \textbf{Nội dung} & \textbf{Số dòng} \\
+\textbf{Tệp} & \textbf{Đại diện cho} & \textbf{Số dòng} \\
 \midrule
-\tbl{trans} & Giao dịch & 1.056.320 \\
-\tbl{account} & Tài khoản, khu vực chi nhánh, tần suất sao kê & 4.500 \\
-\tbl{client} & Khách hàng, mã số sinh, khu vực cư trú & 5.369 \\
-\tbl{disp} & Vai trò khách hàng--tài khoản (OWNER, DISPONENT) & 5.369 \\
-\tbl{district} & Khu vực và vùng & 77 \\
-\tbl{customer\_profile\_\allowbreak simulated} & Hạng thành viên của từng chủ sở hữu (mô phỏng) & 4.500 \\
-\midrule
-\tbl{loan}, \tbl{order}, \tbl{card} & Không sử dụng & 682 / 6.471 / 892 \\
+\tbl{trans} & Hệ thống ngân hàng lõi & 1.056.320 \\
+\tbl{account} & Sổ đăng ký tài khoản & 4.500 \\
+\tbl{client}, \tbl{disp} & Dữ liệu gốc khách hàng (chủ sở hữu) & 5.369 \\
+\tbl{district} & Dữ liệu tham chiếu (77 khu vực) & 77 \\
+\tbl{customer\_profile\_\allowbreak simulated} & Hệ thống khách hàng thân thiết (hạng mô phỏng) & 4.500 \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-\subsection{Đặc điểm dữ liệu}
-\label{sec:data-characteristics}
-
-\textbf{Khối lượng và tăng trưởng.} Số giao dịch trong 1.056.320 giao dịch tăng qua từng
-năm, từ 28.205 năm 1993 lên 322.277 năm 1998, khi ngân hàng mở thêm tài khoản. Mỗi tài khoản
-có từ 9 đến 675 giao dịch (trung vị 208), tạo nên một lịch sử dài cho mỗi tài khoản, điều
-mà BR02, BR03 và BR08 cần đến.
-
-\textbf{Chiều dòng tiền.} Mã \tbl{type} cho biết chiều của dòng tiền
-(Bảng~\ref{tab:types}): \texttt{PRIJEM} (ghi có) là tiền vào, còn \texttt{VYDAJ} (ghi nợ) và
-\texttt{VYBER} (rút tiền) là tiền ra. Tổng tiền vào là 3.227.472.424,50~CZK và tổng tiền ra
-là 3.030.321.135,80~CZK. Số tiền không bao giờ âm: 14 giao dịch có số tiền bằng không, giá
-trị trung bình là 5.924~CZK, trung vị 2.100~CZK, phân vị thứ 99 là 45.455~CZK và lớn nhất là
-87.400~CZK. Số dư sau giao dịch âm ở 2.999 bản ghi.
-
-\begin{table}[!htb]
+\begin{table}[!t]
 \centering
 \caption{Loại giao dịch và chiều dòng tiền (số tiền tính bằng CZK)}
 \label{tab:types}
@@ -361,20 +263,10 @@ VYBER (rút tiền) & OUT & 16.666 & 1,58\% & 12.103 & 208,6 \\
 \end{tabular}
 \end{table}
 
-\textbf{Quyền sở hữu.} Mỗi tài khoản có đúng một chủ sở hữu (\texttt{disp.type = OWNER}), và
-mỗi chủ sở hữu trong 4.500 chủ sở hữu sở hữu đúng một tài khoản; 869 khách hàng còn lại chỉ
-là người được ủy quyền (DISPONENT). Khu vực cư trú của chủ sở hữu khác với khu vực chi nhánh của
-tài khoản ở 409 tài khoản, vì vậy khu vực đóng hai vai trò. Các số liệu này tái hiện được
-14 trên 15 số liệu trong khảo sát trước đó của nhóm về bộ dữ liệu.
-
 \subsection{Khiếm khuyết chất lượng dữ liệu}
 \label{sec:data-quality}
-Bảng~\ref{tab:dq} tóm tắt các khiếm khuyết phát hiện được khi khảo sát dữ liệu (profiling),
-được sắp xếp theo các đặc tính chất lượng dữ liệu của ISO/IEC 25012 \cite{iso25012}. Các
-khiếm khuyết này liên quan đến việc phân loại giao dịch chứ không phải số tiền, vốn đầy đủ
-và không âm. Các trường phân loại \tbl{operation} và \tbl{k\_symbol} dùng hai cách mã hóa
-khác nhau cho giá trị ``thiếu'' (NULL và chuỗi rỗng), vì vậy 17 tổ hợp thô của (loại, nghiệp
-vụ, mục đích) rút gọn còn 15 sau khi chuẩn hóa.
+Các khiếm khuyết liên quan đến việc phân loại giao dịch chứ không phải số tiền
+(Bảng~\ref{tab:dq}, theo ISO/IEC 25012 \cite{iso25012}).
 
 \begin{table*}[!t]
 \centering
@@ -383,13 +275,13 @@ vụ, mục đích) rút gọn còn 15 sau khi chuẩn hóa.
 \small
 \begin{tabular}{L{2.3cm} L{7.0cm} L{5.4cm}}
 \toprule
-\textbf{Đặc tính} & \textbf{Phát hiện} & \textbf{Cách xử lý cần thiết} \\
+\textbf{Đặc tính} & \textbf{Phát hiện} & \textbf{Cách xử lý} \\
 \midrule
-Tính đầy đủ & \tbl{operation} rỗng ở 183.114 giao dịch (tất cả có mục đích \texttt{UROK}, ghi có tiền lãi); \tbl{k\_symbol} là NULL ở 481.881 và rỗng ở 53.433 giao dịch & Thành viên tường minh \texttt{NOT\_RECORDED}; không bỏ dòng nào \\
-Tính nhất quán & Hai cách mã hóa giá trị ``thiếu''; mã bị chèn khoảng trắng; 17 tổ hợp nhưng chỉ mang 15 nghĩa & Cắt khoảng trắng và ánh xạ cả hai cách mã hóa về một thành viên; junk dimension gồm 15 hồ sơ \\
-Tính dễ hiểu & Mã tiếng Séc (ví dụ \texttt{PRIJEM}, \texttt{SIPO}) & Tên dễ đọc và chiều dòng tiền trong dimension hồ sơ \\
-Tính chính xác & Ngày sinh và giới tính được gộp vào một ``mã số sinh'' (tháng + 50 với nữ); năm có 2 chữ số & Giải mã thành \tbl{gender} và \tbl{birth\_date} (lưu dưới dạng \texttt{Date32}, trước năm 1970) \\
-Tính kịp thời & Không có thuộc tính nào có lịch sử thay đổi & Hạng thành viên mô phỏng kèm ngày hiệu lực (Mục~\ref{sec:tier}) \\
+Tính đầy đủ & \tbl{operation} rỗng ở 183.114 giao dịch; \tbl{k\_symbol} là NULL ở 481.881 và rỗng ở 53.433 giao dịch & Thành viên tường minh \texttt{NOT\_RECORDED}; không bỏ dòng nào \\
+Tính nhất quán & Hai cách mã hóa giá trị ``thiếu''; mã bị chèn khoảng trắng; 17 tổ hợp nhưng chỉ mang 15 nghĩa & Chuẩn hóa thành một junk dimension gồm 15 hồ sơ \\
+Tính dễ hiểu & Mã tiếng Séc (ví dụ \texttt{PRIJEM}, \texttt{SIPO}) & Tên dễ đọc và chiều dòng tiền \\
+Tính chính xác & Ngày sinh và giới tính được gộp vào một ``mã số sinh'' & Giải mã thành \tbl{gender} và \tbl{birth\_date} \\
+Tính kịp thời & Không có thuộc tính nào có lịch sử thay đổi & Hạng thành viên mô phỏng kèm ngày hiệu lực \\
 \bottomrule
 \end{tabular}
 \end{table*}
@@ -397,83 +289,41 @@ Tính kịp thời & Không có thuộc tính nào có lịch sử thay đổi &
 \subsection{Hạng thành viên mô phỏng}
 \label{sec:tier}
 BR01 và BR08 cần một thuộc tính thay đổi theo thời gian. Một script tất định gán cho mỗi
-chủ sở hữu trong 4.500 chủ sở hữu một hạng ban đầu theo tiền vào của năm đầu tiên sau khi mở
-tài khoản: Standard (dưới 150.000~CZK, 2.075 chủ sở hữu), Silver (đến 300.000, 1.438), Gold
-(đến 550.000, 698) và Platinum (289), có hiệu lực từ ngày mở tài khoản. Một lần đánh giá lại
-cuối năm với cùng các ngưỡng trên tiền vào của năm 1998, có hiệu lực từ 1999-01-01, làm thay
-đổi hạng của 618 chủ sở hữu (13,7\%); cùng với các giao dịch tháng 1/1999 của họ, lần đánh
-giá lại này tạo thành kịch bản KB08.
+chủ sở hữu trong 4.500 chủ sở hữu một hạng theo tiền vào của năm đầu tiên của tài khoản:
+Standard (dưới 150.000~CZK, 2.075 chủ sở hữu), Silver (đến 300.000, 1.438), Gold (đến
+550.000, 698) và Platinum (289). Một lần đánh giá lại cuối năm 1998, có hiệu lực từ
+1999-01-01, làm thay đổi hạng của 618 chủ sở hữu; cùng với các giao dịch tháng 1/1999 của
+họ, lần đánh giá lại này tạo thành kịch bản KB08.
 
-\subsection{Phạm vi và ràng buộc}
-Giải pháp xử lý dữ liệu theo lô hằng ngày hoặc hằng tháng, không theo luồng. Số dư cuối kỳ và
-các giao dịch chuyển khoản nội bộ giữa các tài khoản của ngân hàng nằm ngoài phạm vi:
-\tbl{balance\_after} là đại lượng bán cộng dồn và chỉ được hiển thị khi tra cứu tài khoản.
-Ứng dụng không có kiểm soát truy cập (cả ba tab đều mở), và PostgreSQL nằm ngoài phạm vi sao
-lưu của BR07. Cuối cùng, giải pháp phải chạy trên một máy duy nhất để có thể trình diễn và
-tái lập.
-
-\subsection{Các hướng đã cân nhắc nhưng không triển khai}
+\subsection{Phạm vi}
 \label{sec:other-directions}
-Trước khi chốt phạm vi vào dòng tiền và hoạt động tài khoản, nhóm đã cân nhắc các cách sử
-dụng khác của cùng bộ dữ liệu (Bảng~\ref{tab:directions}). Chúng được ghi lại ở đây vì kho
-dữ liệu được thiết kế để có thể bổ sung các hướng này sau, dưới dạng các quy trình nghiệp vụ
-hoặc data mart mới, mà không thay đổi star schema hiện có.
-
-\begin{table}[!t]
-\centering
-\caption{Các hướng đã cân nhắc nhưng không triển khai}
-\label{tab:directions}
-\footnotesize
-\setlength{\tabcolsep}{3pt}
-\begin{tabular}{L{2.0cm} L{2.6cm} L{3.1cm}}
-\toprule
-\textbf{Hướng} & \textbf{Dữ liệu trong Berka} & \textbf{Lý do không thuộc phạm vi} \\
-\midrule
-Rủi ro vỡ nợ khoản vay & \tbl{loan} (682 khoản vay kèm trạng thái) & Một quy trình nghiệp vụ và nhóm người dùng khác; quá ít khoản vay để xây dựng mô hình \\
-Phân tích sử dụng thẻ & \tbl{card} (892 thẻ: loại và ngày phát hành) & Không có giao dịch thẻ, chỉ có các thẻ đã phát hành \\
-Thanh toán định kỳ & \tbl{order} (6.471 lệnh chi định kỳ) & Trùng với BR02; không thêm yêu cầu mới cho ba nhóm người dùng \\
-Phân khúc khách hàng (RFM) & \tbl{trans}, \tbl{client} & Bài toán marketing; không có nhóm người dùng marketing trong phạm vi \\
-Kinh tế vùng & \tbl{district} (A4--A16: dân số, lương, thất nghiệp) & Thuộc tính kinh tế--xã hội nằm ngoài góc nhìn dòng tiền; không đưa vào \tbl{dim\_district} \\
-Phát hiện gian lận theo luồng & --- & Berka là một bản trích xuất lịch sử; các quy tắc theo lô của BR03 đáp ứng yêu cầu \\
-\bottomrule
-\end{tabular}
-\end{table}
+Dữ liệu được xử lý theo lô, không theo luồng. Số dư cuối kỳ, chuyển khoản nội bộ, kiểm soát
+truy cập và việc sao lưu kho vận hành nằm ngoài phạm vi, và giải pháp chạy trên một máy duy
+nhất. Các cách sử dụng khác của dữ liệu đã được cân nhắc và loại ra vì chúng thuộc về các quy
+trình nghiệp vụ hoặc nhóm người dùng khác: rủi ro vỡ nợ khoản vay (\tbl{loan}), phân tích thẻ
+(\tbl{card}, chỉ có thông tin phát hành), thanh toán định kỳ (\tbl{order}), phân khúc khách
+hàng, kinh tế vùng (các thuộc tính của \tbl{district}), và phát hiện gian lận theo luồng.
+Kho dữ liệu có thể được mở rộng với các hướng này sau mà không thay đổi star schema.
 
 
 %% =====================================================================
 \section{Các giải pháp đề xuất}
 \label{sec:solutions}
 
-Mục này trình bày giải pháp đề xuất---một star schema Kimball trên ClickHouse với một kho
-vận hành trên PostgreSQL, được nạp theo lô qua một Data Lake và Spark---và các phương án
-thay thế dùng để đối chiếu: một mô hình dữ liệu khác (One Big Table), một công nghệ kho dữ
-liệu khác (PostgreSQL), và một kiến trúc khác cho kho vận hành.
-
 \subsection{Giải pháp thứ nhất: Star schema Kimball trên ClickHouse (đề xuất)}
 \label{sec:sol-kimball}
 
 \subsubsection{Kiến trúc}
-Hình~\ref{fig:arch} trình bày kiến trúc ở mức container, vẽ theo mô hình C4
-\cite{c4model}. Kiến trúc gồm sáu khối, tất cả chạy trong Docker Compose trên một máy:
-\begin{enumerate}
-  \item[A.] \textbf{Nguồn.} Các tệp Berka, tệp hạng thành viên và các tệp kịch bản cùng
-        định dạng.
-  \item[B.] \textbf{Data Lake.} Mỗi lô trước tiên được sao chép nguyên vẹn dưới dạng
-        Parquet vào \texttt{lake/batches/<batch\_id>/}. Nhờ đó, một lô có thể được truy vết
-        và chạy lại từ đúng dữ liệu đầu vào ban đầu của nó, kể cả khi nguồn đã thay đổi.
-  \item[C.] \textbf{Pipeline.} Các job PySpark đọc một lô, kiểm tra, chuẩn hóa mã, cập nhật
-        các dimension (kể cả SCD2), nạp bảng fact, đối soát lô với đầu vào của nó, và đánh
-        giá các quy tắc cảnh báo trên kho dữ liệu. Mọi lần chạy và bước đều được ghi vào
-        khối E.
-  \item[D.] \textbf{Kho dữ liệu.} ClickHouse chứa star schema (cơ sở dữ liệu
-        \texttt{dw}) và một đĩa sao lưu riêng.
-  \item[E.] \textbf{Kho vận hành.} PostgreSQL chứa những dữ liệu mà ngân hàng phải có khả
-        năng cập nhật và kiểm toán: lô, lần chạy, bước, bản ghi bị tách, quy tắc cảnh báo,
-        cảnh báo và quá trình xử lý chúng, và danh mục sao lưu.
-  \item[F.] \textbf{Ứng dụng.} Một ứng dụng Streamlit với ba tab đọc D và E, ghi kết quả
-        xử lý cảnh báo vào E, và gửi các lệnh nằm trong danh sách cho phép đến C (chạy một
-        kịch bản, chạy lại một lô, sao lưu, khôi phục) thông qua một dịch vụ runner nhỏ.
-\end{enumerate}
+Kiến trúc gồm sáu khối (Hình~\ref{fig:arch}), vẽ theo mô hình C4 \cite{c4model} và chạy
+trong Docker Compose trên một máy. \textbf{A} là nguồn. \textbf{B}, Data Lake, giữ một bản
+sao Parquet nguyên vẹn của mọi lô, để mọi lô đều có thể được truy vết và chạy lại.
+\textbf{C}, pipeline PySpark, kiểm tra và chuẩn hóa một lô, cập nhật các dimension (kể cả
+SCD2), nạp bảng fact, đối soát lô với đầu vào của nó, và đánh giá các quy tắc cảnh báo; mọi
+lần chạy và bước đều được ghi vào E. \textbf{D}, ClickHouse, chứa star schema và một đĩa sao
+lưu. \textbf{E}, PostgreSQL, chứa những dữ liệu phải được cập nhật tại chỗ và kiểm toán: các
+lần chạy, bản ghi bị tách, cảnh báo và quá trình xử lý chúng, và danh mục sao lưu.
+\textbf{F}, một ứng dụng Streamlit với ba tab, đọc D và E, ghi kết quả xử lý cảnh báo vào E,
+và gửi các lệnh nằm trong danh sách cho phép đến C.
 
 \begin{figure*}[!t]
 \centering
@@ -499,42 +349,23 @@ Hình~\ref{fig:arch} trình bày kiến trúc ở mức container, vẽ theo mô
 \draw[arr, <->] (ops.east) -- node[above, sloped, font=\scriptsize, pos=0.55]{xử lý} ([yshift=-5mm]app.west);
 \draw[arr] (app.south) -- ++(0,-1.7) -| node[pos=0.25, below, font=\scriptsize]{lệnh: chạy, chạy lại, sao lưu, khôi phục (runner)} (pipe.south);
 \end{tikzpicture}
-\caption{Kiến trúc mức container của giải pháp đề xuất (mô hình C4, mức 2). Các khối A--F theo thiết kế của nhóm.}
+\caption{Kiến trúc mức container của giải pháp đề xuất (mô hình C4, mức 2).}
 \label{fig:arch}
 \end{figure*}
 
 \subsubsection{Mô hình chiều}
-Mô hình tuân theo quy trình thiết kế bốn bước của Kimball \cite{kimball2013}:
-\begin{enumerate}
-  \item \textbf{Quy trình nghiệp vụ:} giao dịch tài khoản.
-  \item \textbf{Độ hạt (grain):} mỗi giao dịch là một dòng fact (độ hạt nguyên tử), để mọi
-        BR, kể cả danh sách giao dịch của BR02 và căn cứ của BR03, đều được trả lời từ cùng
-        một bảng.
-  \item \textbf{Dimension} (Hình~\ref{fig:star}):
-  \begin{itemize}
-    \item \tbl{dim\_date}: lịch với năm, quý, tháng, \tbl{year\_month}, thứ trong tuần và
-          cờ cuối tuần.
-    \item \tbl{dim\_account} (Type~1): tài khoản, ngày mở, tần suất sao kê và khu vực chi
-          nhánh của tài khoản.
-    \item \tbl{dim\_customer} (\textbf{Type~2}): chủ sở hữu, với giới tính và ngày sinh
-          được giải mã từ mã số sinh, khu vực cư trú và hạng thành viên. Mỗi hạng là một phiên
-          bản với khóa thay thế riêng, \tbl{valid\_from} (bao gồm), \tbl{valid\_to} (không
-          bao gồm; 2299-12-31 với phiên bản hiện hành) và \tbl{is\_current}.
-    \item \tbl{dim\_transaction\_profile}: một \emph{junk dimension} gồm 15 tổ hợp đã chuẩn
-          hóa của loại, nghiệp vụ và mục đích, với tên dễ đọc và chiều dòng tiền (IN/OUT).
-    \item \tbl{dim\_district}: 77 khu vực trong 8 vùng, đóng hai vai trò---khu vực chi nhánh qua
-          \tbl{dim\_account} và khu vực cư trú qua \tbl{dim\_customer} (một outrigger thay vì
-          một khóa trực tiếp trong bảng fact).
-  \end{itemize}
-  \item \textbf{Đại lượng (facts):} \tbl{amount} không dấu và \emph{cộng dồn được}; tiền
-        vào và tiền ra có được bằng cách tách nó theo chiều của hồ sơ giao dịch, và dòng
-        tiền thuần là hiệu của hai đại lượng này. \tbl{balance\_after} là \emph{bán cộng
-        dồn} và không bao giờ được cộng tổng. \tbl{load\_batch\_id} và \tbl{loaded\_at} gắn
-        mỗi dòng với lô đã nạp nó.
-\end{enumerate}
-Mấu chốt của BR08 là cách dòng fact chọn phiên bản khách hàng: pipeline nối mỗi giao dịch
-với phiên bản chủ sở hữu có khoảng hiệu lực chứa ngày giao dịch. Do đó, một lần đổi hạng tạo
-ra phiên bản mới cho các giao dịch về sau mà không chạm đến các dòng fact của các kỳ trước.
+Theo bốn bước của Kimball \cite{kimball2013}, quy trình nghiệp vụ là giao dịch tài khoản và
+độ hạt (grain) là mỗi giao dịch một dòng fact, để báo cáo và tra cứu tài khoản dùng cùng một
+bảng (Hình~\ref{fig:star}). \tbl{amount} cộng dồn được và được tách thành tiền vào và tiền ra
+theo chiều của hồ sơ giao dịch; \tbl{balance\_after} là bán cộng dồn và không bao giờ được
+cộng tổng. \tbl{dim\_customer} là \textbf{Type~2}: mỗi hạng là một phiên bản với khóa thay
+thế riêng và một khoảng hiệu lực [\tbl{valid\_from}, \tbl{valid\_to}), phiên bản hiện hành
+kết thúc vào 2299-12-31. \tbl{dim\_transaction\_profile} là một junk dimension gồm 15 tổ hợp
+mã, và \tbl{dim\_district} đóng hai vai trò qua tài khoản và khách hàng. Mỗi giao dịch được
+nối với phiên bản chủ sở hữu có hiệu lực vào ngày của nó, với điều kiện ngày nằm trong phép
+nối: một lần đổi hạng tạo ra phiên bản mới cho các giao dịch về sau mà không chạm đến các
+dòng fact của các kỳ trước, và một giao dịch nằm ngoài mọi phiên bản bị tách thay vì biến mất
+mà không có dấu hiệu gì.
 
 \begin{figure}[!htb]
 \centering
@@ -563,25 +394,13 @@ balance\_after \emph{(bán cộng dồn)}\\ load\_batch\_id, loaded\_at};
 \label{fig:star}
 \end{figure}
 
-\subsubsection{Lô và chạy lại}
-Dữ liệu lịch sử được nạp dưới dạng một lô tham chiếu (\texttt{REF\_INITIAL}: khu vực, tài
-khoản, chủ sở hữu và hạng ban đầu), tiếp theo là 72 lô theo tháng (\texttt{HIST\_1993\_01}
-đến \texttt{HIST\_1998\_12}). Mỗi kịch bản là một lô bổ sung (ví dụ
-\texttt{KB05\_DATA\_ERRORS}). Mọi lô đều có thể chạy lại từ bản chụp của nó trong Data Lake.
-Một lần chạy lại bỏ qua các giao dịch mà chính lô đó đã nạp và được ghi nhận là
-\texttt{RERUN}; ngoài ra bảng fact là một \texttt{ReplacingMergeTree} với khóa là giao dịch,
-nên một lần chạy lại không thể tạo bản trùng.
-
-\subsubsection{Công nghệ xử lý dữ liệu}
-\textbf{Apache Spark} \cite{zaharia2016spark} (PySpark, chế độ local) thực thi pipeline. API
-DataFrame của Spark biểu diễn các quy tắc kiểm tra theo cách khai báo, và cùng các job đó có
-thể chạy trên một cụm máy mà không cần thay đổi. Bước kiểm tra áp dụng các quy tắc V1--V7
-(Bảng~\ref{tab:vrules}); một bản ghi không đạt được ghi vào \tbl{ops.rejected\_record} kèm
-quy tắc, lý do và nội dung gốc, còn phần còn lại của lô tiếp tục được xử lý.
-Mã nguồn~\ref{lst:scd} cho thấy cách một dòng fact nhận phiên bản khách hàng của nó. Điều
-kiện ngày là một phần của phép nối: nếu nó được áp dụng sau phép nối, một giao dịch nằm
-ngoài mọi phiên bản sẽ biến mất mà không có dấu hiệu gì, còn ở đây giao dịch đó giữ một khóa
-null và bị tách theo V7.
+\subsubsection{Pipeline}
+Dữ liệu lịch sử được nạp dưới dạng một lô tham chiếu và 72 lô theo tháng; mỗi kịch bản là
+một lô bổ sung. Mỗi lô được kiểm tra với các quy tắc V1--V7 (Bảng~\ref{tab:vrules}); một
+bản ghi không đạt được ghi vào kho vận hành kèm quy tắc, lý do và nội dung của nó, còn phần
+còn lại của lô tiếp tục được xử lý. Mỗi lô được đối soát với đầu vào của nó (số lượng và số
+tiền). Một lần chạy lại bỏ qua các giao dịch mà lô đó đã nạp, và bảng fact, một
+\texttt{ReplacingMergeTree} với khóa là giao dịch, không thể chứa bản trùng.
 
 \begin{table}[!t]
 \centering
@@ -593,305 +412,175 @@ null và bị tách theo V7.
 \toprule
 \textbf{Quy tắc} & \textbf{Một bản ghi bị tách khi} \\
 \midrule
-V1 & thiếu một trường bắt buộc (id, tài khoản, ngày, loại, số tiền) \\
+V1 & thiếu một trường bắt buộc \\
 V2 & tài khoản không tồn tại trong kho dữ liệu \\
 V3 & số tiền âm hoặc không phải là số \\
 V4 & ngày không hợp lệ hoặc nằm ngoài lịch \\
-V5 & mã loại không xác định (không phải \texttt{PRIJEM}, \texttt{VYDAJ}, \texttt{VYBER}) \\
-V6 & id giao dịch bị trùng trong lô hoặc đã được một lô khác nạp \\
+V5 & mã loại không xác định \\
+V6 & id giao dịch bị trùng hoặc đã được một lô khác nạp \\
 V7 & không có phiên bản chủ sở hữu nào có hiệu lực vào ngày giao dịch \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-\begin{lstlisting}[language=Python, caption={Chọn phiên bản chủ sở hữu có hiệu lực vào ngày giao dịch (trích từ \texttt{pipeline.py}, đã giản lược).}, label={lst:scd}]
-in_version = ((F.col("client_id") == F.col("v_client_id"))
-    & (F.col("txn_date") >= F.col("valid_from"))
-    & (F.col("txn_date") <  F.col("valid_to")))
-f = (new_rows
-     .join(F.broadcast(accounts), "account_id")
-     .join(F.broadcast(profiles),
-           ["type_code", "operation_code", "purpose_code"])
-     .join(F.broadcast(owner), "account_id", "left")
-     .join(F.broadcast(versions), in_version, "left"))
-# no valid version -> customer_sk is NULL -> rejected (V7)
-no_version = f.filter(F.col("customer_sk").isNull())
-\end{lstlisting}
+Cảnh báo gian lận (BR03) được tính sau mỗi lần nạp bằng hai quy tắc có tham số được lưu
+trong kho vận hành: \textbf{R1}, tiền ra của một tài khoản trong một tháng vượt quá ba lần
+mức trung bình của sáu tháng trước đó và vượt quá 50.000~CZK; \textbf{R2}, một giao dịch
+tiền ra xảy ra sau ít nhất 180 ngày không hoạt động. Mỗi cảnh báo lưu một lý do, các số liệu
+đã dùng và các giao dịch liên quan, và là duy nhất theo tài khoản, quy tắc và kỳ, nên một
+lần chạy lại không thêm cảnh báo nào. Trên dữ liệu lịch sử, các quy tắc sinh ra 1.697 cảnh
+báo.
 
-Cảnh báo gian lận (BR03) được tính sau mỗi lần nạp, từ kho dữ liệu, bằng hai quy tắc có
-tham số nằm trong \tbl{ops.alert\_rule}, nhờ đó có thể tinh chỉnh mà không cần sửa mã:
-\textbf{R1} (``tiền ra tăng đột biến'') được kích hoạt khi tiền ra của một tài khoản trong
-một tháng vượt quá ba lần mức tiền ra trung bình hằng tháng của sáu tháng trước đó và vượt
-quá 50.000~CZK; \textbf{R2} (``tài khoản ngủ đông hoạt động trở lại'') được kích hoạt khi có
-một giao dịch tiền ra sau ít nhất 180 ngày không có giao dịch nào. Mỗi cảnh báo lưu một lý
-do dễ đọc, các số liệu đã dùng (\tbl{evidence}) và id của các giao dịch liên quan. Cảnh báo
-là duy nhất theo tài khoản, quy tắc và kỳ, nên việc chạy lại một lô không thêm cảnh báo
-nào. Trên dữ liệu lịch sử, các quy tắc sinh ra 1.697 cảnh báo (1.695 R1 và 2 R2).
-
-\subsubsection{Công nghệ quản lý dữ liệu}
-\textbf{ClickHouse} \cite{schulze2024clickhouse} là một cơ sở dữ liệu phân tích hướng cột.
-Lưu trữ theo cột chỉ đọc những cột mà truy vấn chạm tới và nén chúng tốt, đây là ưu điểm kinh
-điển của cơ sở dữ liệu cột với tải phân tích \cite{stonebraker2005cstore,abadi2008column}.
-ClickHouse không có cập nhật tại chỗ và không ràng buộc khóa, trong khi một thiết kế Kimball
-thường dựa vào hai điều này. Giải pháp xử lý vấn đề này như sau: các dimension là bảng
-\texttt{ReplacingMergeTree}, trong đó một chỉnh sửa Type~1 hoặc việc đóng một phiên bản SCD2
-được ghi thành một dòng mới với \tbl{updated\_at} muộn hơn và được đọc bằng \texttt{FINAL};
-khóa được gán và kiểm tra bởi pipeline; và bảng fact được sắp xếp theo
-\texttt{(account\_sk, date\_key, transaction\_id)} và phân vùng theo năm, khớp với các điều
-kiện lọc của BR01 (kỳ) và BR02 (tài khoản và kỳ) (Mã nguồn~\ref{lst:ddl}). Sao lưu dùng các
-câu lệnh gốc \texttt{BACKUP DATABASE \ldots\ TO Disk} và \texttt{RESTORE} trên một đĩa
-riêng.
-
-\begin{lstlisting}[language=SQL, caption={Định nghĩa bảng fact giao dịch trong ClickHouse (trích từ \texttt{dw.sql}).}, label={lst:ddl}]
-CREATE TABLE IF NOT EXISTS dw.fact_transaction (
-  transaction_id          UInt64,
-  date_key                UInt32,  -- -> dim_date
-  account_sk              UInt32,  -- -> dim_account
-  customer_sk             UInt32,  -- owner version valid on the date
-  transaction_profile_sk  UInt16,  -- -> dim_transaction_profile
-  amount                  Decimal(18, 2),
-  balance_after           Decimal(18, 2),
-  counterparty_bank_code  Nullable(String),
-  counterparty_account_ref Nullable(String),
-  load_batch_id           LowCardinality(String),
-  loaded_at               DateTime64(3)
-) ENGINE = ReplacingMergeTree(loaded_at)
-PARTITION BY intDiv(date_key, 10000)      -- one partition per year
-ORDER BY (account_sk, date_key, transaction_id);
-\end{lstlisting}
-
-\textbf{PostgreSQL} đóng vai trò kho vận hành. Khác với kho dữ liệu, dữ liệu này nhỏ, được
-cập nhật tại chỗ và phải tuân theo các ràng buộc thực sự: khóa chính và khóa ngoại, ràng
-buộc \texttt{CHECK} trên mọi trạng thái, và một hàm chỉ cho phép các chuyển trạng thái hợp
-lệ của cảnh báo (\emph{chưa xem} $\rightarrow$ \emph{đang xem xét} $\rightarrow$ \emph{đã
-xử lý}, \emph{chưa xem} $\rightarrow$ \emph{đã xử lý}, và mở lại một cảnh báo đã xử lý) đồng
-thời ghi mọi thay đổi kèm ghi chú vào \tbl{ops.alert\_action}. Giữ dữ liệu này bên ngoài kho
-dữ liệu có nghĩa là ghi chú của chuyên viên phân tích không bao giờ bị lẫn với số liệu của
-ngân hàng, và một lần khôi phục kho dữ liệu không bao giờ làm mất bản ghi về những gì đã xảy
-ra.
-
-Bảng~\ref{tab:techsel} so sánh các công nghệ quản lý dữ liệu ứng viên, bao gồm cả những
-công nghệ được môn học gợi ý.
-
-\begin{table*}[!t]
-\centering
-\caption{So sánh các công nghệ quản lý dữ liệu ứng viên}
-\label{tab:techsel}
-\small
-\begin{tabular}{L{3.0cm} L{2.2cm} L{2.0cm} L{2.2cm} L{5.0cm}}
-\toprule
-\textbf{Công nghệ} & \textbf{Mô hình lưu trữ} & \textbf{Tốc độ phân tích} & \textbf{Triển khai cục bộ} & \textbf{Đánh giá} \\
-\midrule
-ClickHouse (được chọn, D) & Lưu theo cột & Rất cao & Một container & Tổng hợp nhanh; sao lưu gốc; không có cập nhật tại chỗ hay ràng buộc khóa \\
-PostgreSQL (được chọn, E; phương án thay thế cho D) & Lưu theo dòng & Trung bình & Một container & Ràng buộc, giao dịch, cập nhật tại chỗ; chậm hơn khi quét lượng lớn dữ liệu \\
-Apache Hive & Tệp + bộ máy SQL & Thấp--trung bình & Nhiều dịch vụ & Có trong danh sách của môn học; độ trễ cao gây bất lợi cho một ứng dụng tương tác \\
-Spark SQL + Delta Lake & Lakehouse & Trung bình--cao & Nhiều dịch vụ & Gần với Databricks (danh sách của môn học); nhiều thành phần cần vận hành hơn \\
-BigQuery / Redshift / Synapse & Kho dữ liệu đám mây & Cao & Không cục bộ & Có trong danh sách của môn học; cần thanh toán đám mây và kết nối ổn định \\
-\bottomrule
-\end{tabular}
-\end{table*}
-
-\subsubsection{Ứng dụng hướng dữ liệu}
-Ứng dụng được tổ chức quanh ba nhóm người dùng: mỗi nhóm một tab, chỉ chứa các khung nhìn
-của các BR thuộc nhóm đó (Bảng~\ref{tab:appmap}). Tab \emph{Tổng quan} hiển thị các ô KPI
-và biểu đồ với một bộ lọc kỳ duy nhất, phù hợp với một nhà quản lý không chuyên kỹ thuật.
-Tab \emph{Phân tích} hướng theo từng trường hợp: chuyên viên phân tích chọn một tài khoản
-hoặc một cảnh báo và xem các giao dịch của nó, lý do và căn cứ của cảnh báo, cùng một biểu
-mẫu để đổi trạng thái kèm ghi chú. Tab \emph{Vận hành} cung cấp cho kỹ sư dữ liệu chi tiết
-và quyền điều khiển ở mức lần chạy. Bộ chạy kịch bản của tab này theo luồng N01--N05 của
-nhóm: chọn một kịch bản và xem trước đầu vào mà không ghi gì, chạy kịch bản, so sánh kết
-quả mong đợi với kết quả thực tế, và chạy lại.
+\subsubsection{Công nghệ}
+\textbf{Apache Spark} \cite{zaharia2016spark} thực thi pipeline; cùng các job đó có thể chạy
+trên một cụm máy. \textbf{ClickHouse} \cite{schulze2024clickhouse}, một cơ sở dữ liệu lưu
+theo cột, chỉ đọc những cột mà truy vấn cần và nén chúng
+\cite{stonebraker2005cstore,abadi2008column}. ClickHouse không có cập nhật tại chỗ và không
+ràng buộc khóa: các dimension là bảng \texttt{ReplacingMergeTree}, trong đó một chỉnh sửa
+hoặc việc đóng một phiên bản SCD2 là một dòng mới được đọc bằng \texttt{FINAL}, khóa được
+gán và kiểm tra bởi pipeline, và bảng fact được sắp xếp theo tài khoản và ngày và phân vùng
+theo năm. Sao lưu dùng các câu lệnh gốc \texttt{BACKUP} và \texttt{RESTORE}.
+\textbf{PostgreSQL} chứa dữ liệu vận hành, vốn nhỏ, được cập nhật tại chỗ và chịu ràng buộc
+bởi khóa, \texttt{CHECK} và một hàm chỉ cho phép các chuyển trạng thái hợp lệ của cảnh báo
+và ghi mọi thay đổi kèm ghi chú. Bảng~\ref{tab:techsel} so sánh các công nghệ ứng viên cho
+kho dữ liệu.
 
 \begin{table}[!t]
 \centering
-\caption{Ánh xạ yêu cầu nghiệp vụ vào các khung nhìn của ứng dụng}
-\label{tab:appmap}
+\caption{Các công nghệ ứng viên cho kho dữ liệu}
+\label{tab:techsel}
 \footnotesize
-\setlength{\tabcolsep}{4pt}
-\begin{tabular}{l L{1.7cm} L{5.0cm}}
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{L{2.2cm} L{1.6cm} L{4.1cm}}
 \toprule
-\textbf{BR} & \textbf{Tab} & \textbf{Hiển thị và tương tác chính} \\
+\textbf{Công nghệ} & \textbf{Mô hình} & \textbf{Đánh giá} \\
 \midrule
-BR01 & Tổng quan & Bộ lọc kỳ; ô KPI; biểu đồ vào--ra theo ngày/tháng; bảng theo hạng \\
-BR02 & Phân tích & Chọn tài khoản và kỳ; các tổng; danh sách giao dịch \\
-BR03 & Phân tích & Danh sách cảnh báo; lý do, căn cứ, giao dịch liên quan \\
-BR04 & Phân tích & Biểu mẫu trạng thái kèm ghi chú; lịch sử thao tác \\
-BR05 & Vận hành & Bản ghi bị tách theo lô và quy tắc; các bản ghi bị tách kèm lý do \\
-BR06 & Vận hành & Các lần chạy kèm trạng thái và số lượng; các bước của một lần chạy; nguyên nhân lỗi \\
-BR07 & Vận hành & Sao lưu; chọn một bản sao lưu và khôi phục; kết quả đối soát \\
-BR08 & Vận hành & Báo cáo theo hạng cho một kỳ cũ và một kỳ mới; các phiên bản của một khách hàng \\
---- & Vận hành & Bộ chạy kịch bản: xem trước, chạy, mong đợi so với thực tế, chạy lại \\
+ClickHouse (được chọn) & Lưu theo cột & Tổng hợp nhanh, sao lưu gốc; không có cập nhật tại chỗ \\
+PostgreSQL & Lưu theo dòng & Ràng buộc và cập nhật; quét chậm hơn (phương án thay thế) \\
+Apache Hive & SQL trên tệp & Độ trễ cao đối với một ứng dụng tương tác \\
+Spark SQL + Delta & Lakehouse & Nhiều thành phần cần vận hành hơn \\
+Kho dữ liệu đám mây & Dịch vụ quản lý & Cần thanh toán và kết nối \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-\subsubsection{Công nghệ cho ứng dụng}
-\textbf{Streamlit} \cite{streamlit} là một framework Python cho ứng dụng dữ liệu. Streamlit
-được chọn thay vì một công cụ dashboard vì ứng dụng phải \emph{ghi}---trạng thái và ghi chú
-của cảnh báo---và \emph{điều khiển} pipeline, chứ không chỉ hiển thị biểu đồ. Các lệnh từ
-ứng dụng được gửi đến một dịch vụ runner bên trong container Spark; dịch vụ này chỉ chấp
-nhận một danh sách thao tác được cho phép với các tham số đã được kiểm tra, mỗi lúc chỉ chạy
-một job, và đánh dấu lần chạy tương ứng là \texttt{triggered\_by = app}. Các truy vấn đọc
-được lưu đệm trong 60 giây. Truy vấn tra cứu một tài khoản hay một khách hàng lọc bảng fact
-theo khóa của chính nó (\tbl{account\_sk}, \tbl{customer\_sk}) trước khi nối các
-dimension, để ClickHouse dùng được khóa sắp xếp của bảng fact thay vì đọc toàn bộ bảng.
-
-Bảng~\ref{tab:techroles} tóm tắt cách mỗi công nghệ được sử dụng và những BR phụ thuộc vào
-nó.
+\subsubsection{Ứng dụng}
+Một ứng dụng Streamlit \cite{streamlit} có mỗi nhóm người dùng một tab
+(Bảng~\ref{tab:appmap}). Streamlit được chọn thay vì một công cụ dashboard vì ứng dụng còn
+phải ghi kết quả xử lý cảnh báo và điều khiển pipeline. Các lệnh được gửi đến một dịch vụ
+runner trong container Spark; dịch vụ này chỉ chấp nhận một danh sách thao tác được cho
+phép, mỗi lúc chỉ chạy một job, và đánh dấu lần chạy là \texttt{triggered\_by = app}. Truy
+vấn tra cứu một tài khoản hay một khách hàng lọc bảng fact theo khóa của chính nó
+(\tbl{account\_sk}, \tbl{customer\_sk}) trước khi nối các dimension, để ClickHouse dùng được
+khóa sắp xếp của bảng fact.
 
 \begin{table}[!t]
 \centering
-\caption{Các công nghệ của giải pháp thứ nhất và các BR mà chúng phục vụ}
-\label{tab:techroles}
+\caption{Các yêu cầu nghiệp vụ trong ứng dụng}
+\label{tab:appmap}
 \footnotesize
 \setlength{\tabcolsep}{4pt}
-\begin{tabular}{L{1.9cm} L{4.3cm} L{1.4cm}}
+\begin{tabular}{l L{1.6cm} L{5.0cm}}
 \toprule
-\textbf{Công nghệ} & \textbf{Vai trò} & \textbf{BR} \\
+\textbf{BR} & \textbf{Tab} & \textbf{Hiển thị và tương tác} \\
 \midrule
-Parquet (Data Lake) & Đầu vào nguyên vẹn của mọi lô; nguồn để chạy lại & BR05--BR07 \\
-Apache Spark & Kiểm tra, chuẩn hóa, SCD2, nạp fact, đối soát & Tất cả \\
-ClickHouse & Star schema; quy tắc cảnh báo; sao lưu và khôi phục & BR01--03, BR07--08 \\
-PostgreSQL & Lần chạy, bước, bản ghi bị tách, cảnh báo, xử lý, danh mục sao lưu & BR03--BR07 \\
-Streamlit & Ứng dụng ba tab; xử lý cảnh báo; điều khiển & Tất cả \\
-Docker Compose & Triển khai tái lập được trên một máy & Tất cả \\
+BR01 & Tổng quan & Bộ lọc kỳ; ô KPI; biểu đồ vào--ra; bảng theo hạng \\
+BR02--04 & Phân tích & Tra cứu tài khoản; cảnh báo kèm căn cứ; biểu mẫu trạng thái \\
+BR05--08 & Vận hành & Bản ghi bị tách; lần chạy và các bước; sao lưu và khôi phục; báo cáo theo hạng \\
+--- & Vận hành & Bộ chạy kịch bản: xem trước, chạy, mong đợi so với thực tế \\
 \bottomrule
 \end{tabular}
 \end{table}
 
 \subsubsection{Các khía cạnh Big Data}
-Môn học yêu cầu đánh giá giải pháp trong bối cảnh Big Data. Chúng tôi thảo luận theo các
-đặc trưng ``V'' thông dụng.
-
-\textbf{Volume (khối lượng).} Berka chứa khoảng một triệu giao dịch, một máy đơn xử lý dễ
-dàng. Thiết kế có thể mở rộng mà không cần thay đổi mô hình: Spark phân tán cùng các job
-trên một cụm máy, và ClickHouse có thể phân mảnh bảng fact bằng engine
-\texttt{Distributed}. Bảng fact chiếm 18,5~MB sau nén cho 1,06 triệu dòng trong ClickHouse.
-
-\textbf{Velocity (tốc độ).} Ngân hàng tạo ra tối đa 322.277 giao dịch mỗi năm, dưới 1.000
-giao dịch mỗi ngày, phù hợp với lô hằng ngày. Một lô theo tháng khoảng 15.000 giao dịch được
-xử lý với trung vị 3,4~s, nên pipeline còn dư địa rất lớn.
-
-\textbf{Variety (đa dạng).} Dữ liệu có cấu trúc. Spark đọc mọi tệp với một schema tường
-minh, và Data Lake lưu schema cùng với dữ liệu.
-
-\textbf{Veracity (độ tin cậy).} Độ tin cậy được bảo đảm bằng việc kiểm tra mọi lô, tách
-riêng các bản ghi không đạt kèm lý do, đối soát từng lô với đầu vào của nó, và đối soát toàn
-bộ với nguồn (Mục~\ref{sec:analysis}).
-
-\textbf{Value (giá trị).} Giá trị được mang lại qua tám BR, mỗi BR gắn với một mục tiêu kinh
-doanh (Bảng~\ref{tab:objectives}) và một khung nhìn của ứng dụng (Bảng~\ref{tab:appmap}).
+Khối lượng (khoảng một triệu giao dịch) và tốc độ (dưới 1.000 giao dịch mỗi ngày) phù hợp
+với một máy và lô hằng ngày; thiết kế có thể mở rộng mà không cần thay đổi mô hình, vì Spark
+phân tán cùng các job và ClickHouse có thể phân mảnh bảng fact. Dữ liệu có cấu trúc và được
+đọc với schema tường minh. Độ tin cậy (veracity) là mối quan tâm chính và được bảo đảm bằng
+việc kiểm tra, tách riêng các bản ghi không đạt và đối soát mọi lô.
 
 \subsection{Giải pháp thứ hai: One Big Table trên ClickHouse}
 \label{sec:sol-obt}
-Giải pháp thứ hai giữ nguyên pipeline và công nghệ nhưng thay star schema bằng một bảng phi
-chuẩn hóa duy nhất: mỗi dòng fact mang theo mọi thuộc tính của các dimension, kể cả cả hai
-vai trò khu vực và hạng thành viên cùng khoảng hiệu lực của nó. Thiết kế này thường được khuyến
-nghị cho cơ sở dữ liệu cột vì nó loại bỏ phép nối khi truy vấn, và nó giữ ngữ nghĩa SCD2
-theo ngày giao dịch vì hạng được sao chép vào lúc nạp dòng. Cái giá của nó là dư thừa và
-chi phí chỉnh sửa cao: thay đổi một thuộc tính Type~1 đòi hỏi ghi lại mọi dòng fact mang
-thuộc tính đó, điều mà ClickHouse thực hiện bằng một mutation bất đồng bộ.
+Cùng pipeline và công nghệ, nhưng chỉ một bảng phi chuẩn hóa: mỗi dòng fact mang theo mọi
+thuộc tính của các dimension, kể cả cả hai vai trò khu vực và hạng cùng khoảng hiệu lực của
+nó. Truy vấn không cần phép nối, nhưng mỗi lần chỉnh sửa Type~1 phải ghi lại mọi dòng fact
+mang thuộc tính đó.
 
 \subsection{Giải pháp thứ ba: Star schema trên PostgreSQL (lưu theo dòng)}
 \label{sec:sol-postgres}
-Giải pháp thứ ba giữ nguyên pipeline, star schema và các dòng dữ liệu, nhưng lưu kho dữ
-liệu trong PostgreSQL, một cơ sở dữ liệu quan hệ hướng dòng (quyết định Q-K của nhóm).
-PostgreSQL hỗ trợ đầy đủ thiết kế Kimball---ràng buộc khóa chính và khóa ngoại, giao dịch và
-cập nhật tại chỗ---cùng chỉ mục B-tree cho tra cứu điểm, nhưng đọc toàn bộ dòng kể cả khi
-truy vấn chỉ cần vài cột. Để so sánh công bằng, phương án này được cấu hình với khóa chính
-và khóa ngoại, chỉ mục trên các cột lọc và cột nối của bảng fact (\tbl{date\_key};
-\tbl{account\_sk}, \tbl{date\_key}; \tbl{customer\_sk}) và trên
-\tbl{dim\_customer.client\_id}, được tạo sau lần nạp hàng loạt; thống kê được cập nhật; và
-256~MB shared buffers, 64~MB bộ nhớ làm việc, cùng tối đa bốn worker song song.
+Cùng pipeline, schema và các dòng dữ liệu trong PostgreSQL, với ràng buộc khóa, cập nhật tại
+chỗ và chỉ mục B-tree trên các cột lọc và cột nối của bảng fact. Một cơ sở dữ liệu lưu theo
+dòng đọc toàn bộ dòng kể cả khi truy vấn chỉ cần vài cột, điều được dự kiến sẽ làm chậm các
+phép quét của BR01 và BR08.
 
 \subsection{Kiến trúc thay thế: dữ liệu vận hành trong ClickHouse}
 \label{sec:sol-ops}
-Kiến trúc đề xuất bổ sung một cơ sở dữ liệu thứ hai (khối E). Phương án thay thế loại bỏ nó
-và lưu các lần chạy, cảnh báo và quá trình xử lý cảnh báo trong ClickHouse, cạnh kho dữ
-liệu. Vì ClickHouse không có cập nhật tại chỗ, một thay đổi trạng thái hoặc được ghi thành
-một phiên bản dòng mới của một bảng \texttt{ReplacingMergeTree} và đọc bằng \texttt{FINAL},
-hoặc được áp dụng dưới dạng mutation \texttt{ALTER TABLE \ldots\ UPDATE}; tính hợp lệ của một
-chuyển trạng thái phải do ứng dụng kiểm tra.
+Khối E bị loại bỏ, và các lần chạy, cảnh báo cùng quá trình xử lý chúng được lưu trong
+ClickHouse. Một thay đổi trạng thái trở thành một phiên bản dòng mới hoặc một mutation, và
+tính hợp lệ của một chuyển trạng thái phải do ứng dụng kiểm tra.
 
 \subsection{Các công trình liên quan}
-Mô hình hóa chiều từ dưới lên của Kimball \cite{kimball2013} đối lập với cách tiếp cận từ
-trên xuống của Inmon \cite{inmon2005}, trong đó một kho dữ liệu doanh nghiệp đã chuẩn hóa
-cung cấp dữ liệu cho các data mart của từng bộ phận, và với Data Vault \cite{linstedt2015},
-vốn tách riêng khóa nghiệp vụ, quan hệ và thuộc tính mô tả để ưu tiên khả năng kiểm toán và
-thích ứng với thay đổi. Với một quy trình nghiệp vụ duy nhất và một nhóm nhỏ, Kimball mang
-lại con đường ngắn nhất từ dữ liệu đến các truy vấn phục vụ người dùng, và các slowly
-changing dimension của nó đáp ứng yêu cầu lịch sử của BR08. Mô hình lakehouse
-\cite{armbrust2021lakehouse} hợp nhất Data Lake và kho dữ liệu trên các định dạng mở. Ưu
-điểm của cơ sở dữ liệu cột đối với tải phân tích đã được khẳng định rõ
+Mô hình hóa chiều của Kimball \cite{kimball2013} đối lập với kho dữ liệu doanh nghiệp đã
+chuẩn hóa của Inmon \cite{inmon2005} và với Data Vault \cite{linstedt2015}; với một quy
+trình nghiệp vụ duy nhất và một nhóm nhỏ, Kimball mang lại con đường ngắn nhất đến các truy
+vấn phục vụ người dùng, và các slowly changing dimension của nó đáp ứng BR08. Mô hình
+lakehouse \cite{armbrust2021lakehouse} hợp nhất Data Lake và kho dữ liệu trên các định dạng
+mở. Cơ sở dữ liệu cột được biết là phù hợp với tải phân tích
 \cite{stonebraker2005cstore,abadi2008column}, và Star Schema Benchmark \cite{oneil2009ssb}
-điều chỉnh TPC-H cho star schema. Bộ dữ liệu Berka đã được sử dụng rộng rãi cho dự đoán vỡ
-nợ khoản vay và phân tích khách hàng kể từ cuộc thi PKDD'99 \cite{berka1999}; ở đây nó được
-dùng làm nguồn cho một kho dữ liệu thay vì cho một mô hình dự đoán.
+đo các truy vấn nối hình sao, như được thực hiện ở đây.
 
 
 %% =====================================================================
 \section{Tiêu chí đánh giá giải pháp}
 \label{sec:criteria}
 
-Các giải pháp được đánh giá theo ba tiêu chí mà môn học yêu cầu. Mỗi tiêu chí được chia
-thành các chỉ số đo lường được với mục tiêu tường minh, được xác định trước khi đo. Tám kịch
-bản đánh giá KB01--KB08 (Bảng~\ref{tab:brs}) là sợi chỉ xuyên suốt: mỗi kịch bản là một lần
-chạy được viết thành script, với một đầu vào, một kết quả mong đợi được viết trước khi nạp,
-và một lần đối soát với nguồn.
-
 \subsection{Tiêu chí 1: Độ đúng của dữ liệu}
-Các chỉ số về độ đúng tuân theo các đặc tính của ISO/IEC 25012 \cite{iso25012}
-(Bảng~\ref{tab:correctness-criteria}). Mọi kết quả đều được kiểm tra với một căn cứ độc lập
-với kho dữ liệu: các tệp nguồn, được tính lại bằng một chương trình riêng; kết quả mong đợi
-của kịch bản; hoặc kho vận hành.
+Độ đúng tuân theo ISO/IEC 25012 \cite{iso25012} (Bảng~\ref{tab:correctness-criteria}). Mọi
+kết quả đều được kiểm tra với một căn cứ độc lập với kho dữ liệu: nguồn được tính lại bằng
+một chương trình riêng, kết quả mong đợi của kịch bản, hoặc kho vận hành.
 
-\begin{table*}[!t]
+\begin{table}[!t]
 \centering
 \caption{Các chỉ số và mục tiêu về độ đúng của dữ liệu}
 \label{tab:correctness-criteria}
-\small
-\begin{tabular}{L{2.4cm} L{8.6cm} L{3.6cm}}
+\footnotesize
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{L{1.85cm} L{3.9cm} L{1.5cm}}
 \toprule
 \textbf{Đặc tính} & \textbf{Chỉ số} & \textbf{Mục tiêu} \\
 \midrule
-Tính chính xác & Số giao dịch, tiền vào và tiền ra theo kỳ và theo hạng: kho dữ liệu so với nguồn (KB01) & Bằng nhau đến từng xu \\
-Tính chính xác & Các giao dịch của một tài khoản (id, số tiền, chiều): kho dữ liệu so với nguồn (KB02) & Bằng nhau, từng dòng một \\
+Tính chính xác & Số lượng và số tiền theo kỳ và theo hạng so với nguồn (KB01); các giao dịch của một tài khoản so với nguồn (KB02) & Bằng nhau đến từng xu; từng dòng một \\
 Tính đầy đủ & Dòng fact thiếu khóa hoặc số tiền & 0 \\
-Tính duy nhất & Id giao dịch trùng lặp, kể cả sau khi chạy lại & 0 \\
-Tính nhất quán & Dòng fact hoặc tài khoản có khóa ngoại không có dòng dimension tương ứng (5 quan hệ) & 0 \\
-Tính nhất quán & SCD2: mỗi khách hàng có đúng một phiên bản hiện hành; các phiên bản không chồng lấn hay đứt quãng; mọi dòng fact trỏ đến phiên bản có hiệu lực vào ngày của nó & 0 vi phạm \\
-Tính nhất quán & Kết quả kịch bản (cảnh báo, bản ghi bị tách, khôi phục, báo cáo theo hạng) so với mong đợi (KB03--KB08) & Tất cả bằng nhau \\
-Tính nhất quán & Kết quả truy vấn của các BR giống hệt nhau trên cả ba giải pháp kho dữ liệu & 18 / 18 phép so sánh \\
+Tính duy nhất & Giao dịch trùng lặp, kể cả sau khi chạy lại & 0 \\
+Tính nhất quán & Khóa mồ côi; SCD2 chồng lấn, đứt quãng, sai phiên bản & 0 \\
+Tính nhất quán & Kịch bản KB03--KB08 so với mong đợi & Tất cả bằng nhau \\
+Tính nhất quán & Kết quả truy vấn giống nhau trên mọi giải pháp & Tất cả bằng nhau \\
 \bottomrule
 \end{tabular}
-\end{table*}
+\end{table}
 
 \subsection{Tiêu chí 2: Hiệu năng}
-Hiệu năng được đánh giá bằng: (i) độ trễ của từng truy vấn BR, dưới dạng trung vị (median)
-và phân vị thứ 95 của các lần chạy nóng, cùng với lần chạy lạnh; (ii) thông lượng và độ trễ
-với 1, 4 và 8 người dùng đồng thời; (iii) dung lượng lưu trữ và thời gian nạp; (iv) chi phí
-chỉnh sửa một thuộc tính Type~1; (v) độ trễ của tải vận hành (xử lý cảnh báo, ghi nhật ký
-lần chạy) và các bảo đảm toàn vẹn mà kho tự thực thi; và (vi) thời gian pipeline cho mỗi lô
-và mỗi bước, cùng khả năng mở rộng theo số nhân CPU. Một giải pháp chỉ được coi là tốt hơn ở
-một chỉ số nếu nó không vi phạm Tiêu chí~1.
+Độ trễ truy vấn (trung vị và phân vị thứ 95 của các lần chạy nóng, cùng với lần chạy lạnh),
+thông lượng với nhiều người dùng đồng thời, dung lượng lưu trữ, thời gian nạp, chi phí chỉnh
+sửa một thuộc tính Type~1, độ trễ và tính toàn vẹn của tải vận hành, và thời gian cùng khả
+năng mở rộng của pipeline. Một giải pháp chỉ được coi là tốt hơn ở một chỉ số nếu nó không vi
+phạm Tiêu chí~1.
 
 \subsection{Tiêu chí 3: Hiệu quả khai thác dữ liệu}
-Hiệu quả được đánh giá cho từng BR theo (i) BR có được minh họa trọn vẹn qua ứng dụng hay
-không, (ii) số thao tác người dùng cần để có câu trả lời, và (iii) thời gian để có câu trả
-lời.
+Mỗi BR có được minh họa trọn vẹn trong ứng dụng hay không, số thao tác, và thời gian để có
+câu trả lời.
 
 \subsection{Giả thuyết}
 \begin{itemize}
-  \item \textbf{H1.} ClickHouse trả lời các truy vấn tổng hợp của BR01, BR03 và BR08 nhanh
-        hơn PostgreSQL với cùng schema, và lưu dữ liệu với dung lượng nhỏ hơn.
-  \item \textbf{H2.} Với các truy vấn tra cứu một tài khoản hoặc một khách hàng (BR02, các
-        phiên bản khách hàng của BR08), chỉ mục B-tree của PostgreSQL thu hẹp hoặc đảo
-        ngược khoảng cách.
-  \item \textbf{H3.} Thời gian của một lô bị chi phối bởi chi phí cố định hơn là bởi số giao
-        dịch trong lô.
-  \item \textbf{H4.} One Big Table trả lời truy vấn nhanh hơn star schema một chút, nhưng
-        cần nhiều dung lượng hơn và khiến chỉnh sửa Type~1 tốn kém hơn nhiều.
-  \item \textbf{H5.} Một kho vận hành quan hệ riêng biệt nhanh hơn với tải vận hành và thực
+  \item \textbf{H1.} ClickHouse trả lời các truy vấn tổng hợp nhanh hơn PostgreSQL với cùng
+        schema, với dung lượng nhỏ hơn.
+  \item \textbf{H2.} Với các truy vấn tra cứu một tài khoản hoặc một khách hàng, chỉ mục của
+        PostgreSQL thu hẹp hoặc đảo ngược khoảng cách.
+  \item \textbf{H3.} Thời gian của một lô bị chi phối bởi chi phí cố định hơn là bởi kích
+        thước của lô.
+  \item \textbf{H4.} One Big Table nhanh hơn một chút nhưng khiến chỉnh sửa tốn kém hơn
+        nhiều.
+  \item \textbf{H5.} Một kho vận hành quan hệ riêng biệt nhanh hơn với tải của nó và thực
         thi được các bảo đảm mà cơ sở dữ liệu cột không thể thực thi.
 \end{itemize}
 
@@ -901,12 +590,10 @@ lời.
 \label{sec:method}
 
 \subsection{Môi trường}
-Mọi thí nghiệm được chạy trên một máy (Apple M3 Pro, 11 nhân CPU, 18 GB RAM) với Docker
-Desktop 28.3.3, có máy ảo được cấp 11 vCPU và 7,65 GiB RAM. Trong thời gian chạy benchmark
-chỉ có bốn container của đề tài đang chạy. Mỗi dịch vụ chạy với một giới hạn bộ nhớ cố định
-(Bảng~\ref{tab:env}). Để nằm trong giới hạn, bộ đệm của ClickHouse được giới hạn (mark cache
-256~MiB, không dùng uncompressed cache) và các nhật ký hệ thống chạy nền của nó bị tắt, nhờ
-đó bộ nhớ khi rảnh giảm từ 1,2 xuống 0,74~GB.
+Mọi thí nghiệm được chạy trên một máy (Apple M3 Pro, 11 lõi, 18~GB RAM) với Docker Desktop
+28.3.3, được cấp 11 vCPU và 7,65~GiB; chỉ có các container của đề tài này đang chạy, mỗi
+container với một giới hạn bộ nhớ (Bảng~\ref{tab:env}). Bộ đệm của ClickHouse được giới hạn
+và các nhật ký hệ thống chạy nền của nó bị tắt để nằm trong giới hạn.
 
 \begin{table}[!t]
 \centering
@@ -914,142 +601,89 @@ chỉ có bốn container của đề tài đang chạy. Mỗi dịch vụ chạ
 \label{tab:env}
 \footnotesize
 \setlength{\tabcolsep}{4pt}
-\begin{tabular}{L{3.6cm} L{2.0cm} L{1.6cm}}
+\begin{tabular}{L{3.8cm} L{1.8cm} L{1.4cm}}
 \toprule
-\textbf{Thành phần} & \textbf{Phiên bản} & \textbf{Giới hạn bộ nhớ} \\
+\textbf{Thành phần} & \textbf{Phiên bản} & \textbf{Bộ nhớ} \\
 \midrule
-Apache Spark (chế độ local, PySpark, Python 3.8) & 3.5.6 & 3 GB \\
+Apache Spark (local, PySpark) & 3.5.6 & 3 GB \\
 ClickHouse (D) & 25.3.14.14 & 2,5 GB \\
-PostgreSQL (E, và phương án thay thế cho D) & 16.4 & 1 GB \\
+PostgreSQL (E; phương án thay thế cho D) & 16.4 & 1 GB \\
 Streamlit (F) & 1.40.2 & 0,5 GB \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-\subsection{Khảo sát dữ liệu}
-Các tệp nguồn được khảo sát bằng DuckDB: số dòng, số giá trị phân biệt, phân phối giá trị,
-kiểm tra miền giá trị và kiểm tra khóa giữa các tệp. Kết quả được trình bày ở
-Mục~\ref{sec:problem}, kèm so sánh với khảo sát trước đó của nhóm về bộ dữ liệu.
-
-\subsection{Kịch bản đánh giá}
-Dữ liệu lịch sử được nạp trước (một lô tham chiếu và 72 lô theo tháng). Sau đó các tệp kịch
-bản được sinh bởi một script tất định, cùng với kết quả mong đợi của chúng, trước khi bất kỳ
-tệp nào được nạp:
-\begin{itemize}
-  \item \textbf{KB03:} năm giao dịch được tạo ra để kích hoạt các quy tắc cảnh báo: ba tài
-        khoản rút 60.000~CZK vào tháng 2/1999 (R1) và hai tài khoản rút tiền sau 196 ngày
-        không hoạt động (R2).
-  \item \textbf{KB05:} 20 giao dịch, trong đó 10 giao dịch hợp lệ và 10 giao dịch mỗi giao
-        dịch vi phạm một quy tắc (V1 2, V2 1, V3 2, V4 2, V5 1, V6 2).
-  \item \textbf{KB07:} kho dữ liệu được sao lưu, 20 giao dịch gửi tiền được nạp, sau đó kho
-        dữ liệu được khôi phục.
-  \item \textbf{KB08:} 618 lần đổi hạng có hiệu lực từ 1999-01-01 và 1.236 giao dịch tháng
-        1/1999 của các chủ sở hữu đó.
-\end{itemize}
-KB01, KB02, KB04 và KB06 dùng dữ liệu đã nạp, các cảnh báo của KB03 và các lần chạy đã có
-(bao gồm một lần chạy thực sự bị lỗi trong quá trình phát triển).
-
-\subsection{Kiểm tra độ đúng của dữ liệu}
-Một chương trình đánh giá tính lại nguồn một cách độc lập: nó đọc tệp Berka và các tệp kịch
-bản bằng pandas, gán cho mỗi giao dịch chủ sở hữu từ \tbl{disp} và hạng từ các tệp hạng theo
-ngày, rồi so sánh kết quả với kho dữ liệu theo đơn vị xu (số nguyên). Sau đó nó so sánh mỗi
-kịch bản với kết quả mong đợi và với kho vận hành, và chạy các phép kiểm tra chất lượng dữ
-liệu trong Bảng~\ref{tab:correctness-criteria}. KB04 được thực thi trong một giao dịch cơ
-sở dữ liệu và được hoàn tác (rollback), nên việc đánh giá không để lại dấu vết. Chương trình
-chỉ đọc kho dữ liệu.
+\subsection{Kịch bản đánh giá và kiểm tra độ đúng}
+Nguồn được khảo sát bằng DuckDB, và dữ liệu lịch sử (một lô tham chiếu và 72 lô theo tháng)
+được nạp. Bốn lô kịch bản được sinh ra, cùng với kết quả mong đợi của chúng, trước khi bất
+kỳ lô nào được nạp: \textbf{KB03}, năm giao dịch được tạo ra để kích hoạt R1 (ba tài khoản)
+và R2 (hai tài khoản); \textbf{KB05}, 20 giao dịch, trong đó 10 giao dịch mỗi giao dịch vi
+phạm một quy tắc; \textbf{KB07}, một lần sao lưu, một lần nạp 20 giao dịch gửi tiền, và một
+lần khôi phục; \textbf{KB08}, 618 lần đổi hạng và 1.236 giao dịch tháng 1/1999. Một chương
+trình đánh giá tính lại nguồn một cách độc lập bằng pandas---chủ sở hữu từ \tbl{disp}, hạng
+từ các tệp hạng theo ngày---và so sánh với kho dữ liệu theo đơn vị xu (số nguyên); sau đó nó
+so sánh mỗi kịch bản với kết quả mong đợi và với kho vận hành, và chạy các phép kiểm tra
+trong Bảng~\ref{tab:correctness-criteria}. KB04 được thực thi trong một giao dịch cơ sở dữ
+liệu và được hoàn tác (rollback).
 
 \subsection{Thiết kế benchmark}
-Benchmark tuân theo phương pháp luận của TPC \cite{tpch,tpcds}, với tải là các truy vấn thực
-tế của ứng dụng. Bốn phép so sánh được thực hiện, mỗi phép chỉ thay đổi một yếu tố
-(Bảng~\ref{tab:bench}). Ba giải pháp kho dữ liệu được nạp từ cùng một bản xuất CSV của kho
-dữ liệu và chứa cùng 1.057.571 dòng fact; mọi phép thử ghi đều chạy trên các bản sao này,
-không bao giờ trên kho dữ liệu hay kho vận hành. Chín truy vấn bao phủ BR01 (bốn), BR02
-(hai), BR03 (quy tắc R1 trên toàn bộ lịch sử, với kết quả là 1.698 cặp tài khoản--tháng, bằng
-số cảnh báo R1), và BR08 (hai). Mỗi truy vấn được chạy sáu lần trên mỗi giải pháp: lần chạy
-đầu tiên (lần chạy lạnh) được ghi nhận riêng, với bộ đệm ClickHouse được xóa trước đó, và
-trung vị cùng phân vị thứ 95 của năm lần chạy còn lại (lần chạy nóng) được báo cáo. Thời
-gian được đo phía client và bao gồm cả việc truyền kết quả, và các tập kết quả được so sánh
-từng dòng với tập kết quả của giải pháp đề xuất. Để đo tính đồng thời, 1, 4 hoặc 8 client
-lặp lại một tổ hợp gồm một truy vấn cho mỗi nhóm người dùng (BR01 theo hạng, BR02 cho một
-tài khoản ngẫu nhiên, BR08 theo hạng) trong 15~s. Tải vận hành (B3) được thực thi từng lời
-gọi một, như ứng dụng và pipeline vẫn làm: 200 lần đổi trạng thái, 200 bước được ghi nhật ký,
-và 50 lần đọc mỗi loại. Với B4, mỗi cấu hình chạy trong một Spark JVM mới, và thời gian khởi
-động session được báo cáo riêng.
+Bốn phép so sánh được thực hiện, mỗi phép chỉ thay đổi một yếu tố (Bảng~\ref{tab:bench}). Ba
+giải pháp kho dữ liệu được nạp từ cùng một bản xuất (1.057.571 dòng fact), và mọi phép thử
+ghi đều chạy trên các bản sao. Chín truy vấn lấy từ ứng dụng bao phủ BR01, BR02, BR03 (quy
+tắc R1 trên toàn bộ lịch sử) và BR08. Mỗi truy vấn được chạy sáu lần trên mỗi giải pháp: lần
+đầu tiên (lần chạy lạnh) sau khi xóa bộ đệm ClickHouse, sau đó là trung vị và phân vị thứ 95
+của năm lần chạy nóng. Thời gian bao gồm cả việc truyền kết quả, và kết quả của các phương án
+thay thế được so sánh từng dòng với giải pháp đề xuất. Để đo tính đồng thời, 1, 4 và 8 client
+chạy trong 15~s một tổ hợp gồm một truy vấn cho mỗi nhóm người dùng. PostgreSQL có khóa chính
+và khóa ngoại, chỉ mục, thống kê, 256~MB shared buffers và 64~MB bộ nhớ làm việc. B1, B2 và B4
+được lặp lại trên một bản sao $\times$10 nhân bản mọi tài khoản, khách hàng và giao dịch với
+các khóa mới (10.575.710 dòng fact, đã được kiểm tra là đúng bằng mười lần $\times$1), giống
+như các benchmark kiểu TPC \cite{tpch,tpcds} sinh dữ liệu theo hệ số quy mô; dữ liệu vận hành
+của B3 không tăng theo kho dữ liệu. Hai cách viết truy vấn tra cứu tài khoản---lọc theo
+\tbl{account\_id} sau phép nối, hoặc lọc bảng fact theo \tbl{account\_sk} trước---cũng được so
+sánh ở cả hai quy mô, kèm số dòng được đọc lấy từ nhật ký truy vấn của ClickHouse; các truy
+vấn tra cứu của ứng dụng trên kho dữ liệu cũng được đo như vậy, ở dạng ban đầu và dạng cuối
+cùng.
 
-B1, B2 và B4 được lặp lại ở quy mô $\times$10. Vì Berka không có thêm dữ liệu, bản sao
-$\times$10 nhân bản mọi tài khoản, khách hàng và giao dịch mười lần với các khóa mới, giữ
-nguyên ngày, số tiền, hạng và lịch sử SCD2, giống như các benchmark kiểu TPC sinh dữ liệu
-theo hệ số quy mô. Bản sao này chứa 10.575.710 dòng fact, và số dòng, tổng số tiền, số tài
-khoản và số khách hàng của nó đã được kiểm tra là đúng bằng mười lần các giá trị ở
-$\times$1. Bản sao nằm trong các cơ sở dữ liệu riêng, nên bản thân kho dữ liệu vẫn ở
-$\times$1. B3 không được lặp lại, vì dữ liệu vận hành không tăng theo kho dữ liệu.
-
-Ở cả hai quy mô còn so sánh hai cách viết truy vấn tra cứu tài khoản (BR02): nối dimension
-tài khoản rồi lọc theo \tbl{account\_id}, và lọc bảng fact theo \tbl{account\_sk} trước.
-Với mỗi cách, thời gian và số dòng được đọc (lấy từ nhật ký truy vấn của ClickHouse) được
-ghi lại. Các truy vấn tra cứu của ứng dụng (BR02 và khung nhìn theo khách hàng của BR08)
-được đo theo cùng cách trên chính kho dữ liệu, ở dạng ban đầu và dạng cuối cùng.
-
-\begin{table*}[!t]
+\begin{table}[!t]
 \centering
 \caption{Thiết kế benchmark}
 \label{tab:bench}
-\small
-\begin{tabular}{l L{4.2cm} L{2.6cm} L{3.6cm} L{4.6cm}}
+\footnotesize
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{l L{2.5cm} L{1.7cm} L{2.9cm}}
 \toprule
-\textbf{Mã} & \textbf{Phép so sánh} & \textbf{Cố định} & \textbf{Câu hỏi} & \textbf{Chỉ số} \\
+\textbf{Mã} & \textbf{Phép so sánh} & \textbf{Cố định} & \textbf{Chỉ số} \\
 \midrule
-B1 & Star schema so với One Big Table & ClickHouse & Mô hình hóa Kimball có đáng với chi phí phép nối không? & Độ trễ; tính đồng thời; dung lượng; thời gian nạp; chi phí chỉnh sửa Type~1 \\
-B2 & ClickHouse so với PostgreSQL & Star schema & Cơ sở dữ liệu cột có mang lại lợi ích không? & Độ trễ; tính đồng thời; dung lượng; thời gian nạp \\
-B3 & Kho vận hành trong PostgreSQL so với trong ClickHouse & Cảnh báo và tải & Có cần một kho vận hành riêng không? & Độ trễ của đổi trạng thái, ghi nhật ký lần chạy, đọc; bảo đảm toàn vẹn \\
-B4 & Spark với 1/2/4/8 nhân; một lô so với 72 lô theo tháng & Phép biến đổi & Pipeline có mở rộng được không, và chia lô tốn bao nhiêu? & Thời gian biến đổi; số dòng mỗi giây \\
+B1 & Star schema so với One Big Table & ClickHouse & Độ trễ, tính đồng thời, dung lượng, chi phí chỉnh sửa \\
+B2 & ClickHouse so với PostgreSQL & Star schema & Độ trễ, tính đồng thời, dung lượng, thời gian nạp \\
+B3 & Kho vận hành trong PostgreSQL so với ClickHouse & Tải & Độ trễ; bảo đảm toàn vẹn \\
+B4 & Spark 1/2/4/8 lõi; 1 so với 72 lô & Phép biến đổi & Thời gian; số dòng mỗi giây \\
 \bottomrule
 \end{tabular}
-\end{table*}
+\end{table}
 
 \subsection{Đánh giá hiệu quả}
-Mỗi BR được minh họa qua khung nhìn tương ứng của ứng dụng. Để đo công sức của người dùng,
-một script (\texttt{tools/ui\_walkthrough.py}) điều khiển ứng dụng trong một trình duyệt
-Chrome không giao diện (1440$\times$900 điểm ảnh) theo một luồng cho mỗi BR, như một người
-dùng sẽ làm: mở một tab, nhập một tài khoản, chọn một cảnh báo, gửi một biểu mẫu, hoặc chạy
-một kịch bản. Với mỗi luồng, script đếm số thao tác và đo thời gian để có câu trả lời, từ
-thao tác cuối cùng đến khi ứng dụng chạy lại xong và kết quả hiển thị trên màn hình. Việc
-chuyển tab không làm ứng dụng chạy lại, vì mọi tab đều đã được hiển thị sẵn, nên các câu trả
-lời như vậy xuất hiện ngay lập tức. Thay đổi trạng thái do BR04 ghi vào đã được xóa sau đó.
+Một script (\texttt{tools/ui\_walkthrough.py}) điều khiển ứng dụng trong Chrome không giao
+diện (1440$\times$900) theo một luồng cho mỗi BR, đếm số thao tác và đo thời gian để có câu
+trả lời, từ thao tác cuối cùng đến khi kết quả hiển thị trên màn hình.
 
 
 %% =====================================================================
 \section{Phân tích và diễn giải}
 \label{sec:analysis}
-% Template guidance: interpret results against the criteria of Section IV only; do not
-% introduce new methods or solutions here; use hedged language unless the evidence is
-% conclusive (e.g., "it appears that...", "the results suggest that...",
-% "it can be tentatively concluded that...").
 
 \subsection{Độ đúng của dữ liệu}
 Cả tám kịch bản đều đạt, với 38/38 phép kiểm tra (Bảng~\ref{tab:correctness-results}). Với
-mọi kỳ, số giao dịch, tiền vào và tiền ra trong kho dữ liệu bằng với nguồn được tính lại đến
-từng xu, kể cả khi chia theo hạng thành viên và khi đếm số khách hàng phân biệt. Trên toàn
-bộ lịch sử, kho dữ liệu chứa 1.056.320 giao dịch Berka với tiền vào 3.227.472.424,50~CZK và
-tiền ra 3.030.321.135,80~CZK, đúng như nguồn, cộng thêm 1.251 giao dịch kịch bản cần được
-giữ lại sau lần khôi phục của KB07. Với 23 tài khoản (ba tài khoản được các kịch bản sử dụng
-và 20 tài khoản chọn ngẫu nhiên), mọi giao dịch đều khớp với nguồn về id, số tiền và chiều.
-
-Các kịch bản hoạt động đúng như đặc tả. KB03 sinh ra đúng năm cảnh báo mong đợi, và căn cứ
-của chúng khớp với các số liệu mong đợi; KB03 đã được chạy sáu lần và vẫn chỉ có năm cảnh
-báo. KB05 nạp 10 giao dịch hợp lệ và tách riêng 10 giao dịch lỗi, mỗi giao dịch theo đúng
-quy tắc mong đợi, và lô kết thúc với trạng thái \texttt{SUCCEEDED\_WITH\_REJECTS} thay vì
-thất bại. Lần khôi phục của KB07 đưa kho dữ liệu về đúng bản sao lưu trên cả năm nhóm số
-liệu (số dòng, tiền vào, tiền ra, báo cáo theo hạng, các phiên bản SCD). KB08 tạo ra 5.118
-phiên bản khách hàng (4.500 hiện hành, 618 đã đóng); báo cáo tháng 1/1999 theo hạng mới bằng
-các số liệu mong đợi, và báo cáo theo hạng giai đoạn 1993--1998 vẫn bằng nguồn được tính với
-các hạng ban đầu---việc đổi hạng không ghi lại lịch sử.
-
-Quá trình đánh giá cũng phát hiện hai lỗi, cả hai đều nằm ngoài kho dữ liệu. Giá trị trung
-bình mong đợi của KB03 đã được tính trên giai đoạn tháng 7--tháng 12/1998, trong khi quy tắc
-R1 cho tháng 2/1999 dùng sáu tháng liền trước, tức tháng 8/1998--tháng 1/1999. Kho dữ liệu
-đúng; bộ sinh dữ liệu đã được sửa và chạy lại, và các tệp giao dịch của nó không thay đổi.
-Thứ hai, một bước của pipeline không ghi lại số bản ghi đầu vào; hiện nay bước này đã ghi.
+mọi kỳ, số giao dịch, tiền vào và tiền ra bằng với nguồn được tính lại đến từng xu, kể cả khi
+chia theo hạng; trên toàn bộ lịch sử, tiền vào 3.227.472.424,50~CZK và tiền ra
+3.030.321.135,80~CZK khớp chính xác với nguồn. KB03 sinh ra đúng năm cảnh báo mong đợi và
+không thêm cảnh báo nào sau sáu lần chạy; KB05 nạp 10 giao dịch hợp lệ và tách riêng 10 giao
+dịch còn lại theo đúng các quy tắc mong đợi; lần khôi phục của KB07 khớp với bản sao lưu trên
+cả năm nhóm số liệu; và sau KB08, báo cáo theo hạng giai đoạn 1993--1998 vẫn bằng nguồn được
+tính với các hạng ban đầu. Quá trình đánh giá cũng phát hiện hai lỗi nằm ngoài kho dữ
+liệu---một cửa sổ sáu tháng sai trong kết quả mong đợi của KB03 và một số lượng bị thiếu ở một
+bước của pipeline---và cả hai đã được sửa.
 
 \begin{table}[!t]
 \centering
@@ -1061,15 +695,15 @@ Thứ hai, một bước của pipeline không ghi lại số bản ghi đầu v
 \toprule
 \textbf{KB} & \textbf{BR} & \textbf{Phép kiểm tra chính} & \textbf{Đạt} \\
 \midrule
-KB01 & BR01 & 4 kỳ, tổng và theo hạng, bằng nguồn đến từng xu & 8/8 \\
-KB02 & BR02 & 23 tài khoản bằng nguồn từng giao dịch một & 2/2 \\
-KB03 & BR03 & 5 cảnh báo mong đợi kèm căn cứ; không trùng sau khi chạy lại & 4/4 \\
-KB04 & BR04 & Chuyển trạng thái hợp lệ được ghi kèm ghi chú; chuyển không hợp lệ bị từ chối & 3/3 \\
+KB01 & BR01 & 4 kỳ, tổng và theo hạng, bằng nguồn & 8/8 \\
+KB02 & BR02 & 23 tài khoản bằng nguồn từng dòng một & 2/2 \\
+KB03 & BR03 & 5 cảnh báo mong đợi; không trùng sau khi chạy lại & 4/4 \\
+KB04 & BR04 & Chuyển trạng thái hợp lệ được ghi; chuyển không hợp lệ bị từ chối & 3/3 \\
 KB05 & BR05 & 10 được nạp, 10 bị tách theo đúng quy tắc mong đợi & 3/3 \\
-KB06 & BR06 & Mọi lần chạy đều có các bước; xác định được bước lỗi và nguyên nhân & 4/4 \\
+KB06 & BR06 & Lần chạy có các bước; xác định được bước lỗi và nguyên nhân & 4/4 \\
 KB07 & BR07 & Khôi phục bằng bản sao lưu trên 5 nhóm số liệu & 3/3 \\
-KB08 & BR08 & Số lượng SCD2; kỳ mới theo hạng mới; kỳ cũ không đổi & 4/4 \\
-DQ & --- & Tính duy nhất, tính đầy đủ, 0 bản ghi mồ côi, tính nhất quán SCD2 & 7/7 \\
+KB08 & BR08 & Số lượng SCD2; kỳ cũ không đổi & 4/4 \\
+DQ & --- & Tính duy nhất, tính đầy đủ, khóa, SCD2 & 7/7 \\
 \midrule
 \multicolumn{3}{l}{\textbf{Tổng}} & \textbf{38/38} \\
 \bottomrule
@@ -1077,8 +711,8 @@ DQ & --- & Tính duy nhất, tính đầy đủ, 0 bản ghi mồ côi, tính nh
 \end{table}
 
 \subsection{Hiệu năng}
-Bảng~\ref{tab:results} trình bày độ trễ truy vấn. Cả 18 phép so sánh tập kết quả (hai
-phương án thay thế $\times$ chín truy vấn) đều khớp từng dòng.
+Bảng~\ref{tab:results} trình bày độ trễ ở quy mô $\times$1; cả 18 phép so sánh kết quả đều
+khớp từng dòng.
 
 \begin{table*}[!t]
 \centering
@@ -1104,196 +738,103 @@ BR08 & Các phiên bản của một khách hàng & 2 & 18,3 (21,5) & 5,4 (5,6) 
 
 \begin{table}[!t]
 \centering
-\caption{Dung lượng, thời gian nạp và chi phí chỉnh sửa Type~1}
-\label{tab:storage}
-\footnotesize
-\setlength{\tabcolsep}{3pt}
-\begin{tabular}{L{3.4cm} r r r}
-\toprule
- & \textbf{Star, CH} & \textbf{OBT, CH} & \textbf{Star, PG} \\
-\midrule
-Dung lượng (MB) & 18,6 & 25,5 & 162,5 \\
-Nạp từ CSV (s) & 0,96 & +1,35 & 4,64 \\
-Đổi tên một khu vực: số dòng được ghi & 1 & 150.058 & 1 \\
-\quad thời gian (ms) & 6,0 & 99,3 & 4,1 \\
-Sửa một ngày sinh: số dòng được ghi & 2 & 330 & 2 \\
-\quad thời gian (ms) & 8,0 & 42,6 & 1,9 \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-\begin{table}[!t]
-\centering
-\caption{Người dùng đồng thời: số truy vấn mỗi giây và độ trễ p95 (ms)}
-\label{tab:concurrency}
-\footnotesize
-\setlength{\tabcolsep}{3pt}
-\begin{tabular}{l r r r r r r}
-\toprule
- & \multicolumn{2}{c}{\textbf{1 client}} & \multicolumn{2}{c}{\textbf{4 client}} & \multicolumn{2}{c}{\textbf{8 client}} \\
-\cmidrule(lr){2-3}\cmidrule(lr){4-5}\cmidrule(lr){6-7}
- & q/s & p95 & q/s & p95 & q/s & p95 \\
-\midrule
-Star, CH & 52,1 & 34,8 & 82,0 & 90,9 & 93,2 & 148,1 \\
-OBT, CH & 91,3 & 24,1 & 215,8 & 38,4 & 251,2 & 66,2 \\
-Star, PG & 4,4 & 454,1 & 12,2 & 835,7 & 12,4 & 1.933,5 \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-\begin{table}[!t]
-\centering
-\caption{Kho vận hành (B3): độ trễ trung vị mỗi lời gọi (ms) và tính toàn vẹn}
-\label{tab:ops}
-\footnotesize
-\setlength{\tabcolsep}{3pt}
-\begin{tabular}{L{4.1cm} r r}
-\toprule
-\textbf{Tải} & \textbf{PostgreSQL} & \textbf{ClickHouse} \\
-\midrule
-Đổi trạng thái cảnh báo + lịch sử (dòng phiên bản) & 0,19 & 5,92 \\
-Đổi trạng thái cảnh báo + lịch sử (mutation) & 0,17 & 11,91 \\
-Ghi nhật ký một bước pipeline (bắt đầu + kết thúc) & 0,32 & 2,46 \\
-Liệt kê 50 cảnh báo mới nhất & 0,11 & 2,61 \\
-Một cảnh báo kèm lịch sử & 0,06 & 3,26 \\
-\midrule
-Từ chối trạng thái không hợp lệ & có & không \\
-Từ chối chuyển trạng thái không hợp lệ & có & không \\
-Từ chối cảnh báo trùng & có & không \\
-Từ chối lịch sử của cảnh báo không tồn tại & có & không \\
-Trạng thái và lịch sử thay đổi nguyên tử & có & không \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-\begin{table}[!t]
-\centering
-\caption{Thời gian pipeline: phép biến đổi Spark trên toàn bộ lịch sử (B4) và pipeline thực tế}
-\label{tab:pipeline}
-\footnotesize
-\setlength{\tabcolsep}{4pt}
-\begin{tabular}{l r r r r}
-\toprule
-\textbf{Số nhân} & 1 & 2 & 4 & 8 \\
-\midrule
-Một lô (s) & 7,7 & 6,0 & 5,4 & 5,4 \\
-72 lô theo tháng (s) & 30,6 & 32,5 & 31,8 & 29,6 \\
-\midrule
-\multicolumn{5}{l}{Pipeline thực tế, mỗi lô theo tháng: trung vị 3,4 s, p95 5,3 s} \\
-\multicolumn{5}{l}{\quad 72 lô: 273,5 s} \\
-\multicolumn{5}{l}{\quad các bước lớn nhất: nạp fact 1,42 s, kiểm tra 0,85 s} \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-\textbf{Công nghệ kho dữ liệu (B2).} Kết quả có vẻ ủng hộ H1. Trên sáu truy vấn tổng hợp,
-ClickHouse nhanh hơn từ 3,3 đến 22 lần, và khoảng cách tăng theo khối lượng công việc của
-truy vấn: nhỏ nhất với một phép cộng tổng đơn giản trên một năm và lớn nhất khi truy vấn còn
-nối với dimension khách hàng và đếm số khách hàng phân biệt (BR01 theo hạng, BR08) hoặc áp
-dụng một hàm cửa sổ cho từng tài khoản (BR03). ClickHouse lưu dữ liệu với dung lượng nhỏ hơn
-8,7 lần (Bảng~\ref{tab:storage}) và, với tám người dùng đồng thời, phục vụ 93 truy vấn mỗi
-giây so với 12 của PostgreSQL, khi độ trễ p95 của PostgreSQL tăng lên gần 2~s
-(Bảng~\ref{tab:concurrency}). H2 được ủng hộ mạnh hơn dự kiến: với ba truy vấn tra cứu một
-tài khoản hoặc một khách hàng, PostgreSQL nhanh hơn 17 đến 46 lần, trả lời trong khoảng
-1~ms nhờ các chỉ mục. Trong ClickHouse các truy vấn này tốn 6--18~ms. Như phép đo ở quy mô
-$\times$10 dưới đây cho thấy, nguyên nhân nằm ở cách viết truy vấn: khi điều kiện lọc đặt
-trên một cột của dimension, ClickHouse không dùng được khóa sắp xếp của bảng fact và phải
-đọc toàn bộ bảng trước khi nối.
-
-\textbf{Mô hình dữ liệu (B1).} H4 có vẻ đúng. One Big Table nhanh hơn star schema từ 1,5
-đến 3,4 lần, nhưng chênh lệch tuyệt đối chỉ là 3--16~ms, và nó cần dung lượng lớn hơn 1,37
-lần (gấp đôi trước khi nén). Điểm yếu của nó là khi có thay đổi: đổi tên một khu vực phải ghi
-lại 150.058 dòng fact trong 99~ms thay vì một dòng dimension, và sửa ngày sinh của một khách
-hàng phải ghi lại 330 dòng thay vì hai. Các con số này tăng theo dữ liệu, còn của star
-schema thì không.
-
-\textbf{Kho vận hành (B3).} H5 có vẻ đúng (Bảng~\ref{tab:ops}). PostgreSQL nhanh hơn 8 đến
-70 lần trên mọi lời gọi mà ứng dụng và pipeline thực hiện, vì mỗi lời gọi chỉ chạm đến một
-dòng, đúng loại tải mà một cơ sở dữ liệu lưu theo dòng có chỉ mục được thiết kế để phục vụ.
-Trong ClickHouse, 400 lệnh chèn nhỏ tạo ra 400 data part, kiểu ghi mà ClickHouse khuyến cáo
-tránh, và một mutation không thể thay đổi cột phiên bản của một \texttt{ReplacingMergeTree}.
-Quan trọng hơn, PostgreSQL thực thi cả năm bảo đảm mà BR03 và BR04 dựa vào, trong khi
-ClickHouse chấp nhận mọi vi phạm: một trạng thái không hợp lệ, một chuyển trạng thái không
-hợp lệ, một cảnh báo trùng, lịch sử của một cảnh báo không tồn tại, và một thay đổi trạng
-thái mà bản ghi lịch sử của nó bị lỗi.
-
-\textbf{Pipeline (B4).} H3 có vẻ đúng (Bảng~\ref{tab:pipeline}). Biến đổi toàn bộ lịch sử
-trong một lô mất 5,4--7,7~s, và thêm nhân vượt quá hai hầu như không giúp ích, vì với
-khoảng một triệu dòng, job bị chi phối bởi chi phí cố định (lập kế hoạch, lập lịch tác vụ,
-tệp nhỏ). Chia cùng khối lượng công việc thành 72 lô theo tháng mất thời gian lâu hơn 4 đến
-6 lần vì cùng lý do đó. Pipeline thực tế cần trung vị 3,4~s cho mỗi lô theo tháng, trong đó
-nạp fact (1,42~s) và kiểm tra (0,85~s) là các bước lớn nhất.
-
-\textbf{Quy mô $\times$10.} Bảng~\ref{tab:scale} so sánh hai quy mô. Trên các truy vấn tổng
-hợp, ClickHouse chậm đi 2--6 lần khi dữ liệu tăng mười lần, nhưng PostgreSQL chậm đi 4--10
-lần, nên khoảng cách nới rộng từ 3--22 lên 7--28 lần; với tám người dùng đồng thời,
-PostgreSQL chỉ phục vụ được 0,4 truy vấn mỗi giây, với độ trễ p95 là 38~s. Tra cứu một tài
-khoản vẫn dưới 1~ms trên PostgreSQL và trên One Big Table, nhưng tăng từ 17 lên 54~ms trên
-star schema trong ClickHouse. So sánh hai cách viết truy vấn cho thấy lý do: khi điều kiện
-lọc đặt trên một cột của dimension (\tbl{account\_id}), ClickHouse đã đọc toàn bộ bảng fact
-(10,6 triệu dòng) trước khi nối, còn lọc bảng fact theo \tbl{account\_sk} trước chỉ đọc
-khoảng 100.000 dòng và mất 6,8~ms ở cả hai quy mô. Sửa một khu vực trên One Big Table phải ghi lại 1.500.580 dòng
-thay vì một. Ở $\times$10, Spark cuối cùng đã hưởng lợi từ việc thêm nhân (một lô: 28,8~s
-trên một nhân, 14,0~s trên tám nhân), trong khi 72 lô theo tháng, mỗi lô khoảng 147.000
-dòng, vẫn không.
-
-\textbf{Truy vấn tra cứu trong ứng dụng.} Trên chính kho dữ liệu, dạng cuối cùng của truy
-vấn tra cứu tài khoản (tài khoản 11, tháng 7/1998--tháng 12/1999) đọc 19.694 dòng thay vì
-162.739 và trả lời trong 4,3~ms thay vì 9,6~ms, với kết quả giống hệt. Khung nhìn theo phiên
-bản của một khách hàng (BR08) giảm từ 14,6 xuống 7,9~ms; truy vấn này vẫn quét cột
-\tbl{customer\_sk} của toàn bộ bảng fact, có vẻ vì cột đó không thuộc khóa sắp xếp.
-
-\begin{table}[!t]
-\centering
-\caption{Quy mô $\times$1 so với $\times$10: trung vị khi chạy nóng (ms) và mức tăng}
+\caption{Quy mô $\times$1 so với $\times$10: trung vị (ms), dung lượng và thông lượng}
 \label{tab:scale}
 \footnotesize
 \setlength{\tabcolsep}{2.5pt}
 \begin{tabular}{L{2.3cm} r r r r r r}
 \toprule
- & \multicolumn{3}{c}{\textbf{Star, CH}} & \multicolumn{3}{c}{\textbf{Star, PG}} \\
-\cmidrule(lr){2-4}\cmidrule(lr){5-7}
-\textbf{Truy vấn} & $\times$1 & $\times$10 & tăng & $\times$1 & $\times$10 & tăng \\
+ & \multicolumn{2}{c}{\textbf{Star, CH}} & \multicolumn{2}{c}{\textbf{OBT, CH}} & \multicolumn{2}{c}{\textbf{Star, PG}} \\
+\cmidrule(lr){2-3}\cmidrule(lr){4-5}\cmidrule(lr){6-7}
+ & $\times$1 & $\times$10 & $\times$1 & $\times$10 & $\times$1 & $\times$10 \\
 \midrule
-BR01 theo tháng & 28,1 & 121,9 & 4,3 & 105,9 & 837,3 & 7,9 \\
-BR01 theo hạng & 14,6 & 47,6 & 3,3 & 323,3 & 1.323,7 & 4,1 \\
-BR03 quy tắc R1 & 45,9 & 199,3 & 4,3 & 1.029,6 & 4.209,2 & 4,1 \\
-BR08 theo hạng & 37,1 & 219,4 & 5,9 & 623,2 & 5.378,4 & 8,6 \\
-BR02 một tài khoản & 17,2 & 53,8 & 3,1 & 1,0 & 0,8 & 0,8 \\
+BR01 theo tháng & 28,1 & 121,9 & 11,8 & 29,8 & 105,9 & 837,3 \\
+BR01 theo hạng & 14,6 & 47,6 & 7,1 & 15,7 & 323,3 & 1.323,7 \\
+BR03 quy tắc R1 & 45,9 & 199,3 & 30,0 & 139,2 & 1.029,6 & 4.209,2 \\
+BR08 theo hạng & 37,1 & 219,4 & 22,5 & 77,8 & 623,2 & 5.378,4 \\
+BR02 một tài khoản & 17,2 & 53,8 & 5,8 & 5,5 & 1,0 & 0,8 \\
 \midrule
-Dung lượng (MB) & 18,6 & 185,5 & 10,0 & 162,5 & 1.612,7 & 9,9 \\
-8 người dùng (q/s) & 93,2 & 9,4 & & 12,4 & 0,4 & \\
+Dung lượng (MB) & 18,6 & 185,5 & 25,5 & 249,4 & 162,5 & 1.612,7 \\
+8 người dùng (truy vấn/s) & 93,2 & 9,4 & 251,2 & 30,7 & 12,4 & 0,4 \\
+Đổi tên một khu vực (dòng) & 1 & 1 & 150.058 & 1.500.580 & 1 & 1 \\
 \bottomrule
 \end{tabular}
 \end{table}
 
+\begin{table}[!t]
+\centering
+\caption{Kho vận hành (B3) và pipeline (B4)}
+\label{tab:ops}
+\footnotesize
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{L{4.3cm} r r}
+\toprule
+\textbf{Tải vận hành, trung vị (ms)} & \textbf{PG} & \textbf{CH} \\
+\midrule
+Đổi trạng thái cảnh báo + lịch sử & 0,19 & 5,92 \\
+Ghi nhật ký một bước pipeline (bắt đầu + kết thúc) & 0,32 & 2,46 \\
+Liệt kê 50 cảnh báo mới nhất & 0,11 & 2,61 \\
+Số quy tắc toàn vẹn được thực thi (trên 5) & 5 & 0 \\
+\midrule
+\textbf{Spark, toàn bộ lịch sử (s)} & \textbf{1 lõi} & \textbf{8 lõi} \\
+\midrule
+$\times$1, một lô / 72 lô & 7,7 / 30,6 & 5,4 / 29,6 \\
+$\times$10, một lô / 72 lô & 28,8 / 51,0 & 14,0 / 57,1 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{Công nghệ kho dữ liệu (B2).} Kết quả có vẻ ủng hộ H1. Trên các truy vấn tổng hợp,
+ClickHouse nhanh hơn PostgreSQL từ 3,3 đến 22 lần, khoảng cách tăng theo khối lượng công việc
+của truy vấn (số khách hàng phân biệt, hàm cửa sổ), và ClickHouse lưu dữ liệu với dung lượng
+nhỏ hơn 8,7 lần. Với tám người dùng đồng thời, nó phục vụ 93 truy vấn mỗi giây so với 12. Ở
+$\times$10, khoảng cách nới rộng lên 7--28 lần: ClickHouse chậm đi 2--6 lần, PostgreSQL chậm
+đi 4--10 lần, và với tám người dùng PostgreSQL chỉ phục vụ được 0,4 truy vấn mỗi giây
+(Bảng~\ref{tab:scale}). H2 được ủng hộ mạnh hơn dự kiến: tra cứu một tài khoản hoặc một khách
+hàng mất khoảng 1~ms trên PostgreSQL so với 6--18~ms trên ClickHouse, và 54~ms ở $\times$10.
+So sánh hai cách viết truy vấn gợi ý lý do: lọc theo \tbl{account\_id} sau phép nối khiến
+ClickHouse đọc toàn bộ bảng fact (10,6 triệu dòng ở $\times$10), còn lọc theo
+\tbl{account\_sk} trước chỉ đọc khoảng 100.000 dòng và mất 6,8~ms ở cả hai quy mô. Trong ứng
+dụng, dạng cuối cùng của truy vấn tra cứu tài khoản đọc 19.694 dòng thay vì 162.739 và trả
+lời trong 4,3 thay vì 9,6~ms.
+
+\textbf{Mô hình dữ liệu (B1).} H4 có vẻ đúng. One Big Table nhanh hơn star schema từ 1,5 đến
+3,4 lần, chênh lệch tuyệt đối chỉ là 3--16~ms, nhưng cần dung lượng lớn hơn 1,37 lần, và đổi
+tên một khu vực phải ghi lại 150.058 dòng fact (1.500.580 ở $\times$10) thay vì một dòng
+dimension.
+
+\textbf{Kho vận hành (B3).} H5 có vẻ đúng (Bảng~\ref{tab:ops}). PostgreSQL nhanh hơn 8 đến
+70 lần trên mọi lời gọi của ứng dụng và pipeline, và từ chối cả năm vi phạm được thử---một
+trạng thái không hợp lệ, một chuyển trạng thái không hợp lệ, một cảnh báo trùng, lịch sử của
+một cảnh báo không tồn tại, và một thay đổi trạng thái mà bản ghi lịch sử của nó bị lỗi---trong
+khi ClickHouse chấp nhận tất cả.
+
+\textbf{Pipeline (B4).} H3 có vẻ đúng. Ở $\times$1, thêm lõi hầu như không giúp ích và 72 lô
+theo tháng mất thời gian lâu hơn 4--6 lần so với một lô, vì chi phí cố định chi phối các job
+khoảng một triệu dòng. Ở $\times$10, một lô chạy nhanh hơn 2,1 lần trên tám lõi so với trên
+một lõi. Pipeline thực tế cần trung vị 3,4~s cho mỗi lô theo tháng.
+
 \subsection{Hiệu quả khai thác dữ liệu}
-Cả tám BR đều được minh họa trọn vẹn trong ứng dụng (Bảng~\ref{tab:br-results},
-Hình~\ref{fig:app-overview}--\ref{fig:app-scenario}). Mỗi câu trả lời cần từ một đến ba
-thao tác. Các câu trả lời làm ứng dụng chạy lại (BR01--BR04) xuất hiện trong vòng
-0,2--0,4~s, và các khung nhìn của tab Vận hành xuất hiện ngay lập tức. Chạy một kịch bản từ
-ứng dụng---chạy lại KB03---mất 10,5~s từ lúc nhấp chuột đến khi có kết quả; lần chạy này được
-ghi nhận là \texttt{triggered\_by = app} và không thêm dòng hay cảnh báo nào, đúng như một
-lần chạy lại phải như vậy. Một lần sao lưu hoặc khôi phục sáu bảng mất dưới 0,5~s trong
-ClickHouse, cộng thêm các truy vấn đối soát của BR07.
+Cả tám BR đều được minh họa trong ứng dụng với một đến ba thao tác
+(Bảng~\ref{tab:br-results}, Hình~\ref{fig:app-overview}--\ref{fig:app-alert}). Các câu trả
+lời làm ứng dụng chạy lại xuất hiện trong vòng 0,2--0,4~s, và các khung nhìn của tab Vận hành
+xuất hiện ngay lập tức. Một lần chạy kịch bản từ ứng dụng (chạy lại KB03) mất 10,5~s và không
+thêm dòng hay cảnh báo nào.
 
 \begin{table*}[!t]
 \centering
-\caption{Minh họa các yêu cầu nghiệp vụ: số thao tác, thời gian để có câu trả lời và ví dụ kết quả}
+\caption{Các yêu cầu nghiệp vụ khi sử dụng: số thao tác, thời gian để có câu trả lời và ví dụ kết quả}
 \label{tab:br-results}
 \small
 \begin{tabular}{l l L{3.7cm} c r L{6.4cm}}
 \toprule
 \textbf{BR} & \textbf{Tab} & \textbf{Luồng người dùng} & \textbf{Thao tác} & \textbf{Thời gian (s)} & \textbf{Ví dụ kết quả} \\
 \midrule
-BR01 & Tổng quan & Chọn kỳ & 1 & 0,19 & 1998: tiền vào 960.964.282~CZK, tiền ra 933.819.075~CZK, dòng tiền thuần 27.145.207~CZK, 322.277 giao dịch; chia theo hạng \\
-BR02 & Phân tích & Mở tab; nhập tài khoản & 2 & 0,21 & Tài khoản 11, tháng 7/1998--tháng 12/1999: 30 giao dịch, bao gồm giao dịch rút 60.000~CZK của KB03 \\
-BR03 & Phân tích & Mở tab và danh sách cảnh báo; chọn một cảnh báo & 3 & 0,43 & Tài khoản 11, tháng 2/1999: tiền ra 60.000~CZK, gấp 19,5 lần mức trung bình 6 tháng là 3.075~CZK \\
-BR04 & Phân tích & Chọn trạng thái; viết ghi chú; gửi & 3 & 0,20 & Cảnh báo chuyển từ \emph{chưa xem} sang \emph{đang xem xét}; lịch sử cho biết ai, khi nào và vì sao \\
-BR05 & Vận hành & Mở tab và khung nhìn BR05 & 2 & ngay & KB05: 10 bản ghi bị tách, liệt kê theo quy tắc kèm lý do và nội dung gốc \\
-BR06 & Vận hành & Mở tab & 1 & ngay & Các lần chạy kèm các bước và số lượng; một lần chạy lỗi ở \texttt{detect\_alerts}, kèm lỗi cơ sở dữ liệu \\
-BR07 & Vận hành & Mở tab và khung nhìn BR07 & 2 & ngay & Khôi phục \texttt{before\_kb07}: 5 trên 5 nhóm số liệu bằng bản sao lưu \\
-BR08 & Vận hành & Mở tab và khung nhìn BR08 & 2 & ngay & Khách hàng 24: Standard đến 1998-12-31, Silver từ 1999-01-01; báo cáo kỳ cũ không đổi \\
+BR01 & Tổng quan & Chọn kỳ & 1 & 0,19 & 1998: tiền vào 960.964.282~CZK, tiền ra 933.819.075~CZK, 322.277 giao dịch \\
+BR02 & Phân tích & Mở tab; nhập tài khoản & 2 & 0,21 & Tài khoản 11: 30 giao dịch, bao gồm giao dịch rút 60.000~CZK của KB03 \\
+BR03 & Phân tích & Mở danh sách cảnh báo; chọn một cảnh báo & 3 & 0,43 & Tài khoản 11, tháng 2/1999: tiền ra gấp 19,5 lần mức trung bình 6 tháng \\
+BR04 & Phân tích & Chọn trạng thái; viết ghi chú; gửi & 3 & 0,20 & Cảnh báo chuyển sang \emph{đang xem xét}; lịch sử cho biết ai, khi nào và vì sao \\
+BR05--08 & Vận hành & Mở tab và khung nhìn & 1--2 & ngay & Các bản ghi bị tách của KB05 theo quy tắc; một lần chạy lỗi và nguyên nhân; khôi phục 5/5; khách hàng 24: Standard, sau đó Silver \\
 KB & Vận hành & Mở bộ chạy kịch bản; chạy KB03 & 3 & 10,5 & Xem trước, chạy, và kết quả mong đợi so với thực tế \\
 \bottomrule
 \end{tabular}
@@ -1313,86 +854,45 @@ KB & Vận hành & Mở bộ chạy kịch bản; chạy KB03 & 3 & 10,5 & Xem t
 \label{fig:app-alert}
 \end{figure}
 
-\begin{figure}[!t]
-\centering
-\includegraphics[width=\columnwidth]{app_scd2}
-\caption{Tab Vận hành (U03, BR08): báo cáo theo hạng cho kỳ cũ và kỳ mới, và hai phiên bản
-hạng của khách hàng 24.}
-\label{fig:app-scd2}
-\end{figure}
-
-\begin{figure}[!t]
-\centering
-\includegraphics[width=\columnwidth]{app_scenario_run}
-\caption{Tab Vận hành, bộ chạy kịch bản (luồng N01--N05): xem trước đầu vào, kết quả mong
-đợi, và một lần chạy lại KB03 đã hoàn tất.}
-\label{fig:app-scenario}
-\end{figure}
-
 \subsection{Diễn giải}
-Kết quả cho thấy giải pháp đề xuất đáp ứng cả ba tiêu chí. Về độ đúng, kho dữ liệu tái tạo
-chính xác nguồn, và các tính năng vận hành---tách riêng bản ghi lỗi, chạy lại lũy đẳng, cảnh
-báo không trùng lặp, khôi phục và lưu giữ lịch sử---hoạt động đúng như đặc tả trong mọi kịch
-bản. Về hiệu năng, cơ sở dữ liệu cột có vẻ là lựa chọn đúng cho loại tải đặc trưng của một
-kho dữ liệu, tức các truy vấn tổng hợp của U01 và U03, nơi nó nhanh hơn tới 22 lần, nhỏ hơn
-8,7 lần và chịu được nhiều người dùng đồng thời hơn hẳn; ưu thế này tăng theo dữ liệu (tới
-28 lần ở $\times$10). One Big Table còn nhanh hơn nữa, nhưng chỉ tính bằng mili giây, với cái
-giá là phải ghi lại những phần lớn của bảng fact cho mỗi lần chỉnh sửa. Mỗi phương án thay
-thế đều tốt hơn ở một điểm---PostgreSQL ở tra cứu điểm và cập nhật một dòng, One Big Table ở
-các phép quét không cần nối---và kiến trúc đề xuất sử dụng điểm mạnh thứ nhất ở nơi nó quan
-trọng: kho vận hành, có tải gồm các tra cứu nhỏ, cập nhật tại chỗ và ràng buộc, được đặt
-trong PostgreSQL.
+Kết quả cho thấy giải pháp đề xuất đáp ứng cả ba tiêu chí. Kho dữ liệu tái tạo chính xác
+nguồn, và việc tách riêng bản ghi lỗi, chạy lại lũy đẳng, cảnh báo không trùng lặp, khôi phục
+và lưu giữ lịch sử hoạt động đúng như đặc tả. Cơ sở dữ liệu cột có vẻ là lựa chọn đúng cho
+các truy vấn tổng hợp vốn đặc trưng cho tải của kho dữ liệu, với ưu thế tăng theo dữ liệu.
+Mỗi phương án thay thế đều tốt hơn ở một điểm---PostgreSQL ở tra cứu điểm và cập nhật một
+dòng, One Big Table ở các phép quét không cần nối---và kiến trúc sử dụng điểm mạnh thứ nhất ở
+nơi nó quan trọng: kho vận hành.
 
 \subsection{Các yếu tố ảnh hưởng đến tính hợp lệ}
-Cần diễn giải các kết quả một cách thận trọng. Mọi hệ thống chạy trên cùng một máy ảo với
-client, và PostgreSQL dùng các thiết lập bộ nhớ ở mức vừa phải; phân vùng, chỉ mục BRIN hoặc
-materialized view có thể thu hẹp khoảng cách của nó trên các truy vấn tổng hợp. Page cache
-của hệ điều hành không thể xóa từ bên trong một container, nên các lần chạy ``lạnh'' chỉ lạnh
-một phần. Dữ liệu $\times$10 là bản sao nhân bản của dữ liệu gốc, nên nó lặp lại các phân
-phối của dữ liệu gốc và có thể nén tốt hơn dữ liệu thực; quy mô $\times$50 và triển khai phân
-tán chưa được đo. Hạng thành viên và dữ liệu kịch bản là mô phỏng, nên các số liệu theo hạng
-và số lượng cảnh báo mô tả phương pháp chứ không phải hành vi thực của khách hàng. Cuối
-cùng, số thao tác và thời gian được đo bởi một script đi theo một luồng cho mỗi BR, không
-phải trong các phiên làm việc với người dùng thực.
+Mọi hệ thống chạy trên cùng một máy ảo với client, và PostgreSQL dùng các thiết lập ở mức
+vừa phải; phân vùng hoặc materialized view có thể thu hẹp khoảng cách của nó. Các lần chạy
+``lạnh'' chỉ lạnh một phần, vì page cache của hệ điều hành không thể xóa được. Dữ liệu
+$\times$10 là bản sao nhân bản và có thể nén tốt hơn dữ liệu thực. Hạng thành viên và các
+kịch bản là mô phỏng, và các thao tác được đo bởi một script, không phải với người dùng thực.
 
 
 %% =====================================================================
 \section{Kết luận và khuyến nghị}
 \label{sec:conclusion}
 
-Báo cáo này đã trình bày một kho dữ liệu mô hình chiều theo Kimball cho phân tích dòng tiền
-ngân hàng, xây dựng trên bộ dữ liệu Berka với Spark, ClickHouse và PostgreSQL. Pipeline nạp
-dữ liệu theo lô qua một Data Lake, tách riêng các bản ghi lỗi thay vì thất bại, có thể chạy
-lại bất kỳ lô nào mà không tạo bản trùng, và ghi lại mọi lần chạy; một dimension khách hàng
-Type~2 lưu giữ lịch sử của một hạng thành viên mô phỏng; và một ứng dụng với ba tab phục vụ
-ba nhóm người dùng và tám yêu cầu nghiệp vụ, bao gồm xử lý cảnh báo và điều khiển pipeline.
+Kho dữ liệu Kimball trên ClickHouse, được nạp bởi một pipeline theo lô có kiểm soát và đi
+kèm một kho vận hành trên PostgreSQL, đã đáp ứng cả ba tiêu chí. Về \emph{độ đúng của dữ
+liệu}, cả tám kịch bản đều đạt và các số liệu dòng tiền bằng nguồn đến từng xu, với lịch sử
+được lưu giữ qua các lần đổi hạng. Về \emph{hiệu năng}, ClickHouse trả lời các truy vấn tổng
+hợp nhanh hơn PostgreSQL 3,3--22 lần (7--28 lần ở $\times$10) với dung lượng nhỏ hơn 8,7 lần,
+star schema tránh được chi phí chỉnh sửa lên tới 1,5 triệu dòng, và kho vận hành nhanh hơn
+8--70 lần và an toàn hơn trong PostgreSQL. Về \emph{hiệu quả}, mọi BR đều được trả lời với
+một đến ba thao tác trong vòng nửa giây.
 
-Về độ đúng của dữ liệu, cả tám kịch bản đánh giá đều đạt (38/38 phép kiểm tra), và các số
-liệu dòng tiền bằng nguồn đến từng xu. Về hiệu năng, ClickHouse trả lời các truy vấn tổng
-hợp nhanh hơn 3,3--22 lần so với cùng mô hình trên PostgreSQL (7--28 lần ở $\times$10), với
-dung lượng nhỏ hơn 8,7 lần và thông lượng gấp tám lần khi sử dụng đồng thời, trong khi
-PostgreSQL nhanh hơn ở các truy vấn tra cứu một tài khoản mà ClickHouse vẫn trả lời dưới
-20~ms. One Big Table tiết kiệm được vài mili giây mỗi truy vấn nhưng khiến các lần chỉnh sửa
-phải ghi lại tới 150.058 dòng, và kho vận hành trên PostgreSQL nhanh hơn 8--70 lần và thực
-thi năm bảo đảm toàn vẹn mà ClickHouse không thực thi. Về hiệu quả, mọi BR đều được minh họa
-qua ứng dụng với một đến ba thao tác, và câu trả lời hiển thị trên màn hình trong vòng
-0,5~s.
+\textbf{Khuyến nghị.} Dùng một cơ sở dữ liệu cột cho kho dữ liệu, vì người dùng của nó chủ
+yếu thực hiện tổng hợp, và một cơ sở dữ liệu quan hệ cho dữ liệu vận hành, vì dữ liệu này
+được cập nhật tại chỗ và phải thực thi các ràng buộc. Trong các truy vấn tra cứu, lọc bảng
+fact theo khóa của chính nó trước.
 
-\textbf{Khuyến nghị.} Với một ngân hàng có loại tải như thế này, chúng tôi khuyến nghị tổ
-hợp đã đề xuất: một cơ sở dữ liệu cột cho kho dữ liệu, vì người dùng của nó chủ yếu thực hiện
-tổng hợp, và một cơ sở dữ liệu quan hệ cho dữ liệu vận hành, vì dữ liệu này được cập nhật
-tại chỗ và phải thực thi các ràng buộc. Các truy vấn tra cứu nên lọc bảng fact theo khóa
-của chính nó trước, như ứng dụng hiện làm với tài khoản, nhờ đó giữ thời gian ở mức vài mili
-giây bất kể khối lượng dữ liệu.
-
-\textbf{Hạn chế.} Dữ liệu kết thúc vào năm 1998 và có khoảng một triệu giao dịch; hạng thành
-viên và các kịch bản là mô phỏng; số dư cuối kỳ và chuyển khoản nội bộ nằm ngoài phạm vi;
-ứng dụng không có kiểm soát truy cập; và kho vận hành không thuộc phạm vi sao lưu.
-
-\textbf{Hướng phát triển.} Bổ sung kiểm soát truy cập theo nhóm người dùng; mở rộng mô hình
-với khoản vay và lệnh chi định kỳ như các quy trình nghiệp vụ mới dùng chung các conformed
-dimension; đo giải pháp ở quy mô $\times$50 và trên một cụm máy; và thay các cảnh báo dựa
-trên quy tắc bằng phát hiện bất thường dựa trên học máy, được đánh giá với cùng các kịch bản.
+\textbf{Hạn chế và hướng phát triển.} Dữ liệu kết thúc vào năm 1998 và hạng thành viên là mô
+phỏng; còn thiếu số dư cuối kỳ và kiểm soát truy cập. Hướng phát triển: kiểm soát truy cập
+theo nhóm người dùng, thêm các quy trình nghiệp vụ như khoản vay, đo ở quy mô lớn hơn và trên
+một cụm máy, và phát hiện bất thường dựa trên học máy, được đánh giá với cùng các kịch bản.
 
 
 %% =====================================================================
@@ -1400,23 +900,12 @@ trên quy tắc bằng phát hiện bất thường dựa trên học máy, đư
 
 \section{Khả năng tái lập}
 \label{App:Reproducibility}
-Toàn bộ mã nguồn, cấu hình Docker Compose và các script đánh giá có tại
-\url{https://github.com/quanndc/data-engineer-bank-project}. Các lệnh chính gồm:
-\begin{itemize}
-  \item \texttt{make up} và \texttt{make schema} --- khởi động hệ thống và tạo kho dữ liệu
-        cùng kho vận hành;
-  \item \texttt{make load-ref} và \texttt{make load-history} --- nạp lô tham chiếu và 72 lô
-        theo tháng;
-  \item \texttt{make alerts} --- đánh giá các quy tắc cảnh báo trên dữ liệu lịch sử đã nạp;
-  \item \texttt{make scenarios} và \texttt{make scenario KB=KB05} --- sinh và chạy một kịch
-        bản (cũng có thể thực hiện từ ứng dụng);
-  \item \texttt{make backup}, \texttt{make restore NAME=\ldots} --- sao lưu và khôi phục kho
-        dữ liệu;
-  \item \texttt{make evaluate} và \texttt{make bench-all} --- chạy đánh giá và bốn
-        benchmark; kết quả và nhật ký được ghi vào \texttt{docs/results/p2/};
-  \item \texttt{python tools/ui\_walkthrough.py} --- điều khiển ứng dụng, đếm số thao tác,
-        đo thời gian trả lời và chụp các ảnh màn hình trong báo cáo này.
-\end{itemize}
+Mã nguồn và các script: \url{https://github.com/quanndc/data-engineer-bank-project}.
+\texttt{make up}, \texttt{make schema}, \texttt{make load-ref} và \texttt{make load-history}
+xây dựng kho dữ liệu; \texttt{make scenarios} và \texttt{make scenario KB=\ldots} chạy các
+kịch bản; \texttt{make evaluate} và \texttt{make bench-all} (\texttt{SCALE=10} cho
+$\times$10) tái lập phần đánh giá và các benchmark, với kết quả trong
+\texttt{docs/results/p2/}; \texttt{tools/ui\_walkthrough.py} đo ứng dụng.
 
 \section{Phân công công việc}
 \label{App:Work}

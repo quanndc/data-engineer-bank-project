@@ -8,6 +8,19 @@ Nhật ký Phase 1 (Kaggle, Kafka, Superset; đến ngày 07/10/2026) đã chuy�
 
 
 
+
+---
+
+## [2026-10-29] Report: rút gọn, tập trung ý chính (bản Anh + Việt) ✂️
+
+- **Abstract** 297 → **212 từ**, theo template ("approximately 200 words").
+- **Toàn bộ report** 17 → **11 trang**, cả [report/main.tex](report/main.tex) và [report/main_vi.tex](report/main_vi.tex); vẫn đủ 7 phần đúng tên và thứ tự của template.
+  - Bỏ: bảng mục tiêu kinh doanh và bảng nguồn dữ liệu dự kiến (thành 1 câu), bảng công nghệ–BR, listing DDL, 2 ảnh app (còn Tổng quan và cảnh báo), bảng các hướng không làm (thành 1 câu trong mục Phạm vi).
+  - Gộp: thời gian truy vấn ×1 giữ 1 bảng; ×1 so với ×10 + dung lượng + thông lượng + chi phí sửa thành 1 bảng; B3 + B4 thành 1 bảng. Big Data và Related Work còn mỗi phần 1 đoạn.
+  - Giữ nguyên mọi số liệu chính, 8 kịch bản, sơ đồ kiến trúc, mô hình sao.
+- Bản tiếng Việt dịch lại từ bản rút gọn; số liệu đối chiếu tự động với bản tiếng Anh (17 bảng khớp từng dòng). Hai bản biên dịch sạch; cập nhật `report_overleaf.zip`.
+- Ghi chú: khối F giữ **chỉ Streamlit** (làm đủ 8 BR, gồm cả ghi và điều khiển); sheet không có Superset, Superset chỉ thuộc Phase 1.
+
 ---
 
 ## [2026-10-29] Report: đối chiếu với template trong `report/LaTeX_Template_for_Technical_Report` 📐
