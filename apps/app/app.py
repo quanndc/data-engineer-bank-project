@@ -103,6 +103,46 @@ def money(x):
     return f"{float(x or 0):,.0f}".replace(",", ".")
 
 
+# ---------------------------------------------------------------- Vietnamese column headers
+# SQL aliases stay short ASCII; tables are shown with Vietnamese headers (vi() just before display).
+COL_VI = {
+    # money and transactions
+    "hang": "Hạng", "so_giao_dich": "Số giao dịch", "tien_vao": "Tiền vào (CZK)", "tien_ra": "Tiền ra (CZK)",
+    "dong_tien_thuan": "Dòng tiền thuần (CZK)", "so_khach": "Số khách hàng", "ngay": "Ngày",
+    "ma_giao_dich": "Mã giao dịch", "transaction_id": "Mã giao dịch", "chieu": "Chiều tiền", "loai": "Loại",
+    "phuong_thuc": "Phương thức", "muc_dich": "Mục đích", "so_tien": "Số tiền (CZK)",
+    "so_du_sau": "Số dư sau giao dịch", "chu_tai_khoan": "Chủ tài khoản", "lo_nap": "Lô nạp",
+    "nam": "Năm", "ky": "Kỳ",
+    # customer versions (SCD2)
+    "customer_sk": "Mã phiên bản", "valid_from": "Hiệu lực từ", "valid_to": "Hiệu lực đến",
+    "is_current": "Hiện tại", "updated_at": "Cập nhật lúc", "tu_ngay": "Từ ngày", "den_ngay": "Đến ngày",
+    # alerts and their handling
+    "alert_id": "Mã cảnh báo", "rule_code": "Quy tắc", "account_id": "Mã tài khoản", "period_start": "Kỳ",
+    "status": "Trạng thái", "reason": "Lý do", "batch_id": "Lô", "detected_at": "Phát hiện lúc",
+    "acted_at": "Thời điểm", "from_status": "Từ trạng thái", "to_status": "Sang trạng thái",
+    "note": "Ghi chú", "acted_by": "Người xử lý",
+    # runs, steps, rejected records
+    "run_id": "Mã lần chạy", "run_kind": "Loại lần chạy", "started_at": "Bắt đầu", "finished_at": "Kết thúc",
+    "giay": "Thời gian (giây)", "rows_received": "Số dòng nhận", "rows_loaded": "Số dòng nạp",
+    "rows_rejected": "Số dòng bị tách", "failed_step": "Bước lỗi", "error_message": "Thông báo lỗi",
+    "step_order": "Thứ tự", "step_name": "Bước", "rows_in": "Số dòng vào", "rows_out": "Số dòng ra",
+    "description": "Mô tả", "so_ban_ghi": "Số bản ghi", "source_table": "Bảng nguồn",
+    "source_key": "Khóa nguồn", "record": "Bản ghi gốc", "rejected_at": "Thời điểm tách", "n": "Số lượng",
+    # backups
+    "backup_id": "Bản sao lưu", "created_at": "Tạo lúc", "phien_ban_scd": "Số phiên bản SCD",
+    "op_id": "Mã thao tác", "op_type": "Thao tác", "khop_ban_sao_luu": "Khớp bản sao lưu",
+    # scenario input files (Berka format)
+    "trans_id": "Mã giao dịch", "date": "Ngày (YYMMDD)", "type": "Loại", "operation": "Phương thức",
+    "amount": "Số tiền", "balance": "Số dư", "k_symbol": "Mục đích", "bank": "Ngân hàng đối tác",
+    "account": "Tài khoản đối tác", "client_id": "Mã khách hàng", "membership_tier": "Hạng thành viên",
+    "tier_effective_from": "Hạng hiệu lực từ",
+}
+
+
+def vi(df):
+    return df.rename(columns=lambda c: COL_VI.get(c, c))
+
+
 # No FINAL on the fact table: the pipeline never loads a transaction_id twice (check U3); FINAL
 # on 1M rows costs memory the 2.5 GB ClickHouse container does not have to spare.
 FACT = """(SELECT f.*, toDate(toString(f.date_key)) AS d, p.cash_flow_direction AS dir,
@@ -158,8 +198,8 @@ def render_overview():
                            {base} GROUP BY hang""", lo=lo, hi=hi, tiers=tuple(tiers))
         by_tier["hang"] = pd.Categorical(by_tier["hang"], TIERS, ordered=True)
         st.markdown("**Theo hạng thành viên**")
-        st.dataframe(by_tier.sort_values("hang").style.format(
-            {c: lambda v: money(v) for c in ["so_giao_dich", "tien_vao", "tien_ra", "dong_tien_thuan"]}),
+        st.dataframe(vi(by_tier.sort_values("hang")).style.format(
+            {COL_VI[c]: lambda v: money(v) for c in ["so_giao_dich", "tien_vao", "tien_ra", "dong_tien_thuan"]}),
             hide_index=True, use_container_width=True)
 
 
@@ -198,9 +238,9 @@ def render_lookup():
         b.metric("Tiền ra", money(m_out))
         c.metric("Thuần", money(m_in - m_out))
         d.metric("Số giao dịch", len(tx))
-        st.dataframe(tx, hide_index=True, use_container_width=True, height=380,
-                     column_config={"so_tien": st.column_config.NumberColumn(format="%.2f"),
-                                    "so_du_sau": st.column_config.NumberColumn(format="%.2f")})
+        st.dataframe(vi(tx), hide_index=True, use_container_width=True, height=380,
+                     column_config={COL_VI["so_tien"]: st.column_config.NumberColumn(format="%.2f"),
+                                    COL_VI["so_du_sau"]: st.column_config.NumberColumn(format="%.2f")})
 
 
 def render_history():
@@ -221,9 +261,9 @@ def render_history():
         return r.sort_values("hang")
 
     if isinstance(old, tuple) and len(old) == 2:
-        c1.dataframe(tier_report(old), hide_index=True, use_container_width=True)
+        c1.dataframe(vi(tier_report(old)), hide_index=True, use_container_width=True)
     if isinstance(new, tuple) and len(new) == 2:
-        c2.dataframe(tier_report(new), hide_index=True, use_container_width=True)
+        c2.dataframe(vi(tier_report(new)), hide_index=True, use_container_width=True)
     scd = q_ch("""SELECT count() AS phien_ban, countIf(is_current = 1) AS hien_tai, countIf(is_current = 0) AS da_dong,
                          uniqExact(client_id) AS khach FROM dw.dim_customer FINAL""").iloc[0]
     st.write(f"`dim_customer`: **{scd.phien_ban:,}** phiên bản · {scd.hien_tai:,} hiện tại · {scd.da_dong:,} đã đóng · "
@@ -233,16 +273,16 @@ def render_history():
     vers = q_ch("""SELECT customer_sk, membership_tier AS hang, valid_from, valid_to, is_current, updated_at
                    FROM dw.dim_customer FINAL WHERE client_id = %(c)s ORDER BY valid_from""", c=int(demo))
     vers["valid_to"] = vers["valid_to"].map(lambda d: "hiện tại" if d.year == 2299 else d)
-    st.dataframe(vers, hide_index=True, use_container_width=True)
+    st.dataframe(vi(vers), hide_index=True, use_container_width=True)
     if len(vers):
-        st.dataframe(q_ch(f"""SELECT c.membership_tier AS hang, t.customer_sk, min(t.d) AS tu_ngay, max(t.d) AS den_ngay,
+        st.dataframe(vi(q_ch(f"""SELECT c.membership_tier AS hang, t.customer_sk, min(t.d) AS tu_ngay, max(t.d) AS den_ngay,
                                      count() AS so_giao_dich, sumIf(amount, dir='IN') AS tien_vao,
                                      sumIf(amount, dir='OUT') AS tien_ra
                               FROM {FACT} AS t
                               JOIN (SELECT customer_sk, membership_tier FROM dw.dim_customer FINAL
                                     WHERE client_id = %(c)s) AS c USING (customer_sk)
                               WHERE t.customer_sk IN (SELECT customer_sk FROM dw.dim_customer FINAL WHERE client_id = %(c)s)
-                              GROUP BY hang, t.customer_sk ORDER BY tu_ngay""", c=int(demo)),
+                              GROUP BY hang, t.customer_sk ORDER BY tu_ngay""", c=int(demo))),
                      hide_index=True, use_container_width=True)
 
 
@@ -289,7 +329,7 @@ def render_sql():
                 df = pd.DataFrame(r.result_rows, columns=r.column_names)
                 st.success(f"{len(df):,} dòng · {time.perf_counter() - started:.2f} s".replace(",", ".")
                            + (" · đã cắt ở 10.000 dòng" if len(df) >= 10_000 else ""))
-                st.dataframe(df, hide_index=True, use_container_width=True)
+                st.dataframe(vi(df), hide_index=True, use_container_width=True)
                 st.download_button("Tải CSV", df.to_csv(index=False).encode(), "ket_qua.csv", "text/csv")
 
 
@@ -373,7 +413,7 @@ with analysis:
             alerts_df = q_pg(sql + " ORDER BY detected_at DESC, alert_id DESC LIMIT 500", params)
             st.markdown(f"**{len(alerts_df)} cảnh báo** (tối đa 500, mới nhất trước)")
             show = alerts_df.assign(status=alerts_df.status.map(STATUS_VI), rule_code=alerts_df.rule_code.map(RULE_VI))
-            pick = st.dataframe(show, hide_index=True, use_container_width=True, height=260,
+            pick = st.dataframe(vi(show), hide_index=True, use_container_width=True, height=260,
                                 on_select="rerun", selection_mode="single-row", key="al_table")
             rows = pick.selection.rows if pick and pick.selection else []
             if rows:
@@ -387,10 +427,10 @@ with analysis:
                 c2.markdown("**Giao dịch liên quan**")
                 ids = list(full.transaction_ids)
                 if ids:
-                    c2.dataframe(q_ch(f"""SELECT t.d AS ngay, t.transaction_id, t.dir AS chieu, t.operation_name AS phuong_thuc,
+                    c2.dataframe(vi(q_ch(f"""SELECT t.d AS ngay, t.transaction_id, t.dir AS chieu, t.operation_name AS phuong_thuc,
                                                  t.amount AS so_tien, t.balance_after AS so_du_sau
                                           FROM {FACT} AS t WHERE t.transaction_id IN %(ids)s ORDER BY t.date_key""",
-                                      ids=tuple(int(x) for x in ids)), hide_index=True, use_container_width=True)
+                                      ids=tuple(int(x) for x in ids))), hide_index=True, use_container_width=True)
                 st.markdown("**BR04 · Xử lý cảnh báo**")
                 with st.form(f"act_{full.alert_id}"):
                     c1, c2, c3 = st.columns([1, 2, 1])
@@ -410,7 +450,7 @@ with analysis:
                 if len(hist):
                     hist["from_status"] = hist.from_status.map(STATUS_VI)
                     hist["to_status"] = hist.to_status.map(STATUS_VI)
-                    st.dataframe(hist, hide_index=True, use_container_width=True)
+                    st.dataframe(vi(hist), hide_index=True, use_container_width=True)
 
 # ================================================================ VẬN HÀNH (U03, BR05-BR08)
 with operations:
@@ -425,7 +465,7 @@ with operations:
                        FROM ops.pipeline_run ORDER BY run_id DESC LIMIT 200""")
         tot = q_pg("SELECT status, count(*) AS n FROM ops.pipeline_run GROUP BY status")
         st.write(" · ".join(f"**{r.status}**: {r.n}" for r in tot.itertuples()))
-        pick = st.dataframe(runs, hide_index=True, use_container_width=True, height=300,
+        pick = st.dataframe(vi(runs), hide_index=True, use_container_width=True, height=300,
                             on_select="rerun", selection_mode="single-row", key="runs_table")
         rows = pick.selection.rows if pick and pick.selection else []
         if rows:
@@ -433,10 +473,10 @@ with operations:
             st.markdown(f"**Lần chạy #{r.run_id}** · lô `{r.batch_id}` · {r.run_kind} · **{r.status}**")
             if r.status == "FAILED":
                 st.error(f"Bước thất bại: {r.failed_step}\n\n{r.error_message}")
-            st.dataframe(q_pg("""SELECT step_order, step_name, status, started_at,
+            st.dataframe(vi(q_pg("""SELECT step_order, step_name, status, started_at,
                                         round(extract(epoch FROM finished_at - started_at)::numeric, 2) AS giay,
                                         rows_in, rows_out, rows_rejected, error_message
-                                 FROM ops.pipeline_step WHERE run_id = %s ORDER BY step_order""", [int(r.run_id)]),
+                                 FROM ops.pipeline_step WHERE run_id = %s ORDER BY step_order""", [int(r.run_id)])),
                          hide_index=True, use_container_width=True)
 
     with sub_dq:
@@ -446,14 +486,14 @@ with operations:
                           GROUP BY 1, 2, 3 ORDER BY 2 DESC, 3""")
         c1, c2 = st.columns([1, 2])
         c1.markdown("**Quy tắc chất lượng**")
-        c1.dataframe(rules, hide_index=True, use_container_width=True)
+        c1.dataframe(vi(rules), hide_index=True, use_container_width=True)
         c2.markdown("**Bản ghi bị tách theo lần chạy và quy tắc**")
-        c2.dataframe(summary, hide_index=True, use_container_width=True)
+        c2.dataframe(vi(summary), hide_index=True, use_container_width=True)
         if len(summary):
             run_pick = st.selectbox("Xem bản ghi bị tách của lần chạy", sorted(summary.run_id.unique(), reverse=True))
-            st.dataframe(q_pg("""SELECT rule_code, source_table, source_key, reason, record, rejected_at
+            st.dataframe(vi(q_pg("""SELECT rule_code, source_table, source_key, reason, record, rejected_at
                                  FROM ops.rejected_record WHERE run_id = %s ORDER BY rule_code, reject_id""",
-                              [int(run_pick)]), hide_index=True, use_container_width=True)
+                              [int(run_pick)])), hide_index=True, use_container_width=True)
 
     with sub_kb:
         st.caption("Luồng N01–N05: chọn và xem trước (chưa ghi Data Lake/kho) → chạy → đối chiếu mong đợi và thực tế → chạy lại")
@@ -465,7 +505,7 @@ with operations:
             c1, c2 = st.columns(2)
             for name, f in pv["files"].items():
                 c1.markdown(f"**{name}** · {f['rows']} dòng (10 dòng đầu)")
-                c1.dataframe(pd.DataFrame(f["sample"], columns=f["header"]), hide_index=True, use_container_width=True)
+                c1.dataframe(vi(pd.DataFrame(f["sample"], columns=f["header"])), hide_index=True, use_container_width=True)
             c2.markdown("**Kết quả mong đợi** (`expected.json`)")
             c2.json(pv.get("expected", {}), expanded=False)
             batch = pv.get("expected", {}).get("batch_id")
@@ -477,13 +517,13 @@ with operations:
                     last = q_pg("""SELECT run_id, run_kind, status, rows_received, rows_loaded, rows_rejected
                                    FROM ops.pipeline_run WHERE batch_id = %s ORDER BY run_id DESC LIMIT 1""", [batch])
                     st.markdown("**Thực tế (lần chạy vừa xong)**")
-                    st.dataframe(last, hide_index=True, use_container_width=True)
+                    st.dataframe(vi(last), hide_index=True, use_container_width=True)
                     if kb == "KB03":
-                        st.dataframe(q_pg("SELECT rule_code, account_id, period_start, status, reason FROM ops.alert "
-                                          "WHERE batch_id = %s ORDER BY alert_id", [batch]), hide_index=True)
+                        st.dataframe(vi(q_pg("SELECT rule_code, account_id, period_start, status, reason FROM ops.alert "
+                                          "WHERE batch_id = %s ORDER BY alert_id", [batch])), hide_index=True)
                     if kb == "KB05":
-                        st.dataframe(q_pg("SELECT rule_code, count(*) AS n FROM ops.rejected_record WHERE run_id = %s "
-                                          "GROUP BY 1 ORDER BY 1", [int(last.run_id[0])]), hide_index=True)
+                        st.dataframe(vi(q_pg("SELECT rule_code, count(*) AS n FROM ops.rejected_record WHERE run_id = %s "
+                                          "GROUP BY 1 ORDER BY 1", [int(last.run_id[0])])), hide_index=True)
 
     with sub_backup:
         st.caption("Sao lưu cấu trúc và dữ liệu của 6 bảng DW (kể cả lịch sử SCD) vào vùng lưu riêng; chỉ chạy khi pipeline không ghi")
@@ -501,13 +541,13 @@ with operations:
             if target and st.button("⏪ Khôi phục", type="primary"):
                 run_and_wait("restore", target, f"Khôi phục {target}")
         st.markdown("**Danh mục bản sao lưu**")
-        st.dataframe(cat, hide_index=True, use_container_width=True)
+        st.dataframe(vi(cat), hide_index=True, use_container_width=True)
         ops_df = q_pg("""SELECT op_id, backup_id, op_type, status, started_at,
                                 round(extract(epoch FROM finished_at - started_at)::numeric, 1) AS giay,
                                 result->'matches_backup' AS khop_ban_sao_luu, error_message
                          FROM ops.backup_operation ORDER BY op_id DESC""")
         st.markdown("**Lịch sử thao tác** (khôi phục: so số dòng, tiền vào/ra, báo cáo theo hạng, phiên bản SCD với bản sao lưu)")
-        st.dataframe(ops_df, hide_index=True, use_container_width=True)
+        st.dataframe(vi(ops_df), hide_index=True, use_container_width=True)
 
     with sub_hist:
         render_history()

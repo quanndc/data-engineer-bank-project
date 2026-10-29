@@ -12,6 +12,15 @@ Nhật ký Phase 1 (Kaggle, Kafka, Superset; đến ngày 07/10/2026) đã chuy�
 
 
 
+
+---
+
+## [2026-10-29] App: tên cột tiếng Việt ở mọi bảng 🇻🇳
+
+- [apps/app/app.py](apps/app/app.py): bảng `COL_VI` và hàm `vi()` đổi tên cột ngay trước khi hiển thị (truy vấn SQL giữ alias ngắn); áp dụng cho **21 bảng** ở cả bản đầy đủ và bản chỉ xem, kể cả kết quả tab SQL và phần xem trước file kịch bản. Ví dụ: `hang, so_giao_dich, tien_vao, tien_ra, dong_tien_thuan` → **Hạng, Số giao dịch, Tiền vào (CZK), Tiền ra (CZK), Dòng tiền thuần (CZK)**; `run_id, batch_id, status…` → **Mã lần chạy, Lô, Trạng thái…**.
+- Đã duyệt mọi tab (10 tab bản đầy đủ, 4 tab bản chỉ xem): không lỗi.
+- Chụp lại 9 ảnh app trong [report/figures/](report/figures/) cho report và slide (giữ nguyên số đo thời gian đã dùng trong report); dọn ghi nhận BR04 thử; đóng gói lại `report_overleaf.zip`, `slides_overleaf.zip`.
+
 ---
 
 ## [2026-10-29] Bản chỉ xem đã chạy trên Streamlit Community Cloud ✅
