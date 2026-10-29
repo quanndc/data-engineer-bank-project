@@ -1,0 +1,6 @@
+# F. Application (also used by Streamlit Community Cloud for the viewer copy)
+streamlit==1.40.2
+clickhouse-connect==0.8.18
+psycopg2-binary==2.9.10
+pandas==2.2.3
+altair==5.5.0

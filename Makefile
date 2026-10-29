@@ -12,7 +12,7 @@ endif
 SPARK := $(COMPOSE) exec -T spark
 SHELL := /bin/bash   # PIPESTATUS in the benchmark targets
 
-.PHONY: up down ps logs smoke sql psql clean source-check tiers schema load-ref load-history rerun reconcile scenarios scenario alerts backup restore backups evaluate bench-load bench bench-concurrency bench-update bench-ops bench-spark bench-all bench-clean
+.PHONY: up down ps logs smoke sql psql clean source-check tiers schema load-ref load-history rerun reconcile scenarios scenario alerts backup restore backups evaluate bench-load bench bench-concurrency bench-update bench-ops bench-spark bench-all bench-clean publish viewer
 
 up:            ## Start D ClickHouse, E PostgreSQL, C Spark, F app (http://localhost:8501)
 	@echo "ClickHouse: $(CLICKHOUSE_HOST)"
@@ -70,6 +70,17 @@ backups:       ## List the backups in the catalog
 
 reconcile:     ## Whole Berka source vs. warehouse (count, distinct ids, money in/out)
 	$(PIPELINE) reconcile
+
+# ---------------------------------------------------------------- viewer copy for the members
+AIVEN_VARS := AIVEN_CLICKHOUSE_HOST AIVEN_CLICKHOUSE_PORT AIVEN_CLICKHOUSE_USER AIVEN_CLICKHOUSE_PASSWORD \
+              AIVEN_CLICKHOUSE_SECURE AIVEN_CLICKHOUSE_DATABASE_ENGINE
+
+publish:       ## Copy the 6 dw tables to Aiven ClickHouse (AIVEN_CLICKHOUSE_* in .env) for the viewer app
+	@set -a; . ./.env; set +a; \
+	$(COMPOSE) exec -T $(foreach v,$(AIVEN_VARS),-e $(v)) spark python3 /opt/jobs/publish.py
+
+viewer:        ## Read-only app on http://localhost:8502 (BR01, BR02, BR08, SQL; ClickHouse only)
+	$(COMPOSE) --profile viewer up -d app-viewer
 
 # ---------------------------------------------------------------- evaluation (P2-8)
 RESULTS := docs/results/p2

@@ -109,6 +109,21 @@ services:
       clickhouse: { condition: service_healthy, required: false }
     mem_limit: 512m
 
+  # Read-only copy for the members (APP_MODE=viewer): BR01, BR02, BR08 and SQL on ClickHouse only.
+  # Local test: docker compose --profile viewer up -d app-viewer  ->  http://localhost:8502
+  app-viewer:
+    image: bankdw-app:p2
+    container_name: bankdw-app-viewer
+    profiles: ["viewer"]
+    ports:
+      - "8502:8501"
+    environment:
+      <<: *db-env
+      APP_MODE: viewer
+    depends_on:
+      clickhouse: { condition: service_healthy, required: false }
+    mem_limit: 512m
+
 volumes:
   clickhouse-data:
   ops-data:

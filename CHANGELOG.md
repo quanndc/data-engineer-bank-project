@@ -9,6 +9,18 @@ Nhật ký Phase 1 (Kaggle, Kafka, Superset; đến ngày 07/10/2026) đã chuy�
 
 
 
+
+---
+
+## [2026-10-29] Bản chỉ xem cho thành viên: chế độ viewer, tab SQL, `make publish` lên Aiven 🌐
+
+- [apps/app/app.py](apps/app/app.py): **`APP_MODE=viewer`**: 4 tab Tổng quan (BR01) · Tra cứu tài khoản (BR02) · Báo cáo lịch sử (BR08) · **SQL**; chỉ dùng ClickHouse, không PostgreSQL, không runner, không nút ghi. Chế độ đầy đủ giữ nguyên (BR02/BR08/BR01 tách thành hàm dùng chung cho hai chế độ).
+- Tab SQL: chỉ một câu đọc (`SELECT`/`WITH`/`SHOW`/`DESCRIBE`/`EXPLAIN`), chạy với `readonly=1`, tối đa 30 s, 500 MB, 10.000 dòng, tải CSV. Đã thử: `DROP` và 2 câu lệnh bị app chặn; `SETTINGS readonly = 0` và `WITH … INSERT` bị ClickHouse từ chối; bảng không đổi.
+- `docker-compose.yml`: service `app-viewer` (profile `viewer`, cổng 8502); `make viewer`. App cài gói từ [apps/app/requirements.txt](apps/app/requirements.txt) (dùng chung cho Docker và Streamlit Cloud).
+- [spark/jobs/publish.py](spark/jobs/publish.py) + `make publish`: chép 6 bảng `dw` lên Aiven ClickHouse (tạo bảng, xoá cũ, chép, đối chiếu số dòng và tổng tiền). Biến `AIVEN_CLICKHOUSE_*` trong `.env` (chép từ các dòng `# [aiven]`), chỉ truyền vào lần chạy publish, không vào container app.
+- [docs/DEPLOY.md](docs/DEPLOY.md): hướng dẫn Aiven (tài khoản chỉ đọc `bankdw_viewer`) và Streamlit Community Cloud (secrets, giới hạn email người xem).
+- **Chưa publish được**: dịch vụ Aiven cũ không còn (tên miền NXDOMAIN, dịch vụ đã tắt hoặc bị xoá) → cần bật lại hoặc tạo dịch vụ mới rồi cập nhật `.env`.
+
 ---
 
 ## [2026-10-29] Report: rút gọn, tập trung ý chính (bản Anh + Việt) ✂️

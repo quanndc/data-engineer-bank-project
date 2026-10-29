@@ -111,32 +111,8 @@ FACT = """(SELECT f.*, toDate(toString(f.date_key)) AS d, p.cash_flow_direction 
            JOIN (SELECT * FROM dw.dim_transaction_profile FINAL) AS p USING (transaction_profile_sk))"""
 
 
-# ---------------------------------------------------------------- header and sidebar
-st.title("🏦 BankDW — Dòng tiền và hoạt động tài khoản")
-st.caption("Kimball trên ClickHouse · kho vận hành PostgreSQL · dữ liệu Berka (Séc, 1993–1998) + hạng thành viên mô phỏng")
-
-with st.sidebar:
-    st.subheader("Trạng thái hệ thống")
-    try:
-        n = q_ch("SELECT count() AS n FROM dw.fact_transaction")["n"][0]
-        st.success(f"Data Warehouse · {n:,} giao dịch".replace(",", "."))
-    except Exception as e:  # noqa: BLE001
-        st.error(f"Data Warehouse: {e}")
-    try:
-        open_alerts = q_pg("SELECT count(*) AS n FROM ops.alert WHERE status <> 'RESOLVED'")["n"][0]
-        st.success(f"Kho vận hành · {open_alerts:,} cảnh báo chưa xử lý".replace(",", "."))
-    except Exception as e:  # noqa: BLE001
-        st.error(f"Kho vận hành: {e}")
-    health = runner("/health")
-    if "error" in health:
-        st.warning("Pipeline: không kết nối được")
-    else:
-        st.info("Pipeline: đang chạy một tác vụ" if health.get("busy") else "Pipeline: sẵn sàng")
-
-overview, analysis, operations = st.tabs(["📊 Tổng quan", "🔎 Phân tích", "⚙️ Vận hành"])
-
-# ================================================================ TỔNG QUAN (U01, BR01)
-with overview:
+# ================================================================ views shared by both modes
+def render_overview():
     st.subheader("BR01 · Tổng quan dòng tiền")
     st.caption("Người dùng: Quản lý kinh doanh · Tiền vào / ra = SUM(amount) theo chiều tiền của loại giao dịch; "
                "dòng tiền thuần = vào − ra; hạng = hạng của chủ tài khoản tại ngày giao dịch (SCD2)")
@@ -186,48 +162,199 @@ with overview:
             {c: lambda v: money(v) for c in ["so_giao_dich", "tien_vao", "tien_ra", "dong_tien_thuan"]}),
             hide_index=True, use_container_width=True)
 
+
+def render_lookup():
+    st.caption("Người dùng: Chuyên viên phân tích · chọn mã tài khoản và khoảng thời gian")
+    c1, c2 = st.columns([1, 2])
+    acc = c1.number_input("Mã tài khoản (account_id)", min_value=1, value=11, step=1, key="br02_acc")
+    rng = c2.date_input("Khoảng thời gian", (dt.date(1998, 7, 1), dt.date(1999, 12, 31)),
+                        min_value=dt.date(1993, 1, 1), max_value=dt.date(1999, 12, 31), key="br02_rng")
+    info = q_ch("""SELECT a.account_id, a.account_open_date, a.statement_frequency_name, d.district_name, d.region_name
+                   FROM dw.dim_account AS a FINAL
+                   JOIN (SELECT * FROM dw.dim_district FINAL) AS d ON d.district_sk = a.account_district_sk
+                   WHERE a.account_id = %(a)s""", a=int(acc))
+    if not len(info):
+        st.warning("Không có tài khoản này trong kho.")
+    elif isinstance(rng, tuple) and len(rng) == 2:
+        i = info.iloc[0]
+        st.markdown(f"**Tài khoản {i.account_id}** · mở ngày {i.account_open_date:%d/%m/%Y} · sao kê "
+                    f"{i.statement_frequency_name.lower()} · chi nhánh {i.district_name} ({i.region_name})")
+        lo, hi = (int(d.strftime("%Y%m%d")) for d in rng)
+        # Filter the fact by its own key (account_sk leads its sort key): filtering on dim_account.account_id
+        # after a join made ClickHouse read the whole fact table (P2-8 benchmark, section 12.4).
+        tx = q_ch(f"""SELECT t.d AS ngay, t.transaction_id AS ma_giao_dich, t.dir AS chieu, t.type_name AS loai,
+                             t.operation_name AS phuong_thuc, t.purpose_name AS muc_dich, t.amount AS so_tien,
+                             t.balance_after AS so_du_sau, c.client_id AS chu_tai_khoan, c.membership_tier AS hang,
+                             t.load_batch_id AS lo_nap
+                      FROM {FACT} AS t
+                      JOIN (SELECT customer_sk, client_id, membership_tier FROM dw.dim_customer FINAL) AS c USING (customer_sk)
+                      WHERE t.account_sk IN (SELECT account_sk FROM dw.dim_account FINAL WHERE account_id = %(a)s)
+                        AND t.date_key BETWEEN %(lo)s AND %(hi)s
+                      ORDER BY t.date_key, t.transaction_id""", a=int(acc), lo=lo, hi=hi)
+        m_in = tx.loc[tx.chieu == "IN", "so_tien"].astype(float).sum()
+        m_out = tx.loc[tx.chieu == "OUT", "so_tien"].astype(float).sum()
+        a, b, c, d = st.columns(4)
+        a.metric("Tiền vào", money(m_in))
+        b.metric("Tiền ra", money(m_out))
+        c.metric("Thuần", money(m_in - m_out))
+        d.metric("Số giao dịch", len(tx))
+        st.dataframe(tx, hide_index=True, use_container_width=True, height=380,
+                     column_config={"so_tien": st.column_config.NumberColumn(format="%.2f"),
+                                    "so_du_sau": st.column_config.NumberColumn(format="%.2f")})
+
+
+def render_history():
+    st.caption("Bảng hạng mô phỏng lưu hạng hiện tại + ngày hiệu lực; ETL giữ lịch sử bằng SCD Type 2. "
+               "Giao dịch kỳ cũ giữ hạng cũ, giao dịch từ ngày hiệu lực dùng hạng mới.")
+    c1, c2 = st.columns(2)
+    old = c1.date_input("Kỳ cũ", (dt.date(1993, 1, 1), dt.date(1998, 12, 31)), key="h_old")
+    new = c2.date_input("Kỳ mới", (dt.date(1999, 1, 1), dt.date(1999, 1, 31)), key="h_new")
+
+    def tier_report(rng):
+        lo, hi = (int(d.strftime("%Y%m%d")) for d in rng)
+        r = q_ch(f"""SELECT c.membership_tier AS hang, uniqExact(c.client_id) AS so_khach, count() AS so_giao_dich,
+                            sumIf(amount, dir='IN') AS tien_vao, sumIf(amount, dir='OUT') AS tien_ra
+                     FROM {FACT} AS t
+                     JOIN (SELECT customer_sk, client_id, membership_tier FROM dw.dim_customer FINAL) AS c USING (customer_sk)
+                     WHERE t.date_key BETWEEN %(lo)s AND %(hi)s GROUP BY hang""", lo=lo, hi=hi)
+        r["hang"] = pd.Categorical(r["hang"], TIERS, ordered=True)
+        return r.sort_values("hang")
+
+    if isinstance(old, tuple) and len(old) == 2:
+        c1.dataframe(tier_report(old), hide_index=True, use_container_width=True)
+    if isinstance(new, tuple) and len(new) == 2:
+        c2.dataframe(tier_report(new), hide_index=True, use_container_width=True)
+    scd = q_ch("""SELECT count() AS phien_ban, countIf(is_current = 1) AS hien_tai, countIf(is_current = 0) AS da_dong,
+                         uniqExact(client_id) AS khach FROM dw.dim_customer FINAL""").iloc[0]
+    st.write(f"`dim_customer`: **{scd.phien_ban:,}** phiên bản · {scd.hien_tai:,} hiện tại · {scd.da_dong:,} đã đóng · "
+             f"{scd.khach:,} khách".replace(",", "."))
+    demo = st.number_input("Khách hàng demo (client_id) — xem các phiên bản hạng và giao dịch theo phiên bản",
+                           min_value=1, value=24, step=1, key="h_client")
+    vers = q_ch("""SELECT customer_sk, membership_tier AS hang, valid_from, valid_to, is_current, updated_at
+                   FROM dw.dim_customer FINAL WHERE client_id = %(c)s ORDER BY valid_from""", c=int(demo))
+    vers["valid_to"] = vers["valid_to"].map(lambda d: "hiện tại" if d.year == 2299 else d)
+    st.dataframe(vers, hide_index=True, use_container_width=True)
+    if len(vers):
+        st.dataframe(q_ch(f"""SELECT c.membership_tier AS hang, t.customer_sk, min(t.d) AS tu_ngay, max(t.d) AS den_ngay,
+                                     count() AS so_giao_dich, sumIf(amount, dir='IN') AS tien_vao,
+                                     sumIf(amount, dir='OUT') AS tien_ra
+                              FROM {FACT} AS t
+                              JOIN (SELECT customer_sk, membership_tier FROM dw.dim_customer FINAL
+                                    WHERE client_id = %(c)s) AS c USING (customer_sk)
+                              WHERE t.customer_sk IN (SELECT customer_sk FROM dw.dim_customer FINAL WHERE client_id = %(c)s)
+                              GROUP BY hang, t.customer_sk ORDER BY tu_ngay""", c=int(demo)),
+                     hide_index=True, use_container_width=True)
+
+
+# ================================================================ viewer mode (APP_MODE=viewer)
+# A read-only copy for the members, e.g. on Streamlit Community Cloud with the warehouse on Aiven:
+# reports and lookups (BR01, BR02, BR08) plus free SQL on ClickHouse. No PostgreSQL, no runner,
+# no button that writes anything.
+SQL_SETTINGS = {"readonly": 1, "max_execution_time": 30, "max_memory_usage": 500_000_000,
+                "max_result_rows": 10_000, "result_overflow_mode": "break", "max_threads": 2}
+SQL_EXAMPLE = """-- Tiền vào / ra theo năm và hạng thành viên (hạng tại ngày giao dịch)
+SELECT intDiv(f.date_key, 10000) AS nam, c.membership_tier AS hang,
+       sumIf(f.amount, p.cash_flow_direction = 'IN')  AS tien_vao,
+       sumIf(f.amount, p.cash_flow_direction = 'OUT') AS tien_ra,
+       count() AS so_giao_dich
+FROM dw.fact_transaction AS f
+JOIN (SELECT * FROM dw.dim_transaction_profile FINAL) AS p USING (transaction_profile_sk)
+JOIN (SELECT customer_sk, membership_tier FROM dw.dim_customer FINAL) AS c USING (customer_sk)
+GROUP BY nam, hang
+ORDER BY nam, hang"""
+
+
+def render_sql():
+    st.caption("Truy vấn tự do trên kho dữ liệu (ClickHouse, database `dw`), chỉ đọc: tối đa 30 giây, "
+               "500 MB bộ nhớ và 10.000 dòng mỗi truy vấn. Dimension đọc kèm `FINAL` để lấy phiên bản mới nhất.")
+    with st.expander("Các bảng và cột"):
+        for t in ["fact_transaction", "dim_date", "dim_account", "dim_customer", "dim_transaction_profile",
+                  "dim_district"]:
+            cols = q_ch(f"DESCRIBE TABLE dw.{t}")
+            st.markdown(f"**dw.{t}**: " + ", ".join(f"`{n}` {ty}" for n, ty in zip(cols["name"], cols["type"])))
+    sql = st.text_area("SQL", SQL_EXAMPLE, height=220, key="sql_text")
+    if st.button("Chạy truy vấn", type="primary", key="sql_run"):
+        body = "\n".join(l for l in sql.splitlines() if not l.strip().startswith("--")).strip().rstrip(";")
+        if ";" in body:
+            st.error("Mỗi lần chỉ chạy một câu lệnh.")
+        elif body.split(None, 1)[0].upper() not in ("SELECT", "WITH", "SHOW", "DESCRIBE", "DESC", "EXPLAIN"):
+            st.error("Chỉ cho phép truy vấn đọc (SELECT, WITH, SHOW, DESCRIBE, EXPLAIN).")
+        else:
+            started = time.perf_counter()
+            try:
+                r = ch().query(body, settings=SQL_SETTINGS)    # readonly=1: the server refuses any write
+            except Exception as e:  # noqa: BLE001
+                st.error(f"ClickHouse báo lỗi: {e}")
+            else:
+                df = pd.DataFrame(r.result_rows, columns=r.column_names)
+                st.success(f"{len(df):,} dòng · {time.perf_counter() - started:.2f} s".replace(",", ".")
+                           + (" · đã cắt ở 10.000 dòng" if len(df) >= 10_000 else ""))
+                st.dataframe(df, hide_index=True, use_container_width=True)
+                st.download_button("Tải CSV", df.to_csv(index=False).encode(), "ket_qua.csv", "text/csv")
+
+
+VIEWER = os.environ.get("APP_MODE", "full").lower() == "viewer"
+if VIEWER:
+    st.title("🏦 BankDW — Bản chỉ xem")
+    st.caption("Kho dữ liệu Kimball trên ClickHouse · dữ liệu Berka (Séc, 1993–1998) + hạng thành viên mô phỏng · "
+               "chỉ đọc: báo cáo, tra cứu và SQL")
+    with st.sidebar:
+        st.subheader("Trạng thái")
+        try:
+            n = q_ch("SELECT count() AS n FROM dw.fact_transaction")["n"][0]
+            st.success(f"Data Warehouse · {n:,} giao dịch".replace(",", "."))
+        except Exception as e:  # noqa: BLE001
+            st.error(f"Data Warehouse: {e}")
+        st.info("Bản chỉ xem: không chạy pipeline, không ghi dữ liệu.")
+    t_over, t_lookup, t_hist, t_sql = st.tabs(["📊 Tổng quan", "🔎 Tra cứu tài khoản",
+                                               "🕰️ Báo cáo lịch sử (SCD2)", "🧮 SQL"])
+    with t_over:
+        render_overview()
+    with t_lookup:
+        st.subheader("BR02 · Tra cứu tài khoản")
+        render_lookup()
+    with t_hist:
+        st.subheader("BR08 · Báo cáo lịch sử theo hạng")
+        render_history()
+    with t_sql:
+        render_sql()
+    st.stop()
+
+
+# ---------------------------------------------------------------- header and sidebar
+st.title("🏦 BankDW — Dòng tiền và hoạt động tài khoản")
+st.caption("Kimball trên ClickHouse · kho vận hành PostgreSQL · dữ liệu Berka (Séc, 1993–1998) + hạng thành viên mô phỏng")
+
+with st.sidebar:
+    st.subheader("Trạng thái hệ thống")
+    try:
+        n = q_ch("SELECT count() AS n FROM dw.fact_transaction")["n"][0]
+        st.success(f"Data Warehouse · {n:,} giao dịch".replace(",", "."))
+    except Exception as e:  # noqa: BLE001
+        st.error(f"Data Warehouse: {e}")
+    try:
+        open_alerts = q_pg("SELECT count(*) AS n FROM ops.alert WHERE status <> 'RESOLVED'")["n"][0]
+        st.success(f"Kho vận hành · {open_alerts:,} cảnh báo chưa xử lý".replace(",", "."))
+    except Exception as e:  # noqa: BLE001
+        st.error(f"Kho vận hành: {e}")
+    health = runner("/health")
+    if "error" in health:
+        st.warning("Pipeline: không kết nối được")
+    else:
+        st.info("Pipeline: đang chạy một tác vụ" if health.get("busy") else "Pipeline: sẵn sàng")
+
+overview, analysis, operations = st.tabs(["📊 Tổng quan", "🔎 Phân tích", "⚙️ Vận hành"])
+
+# ================================================================ TỔNG QUAN (U01, BR01)
+with overview:
+    render_overview()
+
 # ================================================================ PHÂN TÍCH (U02, BR02-BR04)
 with analysis:
     sub_lookup, sub_alerts = st.tabs(["BR02 · Tra cứu tài khoản", "BR03 + BR04 · Cảnh báo"])
 
     with sub_lookup:
-        st.caption("Người dùng: Chuyên viên phân tích · chọn mã tài khoản và khoảng thời gian")
-        c1, c2 = st.columns([1, 2])
-        acc = c1.number_input("Mã tài khoản (account_id)", min_value=1, value=11, step=1, key="br02_acc")
-        rng = c2.date_input("Khoảng thời gian", (dt.date(1998, 7, 1), dt.date(1999, 12, 31)),
-                            min_value=dt.date(1993, 1, 1), max_value=dt.date(1999, 12, 31), key="br02_rng")
-        info = q_ch("""SELECT a.account_id, a.account_open_date, a.statement_frequency_name, d.district_name, d.region_name
-                       FROM dw.dim_account AS a FINAL
-                       JOIN (SELECT * FROM dw.dim_district FINAL) AS d ON d.district_sk = a.account_district_sk
-                       WHERE a.account_id = %(a)s""", a=int(acc))
-        if not len(info):
-            st.warning("Không có tài khoản này trong kho.")
-        elif isinstance(rng, tuple) and len(rng) == 2:
-            i = info.iloc[0]
-            st.markdown(f"**Tài khoản {i.account_id}** · mở ngày {i.account_open_date:%d/%m/%Y} · sao kê "
-                        f"{i.statement_frequency_name.lower()} · chi nhánh {i.district_name} ({i.region_name})")
-            lo, hi = (int(d.strftime("%Y%m%d")) for d in rng)
-            # Filter the fact by its own key (account_sk leads its sort key): filtering on dim_account.account_id
-            # after a join made ClickHouse read the whole fact table (P2-8 benchmark, section 12.4).
-            tx = q_ch(f"""SELECT t.d AS ngay, t.transaction_id AS ma_giao_dich, t.dir AS chieu, t.type_name AS loai,
-                                 t.operation_name AS phuong_thuc, t.purpose_name AS muc_dich, t.amount AS so_tien,
-                                 t.balance_after AS so_du_sau, c.client_id AS chu_tai_khoan, c.membership_tier AS hang,
-                                 t.load_batch_id AS lo_nap
-                          FROM {FACT} AS t
-                          JOIN (SELECT customer_sk, client_id, membership_tier FROM dw.dim_customer FINAL) AS c USING (customer_sk)
-                          WHERE t.account_sk IN (SELECT account_sk FROM dw.dim_account FINAL WHERE account_id = %(a)s)
-                            AND t.date_key BETWEEN %(lo)s AND %(hi)s
-                          ORDER BY t.date_key, t.transaction_id""", a=int(acc), lo=lo, hi=hi)
-            m_in = tx.loc[tx.chieu == "IN", "so_tien"].astype(float).sum()
-            m_out = tx.loc[tx.chieu == "OUT", "so_tien"].astype(float).sum()
-            a, b, c, d = st.columns(4)
-            a.metric("Tiền vào", money(m_in))
-            b.metric("Tiền ra", money(m_out))
-            c.metric("Thuần", money(m_in - m_out))
-            d.metric("Số giao dịch", len(tx))
-            st.dataframe(tx, hide_index=True, use_container_width=True, height=380,
-                         column_config={"so_tien": st.column_config.NumberColumn(format="%.2f"),
-                                        "so_du_sau": st.column_config.NumberColumn(format="%.2f")})
+        render_lookup()
 
     with sub_alerts:
         st.caption("BR03: cảnh báo sinh sau mỗi lần nạp, kèm lý do và căn cứ · BR04: ghi nhận trạng thái và ghi chú")
@@ -383,43 +510,4 @@ with operations:
         st.dataframe(ops_df, hide_index=True, use_container_width=True)
 
     with sub_hist:
-        st.caption("Bảng hạng mô phỏng lưu hạng hiện tại + ngày hiệu lực; ETL giữ lịch sử bằng SCD Type 2. "
-                   "Giao dịch kỳ cũ giữ hạng cũ, giao dịch từ ngày hiệu lực dùng hạng mới.")
-        c1, c2 = st.columns(2)
-        old = c1.date_input("Kỳ cũ", (dt.date(1993, 1, 1), dt.date(1998, 12, 31)), key="h_old")
-        new = c2.date_input("Kỳ mới", (dt.date(1999, 1, 1), dt.date(1999, 1, 31)), key="h_new")
-
-        def tier_report(rng):
-            lo, hi = (int(d.strftime("%Y%m%d")) for d in rng)
-            r = q_ch(f"""SELECT c.membership_tier AS hang, uniqExact(c.client_id) AS so_khach, count() AS so_giao_dich,
-                                sumIf(amount, dir='IN') AS tien_vao, sumIf(amount, dir='OUT') AS tien_ra
-                         FROM {FACT} AS t
-                         JOIN (SELECT customer_sk, client_id, membership_tier FROM dw.dim_customer FINAL) AS c USING (customer_sk)
-                         WHERE t.date_key BETWEEN %(lo)s AND %(hi)s GROUP BY hang""", lo=lo, hi=hi)
-            r["hang"] = pd.Categorical(r["hang"], TIERS, ordered=True)
-            return r.sort_values("hang")
-
-        if isinstance(old, tuple) and len(old) == 2:
-            c1.dataframe(tier_report(old), hide_index=True, use_container_width=True)
-        if isinstance(new, tuple) and len(new) == 2:
-            c2.dataframe(tier_report(new), hide_index=True, use_container_width=True)
-        scd = q_ch("""SELECT count() AS phien_ban, countIf(is_current = 1) AS hien_tai, countIf(is_current = 0) AS da_dong,
-                             uniqExact(client_id) AS khach FROM dw.dim_customer FINAL""").iloc[0]
-        st.write(f"`dim_customer`: **{scd.phien_ban:,}** phiên bản · {scd.hien_tai:,} hiện tại · {scd.da_dong:,} đã đóng · "
-                 f"{scd.khach:,} khách".replace(",", "."))
-        demo = st.number_input("Khách hàng demo (client_id) — xem các phiên bản hạng và giao dịch theo phiên bản",
-                               min_value=1, value=24, step=1, key="h_client")
-        vers = q_ch("""SELECT customer_sk, membership_tier AS hang, valid_from, valid_to, is_current, updated_at
-                       FROM dw.dim_customer FINAL WHERE client_id = %(c)s ORDER BY valid_from""", c=int(demo))
-        vers["valid_to"] = vers["valid_to"].map(lambda d: "hiện tại" if d.year == 2299 else d)
-        st.dataframe(vers, hide_index=True, use_container_width=True)
-        if len(vers):
-            st.dataframe(q_ch(f"""SELECT c.membership_tier AS hang, t.customer_sk, min(t.d) AS tu_ngay, max(t.d) AS den_ngay,
-                                         count() AS so_giao_dich, sumIf(amount, dir='IN') AS tien_vao,
-                                         sumIf(amount, dir='OUT') AS tien_ra
-                                  FROM {FACT} AS t
-                                  JOIN (SELECT customer_sk, membership_tier FROM dw.dim_customer FINAL
-                                        WHERE client_id = %(c)s) AS c USING (customer_sk)
-                                  WHERE t.customer_sk IN (SELECT customer_sk FROM dw.dim_customer FINAL WHERE client_id = %(c)s)
-                                  GROUP BY hang, t.customer_sk ORDER BY tu_ngay""", c=int(demo)),
-                         hide_index=True, use_container_width=True)
+        render_history()
