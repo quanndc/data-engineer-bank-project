@@ -11,6 +11,16 @@ Nhật ký Phase 1 (Kaggle, Kafka, Superset; đến ngày 07/10/2026) đã chuy�
 
 
 
+
+---
+
+## [2026-10-29] Bản chỉ xem đã chạy trên Streamlit Community Cloud ✅
+
+- Link: <https://data-engineer-bank-project.streamlit.app/> (`APP_MODE=viewer`, đọc Aiven ClickHouse bằng tài khoản `bankdw_viewer`).
+- Đã kiểm tra bằng trình duyệt: thanh bên 1.057.571 giao dịch; Tổng quan 1998 (vào 960.964.282, ra 933.819.075, thuần 27.145.207, 322.277 giao dịch) khớp bản trên máy; tra cứu tài khoản 11; Báo cáo lịch sử (5.118 phiên bản / 4.500 hiện tại / 618 đã đóng); SQL 28 dòng trong 0,67 s; `DROP TABLE` bị chặn.
+- App đang **công khai** (mở được không cần đăng nhập). Muốn chỉ nhóm xem: Settings → Sharing → *Only specific people can view this app*.
+- Cập nhật dữ liệu trên cloud sau khi chạy thêm ở máy: `make publish`.
+
 ---
 
 ## [2026-10-29] Đã publish kho lên Aiven ClickHouse; tài khoản chỉ đọc cho bản chỉ xem ✅

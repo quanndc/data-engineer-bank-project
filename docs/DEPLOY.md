@@ -1,5 +1,7 @@
 # Deploy bản chỉ xem cho thành viên (Aiven + Streamlit Community Cloud)
 
+**Đang chạy:** <https://data-engineer-bank-project.streamlit.app/> (kiểm tra ngày 29/10/2026).
+
 Hệ thống đầy đủ (pipeline, kho vận hành PostgreSQL, chạy kịch bản, sao lưu) **vẫn chạy trên máy** để demo và nộp bài. Bản cho thành viên là **bản chỉ xem**:
 
 | Có | Không có |
