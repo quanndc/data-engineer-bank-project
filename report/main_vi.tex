@@ -364,7 +364,8 @@ VYBER (rút tiền) & OUT & 16.666 & 1,58\% & 12.103 & 208,6 \\
 \textbf{Quyền sở hữu.} Mỗi tài khoản có đúng một chủ sở hữu (\texttt{disp.type = OWNER}), và
 mỗi chủ sở hữu trong 4.500 chủ sở hữu sở hữu đúng một tài khoản; 869 khách hàng còn lại chỉ
 là người được ủy quyền (DISPONENT). Khu vực cư trú của chủ sở hữu khác với khu vực chi nhánh của
-tài khoản ở 409 tài khoản, vì vậy khu vực đóng hai vai trò.
+tài khoản ở 409 tài khoản, vì vậy khu vực đóng hai vai trò. Các số liệu này tái hiện được
+14 trên 15 số liệu trong khảo sát trước đó của nhóm về bộ dữ liệu.
 
 \subsection{Khiếm khuyết chất lượng dữ liệu}
 \label{sec:data-quality}
@@ -731,7 +732,9 @@ của cảnh báo---và \emph{điều khiển} pipeline, chứ không chỉ hi�
 ứng dụng được gửi đến một dịch vụ runner bên trong container Spark; dịch vụ này chỉ chấp
 nhận một danh sách thao tác được cho phép với các tham số đã được kiểm tra, mỗi lúc chỉ chạy
 một job, và đánh dấu lần chạy tương ứng là \texttt{triggered\_by = app}. Các truy vấn đọc
-được lưu đệm trong 60 giây.
+được lưu đệm trong 60 giây. Truy vấn tra cứu một tài khoản hay một khách hàng lọc bảng fact
+theo khóa của chính nó (\tbl{account\_sk}, \tbl{customer\_sk}) trước khi nối các
+dimension, để ClickHouse dùng được khóa sắp xếp của bảng fact thay vì đọc toàn bộ bảng.
 
 Bảng~\ref{tab:techroles} tóm tắt cách mỗi công nghệ được sử dụng và những BR phụ thuộc vào
 nó.
@@ -925,8 +928,8 @@ Streamlit (F) & 1.40.2 & 0,5 GB \\
 
 \subsection{Khảo sát dữ liệu}
 Các tệp nguồn được khảo sát bằng DuckDB: số dòng, số giá trị phân biệt, phân phối giá trị,
-kiểm tra miền giá trị và kiểm tra khóa giữa các tệp. Kết quả, được trình bày ở
-Mục~\ref{sec:problem}, khớp với khảo sát trước đó của nhóm ở 14 trên 15 số liệu.
+kiểm tra miền giá trị và kiểm tra khóa giữa các tệp. Kết quả được trình bày ở
+Mục~\ref{sec:problem}, kèm so sánh với khảo sát trước đó của nhóm về bộ dữ liệu.
 
 \subsection{Kịch bản đánh giá}
 Dữ liệu lịch sử được nạp trước (một lô tham chiếu và 72 lô theo tháng). Sau đó các tệp kịch
@@ -980,6 +983,12 @@ theo hệ số quy mô. Bản sao này chứa 10.575.710 dòng fact, và số d�
 khoản và số khách hàng của nó đã được kiểm tra là đúng bằng mười lần các giá trị ở
 $\times$1. Bản sao nằm trong các cơ sở dữ liệu riêng, nên bản thân kho dữ liệu vẫn ở
 $\times$1. B3 không được lặp lại, vì dữ liệu vận hành không tăng theo kho dữ liệu.
+
+Ở cả hai quy mô còn so sánh hai cách viết truy vấn tra cứu tài khoản (BR02): nối dimension
+tài khoản rồi lọc theo \tbl{account\_id}, và lọc bảng fact theo \tbl{account\_sk} trước.
+Với mỗi cách, thời gian và số dòng được đọc (lấy từ nhật ký truy vấn của ClickHouse) được
+ghi lại. Các truy vấn tra cứu của ứng dụng (BR02 và khung nhìn theo khách hàng của BR08)
+được đo theo cùng cách trên chính kho dữ liệu, ở dạng ban đầu và dạng cuối cùng.
 
 \begin{table*}[!t]
 \centering
@@ -1220,21 +1229,19 @@ hợp, ClickHouse chậm đi 2--6 lần khi dữ liệu tăng mười lần, nh�
 lần, nên khoảng cách nới rộng từ 3--22 lên 7--28 lần; với tám người dùng đồng thời,
 PostgreSQL chỉ phục vụ được 0,4 truy vấn mỗi giây, với độ trễ p95 là 38~s. Tra cứu một tài
 khoản vẫn dưới 1~ms trên PostgreSQL và trên One Big Table, nhưng tăng từ 17 lên 54~ms trên
-star schema trong ClickHouse. Một phép đo bổ sung giải thích lý do: khi điều kiện lọc đặt
-trên một cột của dimension (\tbl{account\_id}), ClickHouse đọc toàn bộ bảng fact (10,6 triệu
-dòng) trước khi nối; lọc bảng fact theo \tbl{account\_sk} trước chỉ đọc khoảng 100.000 dòng
-và mất 6,8~ms ở cả hai quy mô. Sửa một khu vực trên One Big Table phải ghi lại 1.500.580 dòng
+star schema trong ClickHouse. So sánh hai cách viết truy vấn cho thấy lý do: khi điều kiện
+lọc đặt trên một cột của dimension (\tbl{account\_id}), ClickHouse đã đọc toàn bộ bảng fact
+(10,6 triệu dòng) trước khi nối, còn lọc bảng fact theo \tbl{account\_sk} trước chỉ đọc
+khoảng 100.000 dòng và mất 6,8~ms ở cả hai quy mô. Sửa một khu vực trên One Big Table phải ghi lại 1.500.580 dòng
 thay vì một. Ở $\times$10, Spark cuối cùng đã hưởng lợi từ việc thêm nhân (một lô: 28,8~s
 trên một nhân, 14,0~s trên tám nhân), trong khi 72 lô theo tháng, mỗi lô khoảng 147.000
 dòng, vẫn không.
 
-\textbf{Áp dụng phát hiện vào ứng dụng.} Truy vấn tra cứu tài khoản của ứng dụng (BR02) đã
-được viết lại để lọc bảng fact theo \tbl{account\_sk} trước. Trên chính kho dữ liệu, với tài
-khoản 11 trong giai đoạn tháng 7/1998--tháng 12/1999, truy vấn hiện đọc 19.694 dòng thay vì
-162.739 và trả lời trong 4,3~ms thay vì 9,6~ms, với kết quả giống hệt. Cùng thay đổi đó áp
-dụng cho khung nhìn theo phiên bản của một khách hàng (BR08) giảm thời gian từ 14,6 xuống
-7,9~ms; truy vấn này vẫn quét cột \tbl{customer\_sk} của toàn bộ bảng fact, vì cột đó không
-thuộc khóa sắp xếp.
+\textbf{Truy vấn tra cứu trong ứng dụng.} Trên chính kho dữ liệu, dạng cuối cùng của truy
+vấn tra cứu tài khoản (tài khoản 11, tháng 7/1998--tháng 12/1999) đọc 19.694 dòng thay vì
+162.739 và trả lời trong 4,3~ms thay vì 9,6~ms, với kết quả giống hệt. Khung nhìn theo phiên
+bản của một khách hàng (BR08) giảm từ 14,6 xuống 7,9~ms; truy vấn này vẫn quét cột
+\tbl{customer\_sk} của toàn bộ bảng fact, có vẻ vì cột đó không thuộc khóa sắp xếp.
 
 \begin{table}[!t]
 \centering

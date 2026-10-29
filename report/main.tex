@@ -343,7 +343,8 @@ VYBER (withdrawal) & OUT & 16,666 & 1.58\% & 12,103 & 208.6 \\
 \textbf{Ownership.} Every account has exactly one owner (\texttt{disp.type = OWNER}), and
 each of the 4,500 owners owns exactly one account; the 869 other clients are only
 authorized users (DISPONENT). The owner's residence district differs from the account's
-branch district for 409 accounts, so the district plays two roles.
+branch district for 409 accounts, so the district plays two roles. These figures reproduce
+14 of the 15 figures of the team's earlier survey of the dataset.
 
 \subsection{Data Quality Defects}
 \label{sec:data-quality}
@@ -711,6 +712,9 @@ and notes---and \emph{control} the pipeline, not only display charts. Commands f
 application go to a runner service inside the Spark container, which accepts only an
 allow-list of actions with validated arguments, runs one job at a time, and marks the
 resulting run as \texttt{triggered\_by = app}. Read queries are cached for 60 seconds.
+Lookups of one account or one client filter the fact table by its own key
+(\tbl{account\_sk}, \tbl{customer\_sk}) before joining the dimensions, so that ClickHouse
+can use the sort key of the fact instead of reading the whole table.
 
 Table~\ref{tab:techroles} summarizes how every technology is used and which BRs depend on
 it.
@@ -905,8 +909,9 @@ Streamlit (F) & 1.40.2 & 0.5 GB \\
 
 \subsection{Data Profiling}
 The source files were profiled with DuckDB: row counts, distinct counts, value
-distributions, range checks, and cross-file key checks. The results, reported in
-Section~\ref{sec:problem}, matched the team's earlier survey on 14 of 15 figures.
+distributions, range checks, and cross-file key checks. The results are reported in
+Section~\ref{sec:problem}, where they are also compared with the team's earlier survey of
+the dataset.
 
 \subsection{Evaluation Scenarios}
 The historical data was loaded first (one reference batch and 72 monthly batches). The
@@ -960,6 +965,13 @@ by scale factor. It holds 10,575,710 fact rows, and its row count, total amount,
 of accounts and clients were checked to be exactly ten times those of $\times$1. It lives in
 separate databases, so the warehouse itself stayed at $\times$1. B3 was not repeated,
 because the operational data does not grow with the warehouse.
+
+Two forms of the account lookup (BR02) were also compared at both scales: joining the
+account dimension and filtering on \tbl{account\_id}, and filtering the fact by
+\tbl{account\_sk} first. For each, the time and the number of rows read, taken from the
+query log of ClickHouse, were recorded. The lookups of the application (BR02 and the
+per-client view of BR08) were measured the same way on the warehouse itself, in their
+first and their final form.
 
 \begin{table*}[!t]
 \centering
@@ -1200,21 +1212,19 @@ aggregation queries, ClickHouse became 2--6 times slower when the data grew ten 
 PostgreSQL became 4--10 times slower, so the gap widened from 3--22 to 7--28 times; with
 eight concurrent users PostgreSQL served only 0.4 queries per second, with a p95 latency of
 38~s. Lookups of one account stayed under 1~ms on PostgreSQL and on the One Big Table, but
-grew from 17 to 54~ms on the star schema in ClickHouse. A follow-up measurement explains
-why: when the filter is on a dimension column (\tbl{account\_id}), ClickHouse reads the whole
-fact table (10.6 million rows) before the join; filtering the fact by \tbl{account\_sk}
-first reads about 100,000 rows and takes 6.8~ms at both scales. Correcting one district on
+grew from 17 to 54~ms on the star schema in ClickHouse. The comparison of the two query
+forms suggests why: with the filter on a dimension column (\tbl{account\_id}), ClickHouse
+read the whole fact table (10.6 million rows) before the join, whereas filtering the fact by
+\tbl{account\_sk} first read about 100,000 rows and took 6.8~ms at both scales. Correcting one district on
 the One Big Table rewrote 1,500,580 rows instead of one. At $\times$10, Spark finally gained
 from more cores (one batch: 28.8~s on one core, 14.0~s on eight), whereas the 72 monthly
 batches, of about 147,000 rows each, still did not.
 
-\textbf{Applying the finding to the application.} The account lookup of the application
-(BR02) was rewritten to filter the fact by \tbl{account\_sk} first. On the warehouse
-itself, for account 11 over July 1998--December 1999, the query now reads 19,694 rows
-instead of 162,739 and answers in 4.3~ms instead of 9.6~ms, with an identical result. The
-same change to the per-version view of one client (BR08) lowered it from 14.6 to 7.9~ms; it
-still scans the \tbl{customer\_sk} column of the whole fact table, because that column is
-not part of the sort key.
+\textbf{Lookups in the application.} On the warehouse itself, the final form of the
+account lookup (account 11, July 1998--December 1999) read 19,694 rows instead of 162,739
+and answered in 4.3~ms instead of 9.6~ms, with an identical result. The per-version view of
+one client (BR08) went from 14.6 to 7.9~ms; it still scans the \tbl{customer\_sk} column of
+the whole fact table, which appears to be because that column is not part of the sort key.
 
 \begin{table}[!t]
 \centering

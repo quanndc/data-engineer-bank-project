@@ -7,6 +7,17 @@ Nhật ký Phase 1 (Kaggle, Kafka, Superset; đến ngày 07/10/2026) đã chuy�
 
 
 
+
+---
+
+## [2026-10-29] Report: đối chiếu với template trong `report/LaTeX_Template_for_Technical_Report` 📐
+
+- Cấu trúc đã đúng template (`report_template.tex`, IEEEtran peerreview): title/author/date, mục lục, danh sách hình/bảng, abstract, **7 phần đúng tên và thứ tự** (Introduction · Problem Definition · Proposed Solutions · Criteria for Assessing Solutions · Research Methodology · Analysis and Interpretation · Conclusions and Recommendations), phụ lục A/B, `thebibliography` viết tay, ngôn ngữ thận trọng (hedging) ở phần Analysis.
+- Sửa theo hướng dẫn của template, ở **cả bản Anh và bản Việt**:
+  - Template: Analysis "don't introduce any new content (e.g., research methods or solutions)". Phép đo bổ sung (hai cách viết truy vấn tra cứu tài khoản) chuyển sang **Research Methodology**; việc truy vấn tra cứu lọc fact theo khóa trước chuyển sang **Proposed Solutions** (mục ứng dụng); Analysis chỉ còn số liệu kết quả.
+  - Template: Methodology "do not include your findings". Kết quả "khớp 14/15 số liệu khảo sát" chuyển sang **Problem Definition** (mục đặc điểm dữ liệu).
+- Hai bản biên dịch sạch; cập nhật `report_overleaf.zip`.
+
 ---
 
 ## [2026-10-29] Phase 2 — Report tiếng Việt + sửa lỗi biên dịch trên Overleaf 📄
