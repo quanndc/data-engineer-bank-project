@@ -1,0 +1,2 @@
+# Overleaf and latexmk: build with XeLaTeX (the Vietnamese files need fontspec).
+$pdf_mode = 5;

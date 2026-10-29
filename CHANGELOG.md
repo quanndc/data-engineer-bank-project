@@ -6,6 +6,16 @@ Nhật ký Phase 1 (Kaggle, Kafka, Superset; đến ngày 07/10/2026) đã chuy�
 
 
 
+
+---
+
+## [2026-10-29] Phase 2 — Report tiếng Việt + sửa lỗi biên dịch trên Overleaf 📄
+
+- [report/main_vi.tex](report/main_vi.tex): **bản tiếng Việt** đầy đủ của report (cùng mục, bảng, hình, số liệu; số theo định dạng Việt `1.056.320`, `3,4 s`). XeLaTeX + polyglossia, font TeX Gyre Termes; 17 trang, không lỗi, không tràn lề. Mọi con số đã được đối chiếu tự động với bản tiếng Anh (24 bảng khớp từng dòng). Thống nhất thuật ngữ "khu vực" cho district như app và slide.
+- **Lỗi trên Overleaf** `fontspec … requires either XeTeX or LuaTeX`: file tiếng Việt (report và slide) bị biên dịch bằng pdfLaTeX. Thêm `report/latexmkrc` và `slides/latexmkrc` (`$pdf_mode = 5;`) để Overleaf tự dùng **XeLaTeX**; `main.tex` cũng biên dịch được bằng XeLaTeX.
+- Slide tìm ảnh ở cả `../report/figures/` (repo) lẫn `figures/` (khi upload riêng).
+- Gói upload Overleaf (không đưa lên git): `report_overleaf.zip` (main.tex, main_vi.tex, IEEEtran.cls, latexmkrc, figures/) và `slides_overleaf.zip` (slides.tex, latexmkrc, figures/).
+
 ---
 
 ## [2026-10-29] Phase 2 — Sửa truy vấn BR02, hoàn thiện report tiếng Anh, slide thuyết trình 📄

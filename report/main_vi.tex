@@ -130,7 +130,7 @@ từng xu. So với cùng star schema (lược đồ hình sao) trên PostgreSQL
 truy vấn tổng hợp nhanh hơn 3,3--22 lần với dung lượng nhỏ hơn 8,7 lần, và nhanh hơn 7--28
 lần trên một bản sao nhân mười lần, trong khi PostgreSQL nhanh hơn ở các truy vấn tra cứu
 một tài khoản mà ClickHouse vẫn trả lời dưới 20~ms. One Big Table nhanh hơn star schema
-1,5--3,4 lần nhưng phải ghi lại 150.058 dòng để sửa tên một quận. Lưu dữ liệu vận hành
+1,5--3,4 lần nhưng phải ghi lại 150.058 dòng để sửa tên một khu vực. Lưu dữ liệu vận hành
 trong PostgreSQL nhanh hơn 8--70 lần so với trong ClickHouse và bảo đảm năm ràng buộc toàn
 vẹn mà ClickHouse không bảo đảm.
 \end{abstract}
@@ -167,7 +167,7 @@ liệu đúng, truy vấn nhanh và hữu ích cho người dùng của ngân h�
 Các đóng góp chính gồm:
 \begin{itemize}
   \item một star schema (lược đồ hình sao) cho giao dịch ngân hàng với một junk dimension
-        hồ sơ giao dịch, một dimension (bảng chiều) quận đóng nhiều vai trò, và một
+        hồ sơ giao dịch, một dimension (bảng chiều) khu vực đóng nhiều vai trò, và một
         dimension khách hàng SCD Type~2 lưu giữ lịch sử của một hạng thành viên mô phỏng;
   \item một pipeline theo lô (Data Lake $\rightarrow$ Spark $\rightarrow$ ClickHouse) kiểm
         tra mọi lô, tách riêng các bản ghi lỗi thay vì làm hỏng cả lô, có thể chạy lại bất
@@ -260,7 +260,7 @@ O4. Bảo đảm dữ liệu và vận hành đáng tin cậy & BR05--BR07 & S�
 \toprule
 \textbf{Mã} & \textbf{Người dùng} & \textbf{Yêu cầu nghiệp vụ} & \textbf{Dữ liệu sử dụng} & \textbf{Kết quả minh họa mong đợi (kịch bản)} \\
 \midrule
-BR01 & U01 & Tổng quan dòng tiền: tiền vào, tiền ra, dòng tiền thuần và số giao dịch trong một kỳ được chọn, theo hạng thành viên, dưới dạng biểu đồ theo ngày và theo tháng & \tbl{fact\_transaction}, \tbl{dim\_date}, \tbl{dim\_transaction\_profile}, \tbl{dim\_customer} & KB01: số liệu bằng kết quả một truy vấn trên nguồn \\
+BR01 & U01 & Tổng quan dòng tiền: tiền vào, tiền ra, dòng tiền thuần và số giao dịch trong một kỳ được chọn, theo hạng thành viên, dưới dạng biểu đồ theo ngày và theo tháng & \tbl{fact\_transaction}, \tbl{dim\_date}, \tbl{dim\_transaction\_\allowbreak profile}, \tbl{dim\_customer} & KB01: số liệu bằng kết quả một truy vấn trên nguồn \\
 BR02 & U02 & Hoạt động tài khoản: với một tài khoản và một kỳ, liệt kê các giao dịch, tổng tiền vào, tổng tiền ra và số giao dịch & \tbl{fact\_transaction}, \tbl{dim\_account} & KB02: các giao dịch bằng nguồn, từng giao dịch một \\
 BR03 & U02 & Phát hiện gian lận: sau mỗi lần nạp, kiểm tra các quy tắc và sinh cảnh báo kèm lý do và căn cứ & Kho dữ liệu $\rightarrow$ \tbl{ops.alert} & KB03: một lô gian lận được chuẩn bị sẵn sinh ra đúng các cảnh báo mong đợi \\
 BR04 & U02 & Xử lý cảnh báo: trạng thái \emph{chưa xem / đang xem xét / đã xử lý} kèm ghi chú và lịch sử & \tbl{ops.alert}, \tbl{ops.alert\_action} & KB04: thay đổi trạng thái hiển thị trên giao diện \\
@@ -293,7 +293,7 @@ BR. Các tệp kịch bản cùng định dạng đại diện cho dữ liệu m
 Hệ thống ngân hàng lõi & Khối lượng lớn; chỉ ghi thêm; lô hằng ngày & \tbl{trans} \\
 Sổ đăng ký tài khoản & Nhỏ; hiếm khi thay đổi & \tbl{account} \\
 Dữ liệu gốc khách hàng (KYC) & Thay đổi chậm; mỗi tài khoản một chủ sở hữu & \tbl{client}, \tbl{disp} \\
-Dữ liệu tham chiếu & Tĩnh; 77 quận trong 8 vùng & \tbl{district} \\
+Dữ liệu tham chiếu & Tĩnh; 77 khu vực trong 8 vùng & \tbl{district} \\
 Hệ thống khách hàng thân thiết / CRM & Hạng của từng khách hàng kèm ngày hiệu lực; thay đổi theo thời gian & \tbl{customer\_profile\_\allowbreak simulated}, tệp đổi hạng \\
 Các lần nạp mới hằng ngày & Cùng định dạng với hệ thống lõi; có thể chứa lỗi hoặc gian lận & Các tệp kịch bản KB03, KB05, KB07, KB08 \\
 \bottomrule
@@ -313,15 +313,15 @@ dịch trải từ 1993-01-01 đến 1998-12-31.
 \label{tab:sources}
 \footnotesize
 \setlength{\tabcolsep}{4pt}
-\begin{tabular}{L{2.5cm} L{3.2cm} r}
+\begin{tabular}{L{2.8cm} L{2.9cm} r}
 \toprule
 \textbf{Tệp} & \textbf{Nội dung} & \textbf{Số dòng} \\
 \midrule
 \tbl{trans} & Giao dịch & 1.056.320 \\
-\tbl{account} & Tài khoản, quận chi nhánh, tần suất sao kê & 4.500 \\
-\tbl{client} & Khách hàng, mã số sinh, quận cư trú & 5.369 \\
+\tbl{account} & Tài khoản, khu vực chi nhánh, tần suất sao kê & 4.500 \\
+\tbl{client} & Khách hàng, mã số sinh, khu vực cư trú & 5.369 \\
 \tbl{disp} & Vai trò khách hàng--tài khoản (OWNER, DISPONENT) & 5.369 \\
-\tbl{district} & Quận và vùng & 77 \\
+\tbl{district} & Khu vực và vùng & 77 \\
 \tbl{customer\_profile\_\allowbreak simulated} & Hạng thành viên của từng chủ sở hữu (mô phỏng) & 4.500 \\
 \midrule
 \tbl{loan}, \tbl{order}, \tbl{card} & Không sử dụng & 682 / 6.471 / 892 \\
@@ -363,8 +363,8 @@ VYBER (rút tiền) & OUT & 16.666 & 1,58\% & 12.103 & 208,6 \\
 
 \textbf{Quyền sở hữu.} Mỗi tài khoản có đúng một chủ sở hữu (\texttt{disp.type = OWNER}), và
 mỗi chủ sở hữu trong 4.500 chủ sở hữu sở hữu đúng một tài khoản; 869 khách hàng còn lại chỉ
-là người được ủy quyền (DISPONENT). Quận cư trú của chủ sở hữu khác với quận chi nhánh của
-tài khoản ở 409 tài khoản, vì vậy quận đóng hai vai trò.
+là người được ủy quyền (DISPONENT). Khu vực cư trú của chủ sở hữu khác với khu vực chi nhánh của
+tài khoản ở 409 tài khoản, vì vậy khu vực đóng hai vai trò.
 
 \subsection{Khiếm khuyết chất lượng dữ liệu}
 \label{sec:data-quality}
@@ -493,7 +493,7 @@ Hình~\ref{fig:arch} trình bày kiến trúc ở mức container, vẽ theo mô
 \draw[arr] (src) -- node[lbl]{lô} (pipe);
 \draw[arr, dashed] (pipe.north) -- node[right, font=\scriptsize]{bản chụp} (lake.south);
 \draw[arr] ([yshift=4mm]pipe.east) -- node[lbl, sloped, pos=0.45]{nạp} (dw.west);
-\draw[arr] ([yshift=-4mm]pipe.east) -- node[above, sloped, font=\scriptsize, pos=0.4]{lần chạy, cảnh báo} (ops.west);
+\draw[arr] ([yshift=-4mm]pipe.east) -- node[above, sloped, font=\scriptsize, pos=0.45, align=center]{lần chạy,\\cảnh báo} (ops.west);
 \draw[arr] (dw.east) -- node[lbl, sloped, pos=0.5]{đọc} ([yshift=5mm]app.west);
 \draw[arr, <->] (ops.east) -- node[above, sloped, font=\scriptsize, pos=0.55]{xử lý} ([yshift=-5mm]app.west);
 \draw[arr] (app.south) -- ++(0,-1.7) -| node[pos=0.25, below, font=\scriptsize]{lệnh: chạy, chạy lại, sao lưu, khôi phục (runner)} (pipe.south);
@@ -513,16 +513,16 @@ Mô hình tuân theo quy trình thiết kế bốn bước của Kimball \cite{k
   \begin{itemize}
     \item \tbl{dim\_date}: lịch với năm, quý, tháng, \tbl{year\_month}, thứ trong tuần và
           cờ cuối tuần.
-    \item \tbl{dim\_account} (Type~1): tài khoản, ngày mở, tần suất sao kê và quận chi
+    \item \tbl{dim\_account} (Type~1): tài khoản, ngày mở, tần suất sao kê và khu vực chi
           nhánh của tài khoản.
     \item \tbl{dim\_customer} (\textbf{Type~2}): chủ sở hữu, với giới tính và ngày sinh
-          được giải mã từ mã số sinh, quận cư trú và hạng thành viên. Mỗi hạng là một phiên
+          được giải mã từ mã số sinh, khu vực cư trú và hạng thành viên. Mỗi hạng là một phiên
           bản với khóa thay thế riêng, \tbl{valid\_from} (bao gồm), \tbl{valid\_to} (không
           bao gồm; 2299-12-31 với phiên bản hiện hành) và \tbl{is\_current}.
     \item \tbl{dim\_transaction\_profile}: một \emph{junk dimension} gồm 15 tổ hợp đã chuẩn
           hóa của loại, nghiệp vụ và mục đích, với tên dễ đọc và chiều dòng tiền (IN/OUT).
-    \item \tbl{dim\_district}: 77 quận trong 8 vùng, đóng hai vai trò---quận chi nhánh qua
-          \tbl{dim\_account} và quận cư trú qua \tbl{dim\_customer} (một outrigger thay vì
+    \item \tbl{dim\_district}: 77 khu vực trong 8 vùng, đóng hai vai trò---khu vực chi nhánh qua
+          \tbl{dim\_account} và khu vực cư trú qua \tbl{dim\_customer} (một outrigger thay vì
           một khóa trực tiếp trong bảng fact).
   \end{itemize}
   \item \textbf{Đại lượng (facts):} \tbl{amount} không dấu và \emph{cộng dồn được}; tiền
@@ -563,7 +563,7 @@ balance\_after \emph{(bán cộng dồn)}\\ load\_batch\_id, loaded\_at};
 \end{figure}
 
 \subsubsection{Lô và chạy lại}
-Dữ liệu lịch sử được nạp dưới dạng một lô tham chiếu (\texttt{REF\_INITIAL}: quận, tài
+Dữ liệu lịch sử được nạp dưới dạng một lô tham chiếu (\texttt{REF\_INITIAL}: khu vực, tài
 khoản, chủ sở hữu và hạng ban đầu), tiếp theo là 72 lô theo tháng (\texttt{HIST\_1993\_01}
 đến \texttt{HIST\_1998\_12}). Mỗi kịch bản là một lô bổ sung (ví dụ
 \texttt{KB05\_DATA\_ERRORS}). Mọi lô đều có thể chạy lại từ bản chụp của nó trong Data Lake.
@@ -783,7 +783,7 @@ doanh (Bảng~\ref{tab:objectives}) và một khung nhìn của ứng dụng (B�
 \label{sec:sol-obt}
 Giải pháp thứ hai giữ nguyên pipeline và công nghệ nhưng thay star schema bằng một bảng phi
 chuẩn hóa duy nhất: mỗi dòng fact mang theo mọi thuộc tính của các dimension, kể cả cả hai
-vai trò quận và hạng thành viên cùng khoảng hiệu lực của nó. Thiết kế này thường được khuyến
+vai trò khu vực và hạng thành viên cùng khoảng hiệu lực của nó. Thiết kế này thường được khuyến
 nghị cho cơ sở dữ liệu cột vì nó loại bỏ phép nối khi truy vấn, và nó giữ ngữ nghĩa SCD2
 theo ngày giao dịch vì hạng được sao chép vào lúc nạp dòng. Cái giá của nó là dư thừa và
 chi phí chỉnh sửa cao: thay đổi một thuộc tính Type~1 đòi hỏi ghi lại mọi dòng fact mang
@@ -1105,7 +1105,7 @@ BR08 & Các phiên bản của một khách hàng & 2 & 18,3 (21,5) & 5,4 (5,6) 
 \midrule
 Dung lượng (MB) & 18,6 & 25,5 & 162,5 \\
 Nạp từ CSV (s) & 0,96 & +1,35 & 4,64 \\
-Đổi tên một quận: số dòng được ghi & 1 & 150.058 & 1 \\
+Đổi tên một khu vực: số dòng được ghi & 1 & 150.058 & 1 \\
 \quad thời gian (ms) & 6,0 & 99,3 & 4,1 \\
 Sửa một ngày sinh: số dòng được ghi & 2 & 330 & 2 \\
 \quad thời gian (ms) & 8,0 & 42,6 & 1,9 \\
@@ -1193,7 +1193,7 @@ trên một cột của dimension, ClickHouse không dùng được khóa sắp 
 
 \textbf{Mô hình dữ liệu (B1).} H4 có vẻ đúng. One Big Table nhanh hơn star schema từ 1,5
 đến 3,4 lần, nhưng chênh lệch tuyệt đối chỉ là 3--16~ms, và nó cần dung lượng lớn hơn 1,37
-lần (gấp đôi trước khi nén). Điểm yếu của nó là khi có thay đổi: đổi tên một quận phải ghi
+lần (gấp đôi trước khi nén). Điểm yếu của nó là khi có thay đổi: đổi tên một khu vực phải ghi
 lại 150.058 dòng fact trong 99~ms thay vì một dòng dimension, và sửa ngày sinh của một khách
 hàng phải ghi lại 330 dòng thay vì hai. Các con số này tăng theo dữ liệu, còn của star
 schema thì không.
@@ -1223,7 +1223,7 @@ khoản vẫn dưới 1~ms trên PostgreSQL và trên One Big Table, nhưng tăn
 star schema trong ClickHouse. Một phép đo bổ sung giải thích lý do: khi điều kiện lọc đặt
 trên một cột của dimension (\tbl{account\_id}), ClickHouse đọc toàn bộ bảng fact (10,6 triệu
 dòng) trước khi nối; lọc bảng fact theo \tbl{account\_sk} trước chỉ đọc khoảng 100.000 dòng
-và mất 6,8~ms ở cả hai quy mô. Sửa một quận trên One Big Table phải ghi lại 1.500.580 dòng
+và mất 6,8~ms ở cả hai quy mô. Sửa một khu vực trên One Big Table phải ghi lại 1.500.580 dòng
 thay vì một. Ở $\times$10, Spark cuối cùng đã hưởng lợi từ việc thêm nhân (một lô: 28,8~s
 trên một nhân, 14,0~s trên tám nhân), trong khi 72 lô theo tháng, mỗi lô khoảng 147.000
 dòng, vẫn không.

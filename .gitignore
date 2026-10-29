@@ -42,3 +42,4 @@ report/LaTeX_Template_for_Technical_Report/
 # BR07 backup area (only the folder itself is tracked)
 backups/*
 !backups/.gitkeep
+*_overleaf.zip
