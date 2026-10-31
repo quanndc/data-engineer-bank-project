@@ -46,3 +46,6 @@ backups/*
 
 # secrets for the viewer app on Streamlit Cloud (docs/DEPLOY.md)
 streamlit_secrets.toml
+
+# Flink connector jar (downloaded by make bench-engines-setup)
+flink/lib/

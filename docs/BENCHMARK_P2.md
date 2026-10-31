@@ -1,11 +1,11 @@
 # Benchmark Phase 2 — mức dữ liệu ×1 và ×10 (có giải thích)
 
-> **Cách đọc tài liệu này.** Mục 1 cho biết benchmark trả lời câu hỏi gì. Mục 2 giải nghĩa các thuật ngữ dùng trong bảng. Từ mục 4 trở đi, mỗi phép đo có cùng một khung: **Câu hỏi → Cách đo → Đọc bảng thế nào → Kết quả → Kết luận**. Nếu chỉ cần kết luận, đọc mục 1, mục 10 (×1) và mục 12.9 (×10).
+> **Cách đọc tài liệu này.** Mục 1 cho biết benchmark trả lời câu hỏi gì. Mục 2 giải nghĩa các thuật ngữ dùng trong bảng. Từ mục 4 trở đi, mỗi phép đo có cùng một khung: **Câu hỏi → Cách đo → Đọc bảng thế nào → Kết quả → Kết luận**. Nếu chỉ cần kết luận, đọc mục 1, mục 10 (×1) và mục 12.9 (×10), mục 13 (Spark và Flink).
 
 - **Ngày đo:** 22/10/2026. Lần chạy hoàn chỉnh bằng `make bench-all` (phần truy vấn chạy lúc 20:34–20:35); phần nhiều người dùng đo lại lúc 22:38, B3 đo lại lúc 22:40 (lý do ở mục 9).
 - **Dữ liệu đo:** toàn bộ kho sau P2-8: **1.057.571 giao dịch** (1.056.320 của Berka và 1.251 của các kịch bản KB), 5.118 phiên bản khách hàng, 4.500 tài khoản, 77 khu vực, 15 loại giao dịch. Đây là mức **×1**, tức dữ liệu gốc, chưa nhân bản.
 - **Số liệu gốc:** [docs/results/p2/](results/p2/) (file `.csv`, `.json`) và log màn hình của từng bước trong [docs/results/p2/logs/](results/p2/logs/).
-- **Code:** [benchmark.py](../spark/jobs/benchmark.py) (B1, B2), [bench_ops.py](../spark/jobs/bench_ops.py) (B3), [bench_spark.py](../spark/jobs/bench_spark.py) (B4). Chạy lại tất cả: `make bench-all`.
+- **Code:** [benchmark.py](../spark/jobs/benchmark.py) (B1, B2), [bench_ops.py](../spark/jobs/bench_ops.py) (B3), [bench_spark.py](../spark/jobs/bench_spark.py) (B4), [bench_engines.py](../spark/jobs/bench_engines.py) + [bench_flink.py](../flink/jobs/bench_flink.py) (B5). Chạy lại tất cả: `make bench-all`; B5: `make bench-engines`.
 - **An toàn dữ liệu:** mọi phép thử có ghi dữ liệu đều chạy trên **bản sao** (database `bench` trong ClickHouse; database `dwpg` và schema `bench_ops` trong PostgreSQL). Kho thật `dw` và kho vận hành `ops` chỉ được đọc.
 
 ---
@@ -22,6 +22,7 @@ Giải pháp của nhóm gồm ba lựa chọn chính: **(1)** mô hình Kimball
 | **B2** | ClickHouse ↔ PostgreSQL | Cùng star schema, cùng dữ liệu | **Phần mềm cơ sở dữ liệu** (lưu theo cột ↔ lưu theo dòng) | Dùng ClickHouse làm kho có thật sự nhanh hơn một cơ sở dữ liệu thông thường không? |
 | **B3** | Kho vận hành trên PostgreSQL ↔ trên ClickHouse | Cùng dữ liệu cảnh báo, cùng thao tác | **Nơi lưu dữ liệu vận hành** | Có cần thêm PostgreSQL không, hay để luôn cảnh báo, lịch sử xử lý, log pipeline trong ClickHouse cho gọn? |
 | **B4** | Spark 1 / 2 / 4 / 8 lõi; 1 lô ↔ 72 lô | Cùng phép biến đổi dữ liệu | **Số lõi CPU, cách chia lô** | Thêm CPU có làm pipeline nhanh hơn không? Chia thành 72 lô tháng thì tốn thêm bao nhiêu? |
+| **B5** | Spark ↔ Flink (mục 13) | Cùng phép biến đổi, cùng file đầu vào, cùng máy, cùng 3 GB RAM | **Engine xử lý** | Thay Spark bằng Flink thì pipeline nhanh hơn hay chậm hơn? |
 
 ---
 
@@ -62,6 +63,7 @@ Giải pháp của nhóm gồm ba lựa chọn chính: **(1)** mô hình Kimball
 | ClickHouse | 25.3.14.14; tối đa 2,5 GB RAM; dùng đủ 11 luồng; tắt các log hệ thống chạy ngầm (mục 9) | |
 | PostgreSQL | 16.4; tối đa 1 GB RAM; **cấu hình giống benchmark Phase 1**: `shared_buffers` 256 MB, `work_mem` 64 MB, tối đa 4 worker song song, tắt JIT | Để so sánh công bằng và nhất quán với Phase 1 |
 | Spark | 3.5.6, chạy cục bộ, driver 2 GB | |
+| Flink (chỉ B5) | 1.20.1, image chính thức, 1 jobmanager (768 MB) + 1 taskmanager (2,25 GB, 8 slot); chỉ bật khi chạy B5 | Tổng 3 GB, bằng container Spark |
 | Nơi chạy lệnh đo | Python trong container Spark, cùng mạng Docker | Thời gian đo là thời gian người gọi chờ, gồm cả nhận kết quả |
 
 ---
@@ -418,3 +420,66 @@ Log của các lần lỗi đã bị ghi đè bởi lần chạy thành công; s
 | **H2** PostgreSQL nhanh hơn ở tra cứu 1 tài khoản | Đúng, 17–46× | Đúng, **62–268×**, vì star / ClickHouse đọc cả bảng khi lọc qua dimension. Sửa cách viết truy vấn thì ClickHouse giữ được khoảng 7 ms (mục 12.4) |
 | **H3** Thời gian một lô chủ yếu là chi phí cố định | Đúng | Đúng với lô tháng; với 1 lô lớn, Spark đã tận dụng được nhiều lõi (2,1×) |
 | **H4** One Big Table nhanh hơn chút, nhưng sửa đắt | Đúng | Đúng: sửa 1 khu vực ghi lại **1,5 triệu dòng** |
+
+---
+
+## 13. B5 — Spark hay Flink cho pipeline? (đo ngày 31/10/2026, trên máy)
+
+### Câu hỏi
+Pipeline của nhóm dùng **Apache Spark**. **Apache Flink** là một engine xử lý dữ liệu khác, cũng phổ biến. Nếu thay Spark bằng Flink để làm cùng một việc trên cùng một máy thì nhanh hơn hay chậm hơn?
+
+### Cách đo
+- **Cùng một việc:** đúng phép biến đổi của B4 (mục 8): đọc 72 bản chụp lô → chuẩn hóa mã → tìm tài khoản, loại giao dịch, chủ tài khoản và **phiên bản hạng đúng tại ngày giao dịch (SCD2)** → ghi kết quả ra file Parquet. Spark viết bằng DataFrame ([bench_engines.py](../spark/jobs/bench_engines.py)), Flink viết bằng Flink SQL ([bench_flink.py](../flink/jobs/bench_flink.py)). Cả hai đều cho 4 bảng tra cứu nhỏ vào bộ nhớ (*broadcast*).
+- **Cùng đầu vào:** các file Parquet giống hệt nhau, chuẩn bị một lần (`make bench-engines-prepare`). Bảng tra cứu được xuất sẵn từ kho ra file, nên lúc đo không engine nào đọc database.
+- **Cùng tài nguyên:** cả hai chạy trong Docker trên máy, mỗi bên tối đa **3 GB RAM**. Spark chạy `local[n]`, Flink chạy một cluster nhỏ (1 jobmanager + 1 taskmanager, image chính thức `flink:1.20.1`) với độ song song n. Phép đo không dùng Aiven hay bất kỳ dịch vụ ngoài nào.
+- **Cấu hình:** {x1, x10} × {1, 2, 4, 8 lõi} × {1 lô, 72 lô} = 16 cấu hình. Ở mỗi cấu hình, Spark và Flink **chạy xen kẽ**, mỗi bên 3 lần; số trong bảng là **median** của 3 lần. Hai engine không bao giờ chạy cùng lúc.
+- **Kiểm tra kết quả:** mỗi lần chạy đều tính lại số dòng, số dòng thiếu phiên bản, tổng mã giao dịch, tổng tiền và số phiên bản khách. **Cả 96 lần chạy, Spark và Flink cho kết quả giống hệt nhau**: ×1 có 1.056.320 dòng, tổng tiền 6.257.793.560,30; ×10 có 10.563.200 dòng, tổng tiền 62.577.935.603,00; không dòng nào thiếu phiên bản.
+- **Chạy lại:** `make bench-engines-prepare`, rồi `make bench-engines` (khoảng 65 phút).
+
+### Đọc bảng
+- **Biến đổi:** số giây xử lý dữ liệu, càng nhỏ càng tốt. Với Spark, đây là thời gian quanh lệnh ghi. Với Flink, đây là thời gian từ lúc job đầu tiên bắt đầu đến lúc job cuối cùng kết thúc, lấy theo đồng hồ của Flink.
+- **Khởi động:** phần thời gian còn lại. Với Spark là thời gian mở phiên Spark. Với Flink là thời gian chạy SQL client, đọc câu lệnh, lên kế hoạch và gửi job (cluster Flink đã bật sẵn từ trước).
+- **Bên nhanh hơn:** thời gian biến đổi của bên chậm chia cho bên nhanh.
+
+**1 lô (xử lý cả 72 tháng trong một job)**
+
+| Mức | Lõi | Spark: biến đổi | Flink: biến đổi | Bên nhanh hơn |
+|---|---:|---:|---:|---|
+| ×1 | 1 | 7,0 s | **4,0 s** | Flink 1,8× |
+| ×1 | 2 | 6,1 s | **2,6 s** | Flink 2,4× |
+| ×1 | 4 | 5,4 s | **1,9 s** | Flink 2,9× |
+| ×1 | 8 | 5,5 s | **1,8 s** | Flink 3,0× |
+| ×10 | 1 | **25,9 s** | 39,2 s | Spark 1,5× |
+| ×10 | 2 | **16,6 s** | 22,2 s | Spark 1,3× |
+| ×10 | 4 | 14,5 s | **14,0 s** | gần bằng nhau |
+| ×10 | 8 | **11,5 s** | 12,9 s | Spark 1,1× |
+
+**72 lô tháng (cách pipeline đang chạy: mỗi tháng một lần)**
+
+| Mức | Lõi | Spark: biến đổi | Flink: biến đổi | Bên nhanh hơn |
+|---|---:|---:|---:|---|
+| ×1 | 1 | **21,7 s** | 63,2 s | Spark 2,9× |
+| ×1 | 2 | **19,6 s** | 58,7 s | Spark 3,0× |
+| ×1 | 4 | **18,3 s** | 58,7 s | Spark 3,2× |
+| ×1 | 8 | **19,2 s** | 65,1 s | Spark 3,4× |
+| ×10 | 1 | **43,1 s** | 129,3 s | Spark 3,0× |
+| ×10 | 2 | **43,5 s** | 118,6 s | Spark 2,7× |
+| ×10 | 4 | **39,5 s** | 118,7 s | Spark 3,0× |
+| ×10 | 8 | **37,3 s** | 107,8 s | Spark 2,9× |
+
+**Khởi động** (median, mọi cấu hình): Spark **1,6–2,0 s**; Flink **6–13 s** (lớn hơn ở ×10 vì phải liệt kê nhiều file hơn khi lên kế hoạch).
+
+Số liệu gốc: [engines.csv](results/p2/engines/engines.csv) (median, kèm nhanh nhất và chậm nhất của 3 lần), [runs.csv](results/p2/engines/runs.csv) (cả 96 lần chạy), log [engines.log](results/p2/engines/logs/engines.log).
+
+### Kết luận
+- **Hai engine cho cùng một kết quả.** Chọn engine nào là chuyện tốc độ và vận hành, không ảnh hưởng tới dữ liệu trong kho.
+- **Một lô lớn: tùy cỡ dữ liệu.** Ở ×1, Flink biến đổi nhanh hơn 1,8–3,0×. Ở ×10, hai bên gần ngang nhau khi có từ 4 lõi trở lên, và Spark nhanh hơn khi chỉ có 1–2 lõi. Cả hai đều tận dụng thêm lõi khi dữ liệu lớn (từ 1 lên 8 lõi ở ×10: Spark nhanh hơn 2,3×, Flink nhanh hơn 3,0×).
+- **72 lô tháng: Spark nhanh hơn khoảng 3 lần ở mọi cấu hình.** Mỗi lô là một job Flink riêng, và mỗi job phải được lên kế hoạch, gửi lên cluster, rồi chia việc. Phần chi phí cố định này khoảng **0,8 giây mỗi lô ở Flink**, so với khoảng **0,26 giây mỗi lô ở Spark**. Pipeline của nhóm chạy đúng kiểu này: nạp theo từng lô tháng, ghi log và tách lỗi theo từng lô (BR05, BR06).
+- **Flink khởi động chậm hơn** (6–13 s so với khoảng 2 s), và cần thêm một cluster chạy thường trực (2 container), thêm thư viện Hadoop để đọc Parquet.
+- **Giữ Spark cho pipeline là hợp lý.** Với cách nạp theo lô tháng của đề bài, Spark nhanh hơn khoảng 3 lần, khởi động nhanh hơn và gọn hơn để vận hành. Flink chỉ có lợi rõ khi xử lý một khối lớn trong một lần ở mức dữ liệu nhỏ. Thế mạnh thật sự của Flink là xử lý luồng liên tục (streaming), mà Phase 2 không cần.
+
+### Sự cố khi đo
+- **Build image PyFlink quá lâu** (hơn 40 phút trên chip arm64, vì `pip install apache-flink` phải biên dịch một số gói). Đã bỏ cách này và dùng **image Flink chính thức**, gửi câu SQL qua SQL client, nên không phải build gì.
+- **Flink thiếu thư viện để đọc Parquet:** báo thiếu class Hadoop, sau đó thiếu codec zstd. Đã lấy đúng các jar Hadoop 3.3.4 client và `zstd-jni` từ image Spark (`make bench-engines` tự chép).
+- **Đồng hồ máy ảo Docker bị nhảy** khi máy quá tải (load khoảng 20 do Spotlight đánh chỉ mục; có lần đồng hồ lệch 120 giây). Cách xử lý: đo thời gian bằng đồng hồ đơn điệu (*monotonic*, luôn tăng đều, không bị chỉnh lại) bên trong máy ảo; lần nào đồng hồ nhảy thì bỏ và đo lại; Spark và Flink chạy xen kẽ để cùng chịu điều kiện máy như nhau. Kết quả: 3 lần đo ở cùng cấu hình chênh nhau ít, phần lớn dưới 10%.
+- Lần đo Spark riêng trước đó (lúc máy quá tải) đã bị bỏ, không dùng.

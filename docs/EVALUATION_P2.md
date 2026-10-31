@@ -53,6 +53,8 @@ Cả bảng kết quả bên dưới đều do [spark/jobs/evaluate.py](../spark
 | **B3** Kho vận hành PostgreSQL vs ClickHouse | PostgreSQL nhanh hơn 8–70×; tự chặn **5/5** loại dữ liệu sai, ClickHouse **0/5** | Không đo lại (dữ liệu vận hành không lớn lên theo kho) | Tách PostgreSQL riêng là đúng |
 | **B4** Spark: 1 → 8 lõi (1 lô) | 7,7 → 5,4 s (thêm lõi gần như không giúp) | 28,8 → 14,0 s (**nhanh hơn 2,1×**) | Spark chỉ tận dụng nhiều lõi khi dữ liệu đủ lớn |
 | **B4** — 72 lô tháng so với 1 lô | Chậm hơn 4–6× | Chậm hơn 1,8–4,1× | Chia lô tốn chi phí cố định; đổi lại kiểm soát được từng lô |
+| **B5** Spark vs Flink, cùng phép biến đổi (1 lô) | Flink nhanh hơn 1,8–3,0× | Gần ngang nhau (Spark nhanh hơn tới 1,5× khi có 1–2 lõi) | Cả 96 lần chạy, hai engine cho kết quả giống hệt nhau |
+| **B5** — 72 lô tháng | Spark nhanh hơn 2,9–3,4× | Spark nhanh hơn 2,7–3,0× | Mỗi job Flink tốn khoảng 0,8 s chi phí cố định (Spark khoảng 0,26 s) → giữ Spark cho pipeline theo lô |
 | **Pipeline thật** (chỉ ×1) | 3,4 s/lô tháng, 72 lô 273,5 s; bước nặng nhất `load_fact` 1,42 s | — | |
 | **Phát hiện** tra cứu 1 tài khoản trên star / ClickHouse | Cách app đang viết: 34 ms, đọc cả bảng; lọc `account_sk` trước: 6,1 ms | Cách app: 60 ms, đọc 10,6 triệu dòng; lọc `account_sk` trước: **6,8 ms** | Viết lại truy vấn BR02 thì không chậm đi khi dữ liệu tăng (chưa sửa app) |
 

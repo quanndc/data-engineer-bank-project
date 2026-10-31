@@ -93,6 +93,42 @@ services:
       clickhouse: { condition: service_healthy, required: false }
     mem_limit: 3g
 
+  # Benchmark B5 only: Apache Flink 1.20 (official image, a jobmanager + one taskmanager) running the
+  # same transformation as Spark on the same Parquet inputs, submitted with the SQL client. Not part of
+  # the architecture; started with --profile flink. 3 GB in total, as the Spark container.
+  flink-jobmanager:
+    image: flink:1.20.1-scala_2.12-java17
+    container_name: bankdw-flink-jm
+    profiles: ["flink"]
+    command: jobmanager
+    ports:
+      - "127.0.0.1:18081:8081"          # REST API: job start/end times for the benchmark
+    environment: &flink-env
+      FLINK_PROPERTIES: |
+        jobmanager.rpc.address: flink-jobmanager
+        jobmanager.memory.process.size: 768m
+        taskmanager.memory.process.size: 2304m
+        taskmanager.numberOfTaskSlots: 8
+        rest.flamegraph.enabled: false
+      # Parquet in Flink needs Hadoop classes and the zstd codec of the lake files: the Hadoop 3.3.4
+      # client jars and zstd-jni copied from the Spark image (make bench-engines-flink does it)
+      HADOOP_CLASSPATH: /opt/hadoop-jars/*
+    volumes: &flink-vol
+      - ./lake:/lake
+      - ./flink/lib/flink-sql-parquet-1.20.1.jar:/opt/flink/lib/flink-sql-parquet-1.20.1.jar:ro
+      - ./flink/lib/hadoop:/opt/hadoop-jars:ro
+    mem_limit: 768m
+
+  flink-taskmanager:
+    image: flink:1.20.1-scala_2.12-java17
+    container_name: bankdw-flink-tm
+    profiles: ["flink"]
+    command: taskmanager
+    depends_on: [flink-jobmanager]
+    environment: *flink-env
+    volumes: *flink-vol
+    mem_limit: 2304m
+
   # F. Application: one Streamlit app, three tabs (Tổng quan / Phân tích / Vận hành)
   app:
     build: ./apps/app

@@ -15,6 +15,21 @@ Nhật ký Phase 1 (Kaggle, Kafka, Superset; đến ngày 07/10/2026) đã chuy�
 
 ---
 
+## [2026-10-31] Benchmark B5: Spark và Flink trên cùng một phép biến đổi (chạy trên máy) ⚡
+
+- **Flink trong docker compose** (profile `flink`, chỉ dùng cho benchmark): image chính thức `flink:1.20.1-scala_2.12-java17`, gồm 1 jobmanager và 1 taskmanager, tổng 3 GB RAM bằng container Spark; REST API mở ở `127.0.0.1:18081`. Đọc Parquet cần `flink-sql-parquet` (tải từ Maven, đã khớp SHA-1) cùng các jar Hadoop 3.3.4 client và `zstd-jni` lấy từ image Spark, để trong `flink/lib/` (không lên git). Đã bỏ cách build image PyFlink vì quá chậm trên arm64.
+- [spark/jobs/bench_engines.py](spark/jobs/bench_engines.py): chuẩn bị đầu vào chung cho x1 và x10 (72 lô Parquet, 4 bảng tra cứu xuất từ kho) và phép biến đổi phía Spark. [flink/jobs/bench_flink.py](flink/jobs/bench_flink.py): cùng phép biến đổi viết bằng Flink SQL, cùng broadcast; chạy Spark và Flink xen kẽ ở 16 cấu hình, mỗi cấu hình 3 lần; đo bằng đồng hồ đơn điệu trong máy ảo và tự đo lại khi đồng hồ nhảy.
+- `make bench-engines-prepare`, `make bench-engines` (tự bật Flink rồi tắt khi xong). Kết quả nằm trong [docs/results/p2/engines/](docs/results/p2/engines/).
+- **Kết quả** ([BENCHMARK_P2.md mục 13](docs/BENCHMARK_P2.md)):
+  - Cả 96 lần chạy, hai engine cho kết quả **giống hệt nhau**.
+  - Xử lý 1 lô: Flink nhanh hơn 1,8–3,0× ở ×1; ở ×10 hai bên gần ngang nhau.
+  - **72 lô tháng: Spark nhanh hơn khoảng 3×** (Flink tốn khoảng 0,8 s chi phí cố định mỗi job, Spark khoảng 0,26 s).
+  - Flink khởi động mất 6–13 s, Spark khoảng 2 s.
+  - Kết luận: giữ Spark cho pipeline theo lô.
+- Cập nhật [EVALUATION_P2.md](docs/EVALUATION_P2.md) (bảng Performance).
+
+---
+
 ## [2026-10-29] App: tên cột tiếng Việt ở mọi bảng 🇻🇳
 
 - [apps/app/app.py](apps/app/app.py): bảng `COL_VI` và hàm `vi()` đổi tên cột ngay trước khi hiển thị (truy vấn SQL giữ alias ngắn); áp dụng cho **21 bảng** ở cả bản đầy đủ và bản chỉ xem, kể cả kết quả tab SQL và phần xem trước file kịch bản. Ví dụ: `hang, so_giao_dich, tien_vao, tien_ra, dong_tien_thuan` → **Hạng, Số giao dịch, Tiền vào (CZK), Tiền ra (CZK), Dòng tiền thuần (CZK)**; `run_id, batch_id, status…` → **Mã lần chạy, Lô, Trạng thái…**.

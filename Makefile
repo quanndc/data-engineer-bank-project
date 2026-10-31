@@ -12,7 +12,7 @@ endif
 SPARK := $(COMPOSE) exec -T spark
 SHELL := /bin/bash   # PIPESTATUS in the benchmark targets
 
-.PHONY: up down ps logs smoke sql psql clean source-check tiers schema load-ref load-history rerun reconcile scenarios scenario alerts backup restore backups evaluate bench-load bench bench-concurrency bench-update bench-ops bench-spark bench-all bench-clean publish viewer
+.PHONY: up down ps logs smoke sql psql clean source-check tiers schema load-ref load-history rerun reconcile scenarios scenario alerts backup restore backups evaluate bench-load bench bench-concurrency bench-update bench-ops bench-spark bench-engines-prepare bench-engines bench-all bench-clean publish viewer
 
 up:            ## Start D ClickHouse, E PostgreSQL, C Spark, F app (http://localhost:8501)
 	@echo "ClickHouse: $(CLICKHOUSE_HOST)"
@@ -118,13 +118,32 @@ bench-ops:     ## B3: operational store on PostgreSQL vs ClickHouse (x1 only: it
 bench-spark:   ## B4: Spark transformation with 1/2/4/8 cores, one batch vs 72 monthly batches
 	@$(call BENCH,bench_spark.py,spark)
 
+# B5 runs both scales in one go (SCALE is not used). Spark and Flink alternate on each configuration
+# (3 times each), never at the same time; the Flink cluster runs only during B5.
+ENG := lake/bench/p2/engines
+HADOOP_JARS := hadoop-client-api-3.3.4.jar hadoop-client-runtime-3.3.4.jar commons-logging-1.1.3.jar zstd-jni-1.5.5-4.jar
+
+bench-engines-prepare: ## B5: shared Parquet inputs for Spark and Flink (x1 from dw, x10 from bench10)
+	$(COMPOSE) exec -T spark bash -c "cd /opt/jobs && python3 bench_engines.py prepare"
+
+bench-engines: ## B5: Spark vs Flink, same transformation, x1 and x10, 1/2/4/8 cores, 1 vs 72 batches
+	@test -f flink/lib/flink-sql-parquet-1.20.1.jar || { mkdir -p flink/lib && curl -fsSL -o flink/lib/flink-sql-parquet-1.20.1.jar \
+	  https://repo1.maven.org/maven2/org/apache/flink/flink-sql-parquet/1.20.1/flink-sql-parquet-1.20.1.jar; }
+	@mkdir -p flink/lib/hadoop; for j in $(HADOOP_JARS); do test -f flink/lib/hadoop/$$j || \
+	  docker cp bankdw-spark:/opt/spark/jars/$$j flink/lib/hadoop/; done
+	$(COMPOSE) --profile flink up -d flink-jobmanager flink-taskmanager
+	@until curl -sf http://127.0.0.1:18081/taskmanagers | grep -q '"slotsNumber":8'; do sleep 2; done
+	@mkdir -p $(ENG)/logs $(RESULTS)/engines/logs; python3 flink/jobs/bench_flink.py 2>&1 | tee $(ENG)/logs/engines.log; \
+	s=$${PIPESTATUS[0]}; cp $(ENG)/*.csv $(RESULTS)/engines/; cp $(ENG)/logs/engines.log $(RESULTS)/engines/logs/; \
+	$(COMPOSE) --profile flink stop flink-jobmanager flink-taskmanager; exit $$s
+
 bench-all: bench-load bench bench-concurrency bench-update $(if $(filter 1,$(SCALE)),bench-ops) bench-spark ## All benchmarks (make bench-all SCALE=10)
 
 bench-clean:   ## Drop every benchmark copy (bench*, dwpg*, bench_ops) and the x10 Spark input; dw and ops untouched
 	$(SPARK) python3 -c "import sys; sys.path.insert(0, '/opt/jobs'); from common import clickhouse, postgres; \
 	ch = clickhouse(); [ch.command(f'DROP DATABASE IF EXISTS {d} SYNC') for d in ('bench', 'bench10', 'bench50')]; \
 	c = postgres().cursor(); [c.execute(f'DROP DATABASE IF EXISTS {d}') for d in ('dwpg', 'dwpg10', 'dwpg50')]"
-	rm -rf lake/bench/p2/x*/input lake/bench/p2/b4_out lake/bench/p2/x*/b4_out
+	rm -rf lake/bench/p2/x*/input lake/bench/p2/b4_out lake/bench/p2/x*/b4_out lake/bench/p2/engines
 
 sql:           ## One statement on ClickHouse: make sql Q="SELECT count() FROM dw.fact_transaction"
 	$(SPARK) python3 /opt/jobs/ch_sql.py "$(Q)"
